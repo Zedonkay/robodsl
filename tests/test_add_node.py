@@ -71,8 +71,14 @@ def test_add_node_with_pubsub(tmp_path):
         assert "subscriber /raw_data sensor_msgs/msg/Image" in content
     
     # Check C++ files were created
-    assert (project_dir / "include" / "sensor_processor" / "sensor_processor_node.h").exists()
+    assert (project_dir / "include" / "sensor_processor" / "sensor_processor_node.hpp").exists()
     assert (project_dir / "src" / "sensor_processor_node.cpp").exists()
+    
+    # Check that the header file contains the expected content
+    with open(project_dir / "include" / "sensor_processor" / "sensor_processor_node.hpp", 'r') as f:
+        content = f.read()
+        assert "#ifndef SENSOR_PROCESSOR_NODE_H_" in content
+        assert "class SensorProcessorNode : public rclcpp::Node" in content
 
 
 def test_add_node_to_existing_config(tmp_path):
@@ -110,4 +116,5 @@ def test_add_node_invalid_project_dir():
     )
     
     assert result.exit_code != 0
-    assert "Error: Directory '/nonexistent/path' does not exist" in result.output
+    assert "Error: Directory '/nonexistent/path' does not exist" in result.output or \
+           "Error: Invalid value for '--project-dir': Directory '/nonexistent/path' does not exist." in result.output

@@ -1,20 +1,87 @@
-# RoboDSL Developer Guide
+# 🛠 RoboDSL Developer Guide
 
-Welcome to the developer guide for RoboDSL! This document provides a detailed overview of the project structure, individual files, and core components to help you understand and contribute to the project.
+Welcome to the RoboDSL developer guide! This document provides comprehensive information about the project's architecture, code organization, and development workflow to help you understand and contribute effectively.
 
-## Project Overview
+## 🚀 Project Overview
 
-RoboDSL is a domain-specific language (DSL) and compiler designed to simplify the development of GPU-accelerated robotics applications using ROS2 and CUDA. The project aims to address the complexities of ROS2/CUDA integration, CMake configuration, and GPU profiling by providing a streamlined, high-level workflow.
+RoboDSL is a domain-specific language (DSL) and compiler designed to simplify the development of GPU-accelerated robotics applications using ROS2 and CUDA. The project addresses several key challenges:
 
-## Directory Structure
+- **Complex Integration**: Simplifies ROS2 and CUDA integration
+- **Boilerplate Reduction**: Automates repetitive code generation
+- **Build System**: Handles complex CMake configurations
+- **Standardization**: Enforces best practices for ROS2/CUDA development
 
-The project is organized into the following directories:
+## 🏗 Architecture
 
-- **`config/`**: Contains sample YAML configuration files for nodes.
-- **`include/`**: Holds C++ header files for nodes.
-- **`launch/`**: Contains ROS2 launch files for nodes.
-- **`src/`**: Contains the source code for the RoboDSL tool and the generated node source files.
-- **`tests/`**: Contains all the tests for the project.
+### Core Components
+
+1. **CLI Interface** (`cli.py`)
+   - Command-line interface using Click
+   - Handles project and node lifecycle
+   - Coordinates code generation
+
+2. **DSL Parser** (`parser.py`)
+   - Parses `.robodsl` files
+   - Validates syntax and semantics
+   - Generates intermediate representation
+
+3. **Code Generators**
+   - C++ node generation
+   - Python node generation
+   - CUDA kernel templates (coming soon)
+   - Build system files (CMake, package.xml)
+
+4. **Templates**
+   - Node templates for different languages
+   - Launch file templates
+   - Configuration templates
+
+## 📁 Directory Structure
+
+### Source Code (`src/robodsl/`)
+
+- **`__init__.py`**: Package initialization
+- **`cli.py`**: Command-line interface implementation
+- **`parser.py`**: DSL parsing and validation
+- **`generators/`**: Code generation modules
+  - `cpp_generator.py`: C++ node generation
+  - `python_generator.py`: Python node generation
+  - `cuda_generator.py`: CUDA kernel generation (coming soon)
+  - `build_system.py`: CMake and build system generation
+
+### Generated Project Structure
+
+```
+my_project/
+├── src/                    # Node source files
+│   ├── my_node.cpp         # C++ node implementation
+│   └── my_node.py          # Python node implementation
+│
+├── include/               # C++ headers
+│   └── my_node/
+│       └── my_node.hpp   # Node header
+│
+├── launch/                # Launch files
+│   └── my_node.launch.py
+│
+├── config/                # Configuration files
+│   └── my_node.yaml
+│
+├── robodsl/               # DSL definitions
+│   └── nodes/
+│       └── my_node.robodsl
+│
+├── CMakeLists.txt         # Build configuration
+└── package.xml            # ROS2 package definition
+```
+
+### Test Structure (`tests/`)
+
+- `test_cli.py`: CLI command tests
+- `test_parser.py`: DSL parsing tests
+- `test_add_node.py`: Node generation tests
+- `test_subnodes.py`: Nested node tests
+- `fixtures/`: Test fixtures and utilities
 
 ## File-by-File Breakdown
 
@@ -55,34 +122,145 @@ The project is organized into the following directories:
 - **`test_parser.py`**: Tests for the RoboDSL parser, ensuring that `.robodsl` files are parsed correctly.
 - **`test_subnodes.py`**: Tests for the subnode functionality, ensuring that nested nodes are created and configured correctly.
 
-## Core Components
+## 🧩 Core Components
 
-### Command-Line Interface (`cli.py`)
+### 1. Command-Line Interface (`cli.py`)
 
-The CLI is the main entry point for the RoboDSL tool. It is built using the `click` library and provides the following commands:
+The CLI is the main entry point for RoboDSL, built using the `click` library.
 
-- **`init`**: Initializes a new RoboDSL project.
-- **`build`**: Builds the RoboDSL project (not yet implemented).
-- **`add-node`**: Adds a new node to an existing project, creating the necessary files and directories.
+#### Key Commands
 
-### Parser (`parser.py`)
+```bash
+# Initialize a new project
+robodsl init my_project
 
-The parser is responsible for reading and interpreting `.robodsl` files. It extracts the node definitions, publishers, subscribers, and other information, which is then used by the CLI to generate the necessary code and configuration files.
+# Add a new node
+robodsl add-node my_node --language cpp
 
-### Code Generation
+# Build the project
+robodsl build
+```
 
-The code generation logic is located within the `cli.py` file. It uses the information from the parser to generate the following files:
+#### Key Functions
 
-- **Node source files** (`.py` or `.cpp`)
-- **Launch files** (`.launch.py`)
-- **RoboDSL configuration files** (`.robodsl`)
+- `init()`: Creates a new project structure
+- `add_node()`: Adds a new node to the project
+- `build()`: Builds the project
+- `_create_node_files()`: Handles file generation
+- `_get_node_file_paths()`: Manages file paths
 
-## How to Contribute
+### 2. DSL Parser (`parser.py`)
 
-We welcome contributions to RoboDSL! If you'd like to contribute, please follow these steps:
+Parses `.robodsl` files and validates the syntax.
 
-1.  Fork the repository.
-2.  Create a new branch for your feature or bug fix.
-3.  Make your changes and add tests for them.
-4.  Ensure that all tests pass.
-5.  Submit a pull request with a detailed description of your changes.
+#### Key Features
+- Supports node definitions with publishers, subscribers, and parameters
+- Validates message types and parameter values
+- Generates an abstract syntax tree (AST)
+
+#### Example DSL
+```rubynode my_node {
+    publisher /output std_msgs/msg/String "Hello"
+    subscriber /input std_msgs/msg/String
+    parameter rate 10
+}
+```
+
+### 3. Code Generation
+
+#### C++ Generation
+- Creates `.hpp` and `.cpp` files
+- Handles class definitions and implementations
+- Manages include guards and namespaces
+
+#### Python Generation
+- Generates executable Python nodes
+- Handles imports and class definitions
+- Sets up ROS2 node lifecycle
+
+### 4. Build System
+- Generates `CMakeLists.txt`
+- Handles dependencies
+- Configures CUDA compilation (coming soon)
+
+## 🛠 Development Workflow
+
+### Setting Up for Development
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/robodsl.git
+   cd robodsl
+   ```
+
+2. **Set up a virtual environment**
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+3. **Install development dependencies**
+   ```bash
+   pip install -e ".[dev]"
+   ```
+
+### Running Tests
+
+```bash
+# Run all tests
+pytest tests/
+
+# Run a specific test file
+pytest tests/test_add_node.py -v
+
+# Run with coverage
+pytest --cov=robodsl tests/
+```
+
+### Code Style
+
+We use:
+- **Black** for code formatting
+- **Flake8** for linting
+- **Mypy** for type checking
+
+```bash
+# Format code
+black .
+
+# Check style
+flake8
+# Check types
+mypy .
+```
+
+## 🚀 Contributing
+
+We welcome contributions! Here's how to get started:
+
+1. **Find an issue** or create a new one
+2. **Fork** the repository
+3. Create a feature branch: `git checkout -b feature/amazing-feature`
+4. Commit your changes: `git commit -m 'Add amazing feature'`
+5. Push to the branch: `git push origin feature/amazing-feature`
+6. Open a **Pull Request**
+
+### Pull Request Guidelines
+
+- Include tests for new features
+- Update documentation
+- Follow the existing code style
+- Keep PRs focused and small
+
+## 📚 Additional Resources
+
+- [ROS2 Documentation](https://docs.ros.org/)
+- [CUDA Toolkit Documentation](https://docs.nvidia.com/cuda/)
+- [Click Documentation](https://click.palletsprojects.com/)
+- [Pytest Documentation](https://docs.pytest.org/)
+
+## 🙏 Acknowledgments
+
+- The ROS2 and CUDA communities
+- All contributors who have helped improve RoboDSL
+- The Python ecosystem for amazing developer tools

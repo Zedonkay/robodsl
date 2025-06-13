@@ -24,6 +24,7 @@ class CudaKernelConfig:
 @dataclass
 class RoboDSLConfig:
     """Top-level configuration for a RoboDSL project."""
+    project_name: str = "robodsl_project"  # Default project name
     nodes: List[NodeConfig] = field(default_factory=list)
     cuda_kernels: List[CudaKernelConfig] = field(default_factory=list)
 
@@ -63,6 +64,21 @@ def parse_robodsl(content: str) -> RoboDSLConfig:
                 'topic': sub.group(1),
                 'msg_type': sub.group(2)
             })
+            
+        # Parse services
+        srv_matches = re.finditer(r'service\s+([\w/]+)\s+([\w/]+)', node_content)
+        for srv in srv_matches:
+            node.services.append({
+                'service': srv.group(1),
+                'srv_type': srv.group(2)
+            })
+
+        # Parse parameters
+        param_matches = re.finditer(r'parameter\s+(\w+)\s*[:=]\s*([^\n]+)', node_content)
+        for param in param_matches:
+            # Simple value parsing (can be extended for types)
+            value = param.group(2).strip()
+            node.parameters[param.group(1)] = value
             
         config.nodes.append(node)
     

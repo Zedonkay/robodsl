@@ -133,16 +133,38 @@ def get_node_file_paths(project_path: Path, node_name: str, language: str) -> tu
         return project_path / 'src' / f"{node_name}_node.py", None
     
     # For C++
-    src_dir = project_path / 'src' / '/'.join(parts[:-1]) if len(parts) > 1 else project_path / 'src'
-    include_dir = project_path / 'include' / '/'.join(parts[:-1]) if len(parts) > 1 else project_path / 'include'
+    src_dir = project_path / 'src'
+    include_dir = project_path / 'include'
     
-    src_dir.mkdir(parents=True, exist_ok=True)
-    include_dir.mkdir(parents=True, exist_ok=True)
-    
+    # Create source and header file paths
     src_file = src_dir / f"{node_base_name}_node.cpp"
-    header_file = include_dir / f"{node_base_name}_node.hpp"
+    
+    # For C++ headers, create a subdirectory matching the node name
+    node_include_dir = include_dir / node_name
+    node_include_dir.mkdir(parents=True, exist_ok=True)
+    
+    header_file = node_include_dir / f"{node_base_name}_node.hpp"
     
     return src_file, header_file
+
+
+def _snake_to_camel(snake_str: str) -> str:
+    """Convert a snake_case string to CamelCase.
+    
+    Args:
+        snake_str: The snake_case string to convert
+        
+    Returns:
+        The input string converted to CamelCase
+    """
+    # Handle empty or None input
+    if not snake_str:
+        return snake_str
+        
+    # Split on underscores and capitalize each word
+    components = snake_str.split('_')
+    # Capitalize the first letter of each component and join them
+    return ''.join(x.capitalize() for x in components if x)
 
 
 def create_node_files(project_path: Path, node_name: str, language: str = 'python',
@@ -209,8 +231,9 @@ if __name__ == '__main__':
         node_file.parent.mkdir(parents=True, exist_ok=True)
         include_file.parent.mkdir(parents=True, exist_ok=True)
         
-        # Generate include guard
+        # Generate include guard and class name
         include_guard = f"{'_'.join(node_name.split('.')).upper()}_NODE_H_"
+        class_name = f"{_snake_to_camel(node_base_name)}Node"
         
         # Write header file
         with open(include_file, 'w') as f:
@@ -219,9 +242,9 @@ if __name__ == '__main__':
 
 #include <rclcpp/rclcpp.hpp>
 
-class {node_base_name.capitalize()}Node : public rclcpp::Node {{
+class {class_name} : public rclcpp::Node {{
 public:
-    {node_base_name.capitalize()}Node();
+    {class_name}();
 
 private:
     // Add your members and callbacks here
@@ -234,7 +257,7 @@ private:
         with open(node_file, 'w') as f:
             f.write(f"""#include "{node_name.replace('.', '/')}_node.hpp"
 
-{node_base_name.capitalize()}Node::{node_base_name.capitalize()}Node()
+{class_name}::{class_name}()
 : Node("{node_name}")
 {{
     RCLCPP_INFO(this->get_logger(), "{node_name} node started");
@@ -243,7 +266,7 @@ private:
 int main(int argc, char * argv[])
 {{
     rclcpp::init(argc, argv);
-    auto node = std::make_shared<{node_base_name.capitalize()}Node>();
+    auto node = std::make_shared<{class_name}>();
     rclcpp::spin(node);
     rclcpp::shutdown();
     return 0;
@@ -366,12 +389,38 @@ def add_node(node_name: str, publisher: List[tuple], subscriber: List[tuple],
             f"Invalid node name: '{node_name}'. "
             "Node names must be valid Python/C++ identifiers"
         )
+        
+    # Validate project directory exists
+    if not project_dir.exists():
+        click.echo(f"Error: Directory '{project_dir}' does not exist", err=True)
+        sys.exit(1)
+        
+    # Create include directory structure for C++
+    if language == 'cpp':
+        node_parts = node_name.split('.')
+        if len(node_parts) > 1:
+            include_node_dir = include_dir / '/'.join(node_parts)
+            include_node_dir.mkdir(parents=True, exist_ok=True)
     
     # Create necessary directories
     src_dir = project_path / 'src'
     include_dir = project_path / 'include'
     launch_dir = project_path / 'launch'
     config_dir = project_path / 'config'
+    
+    # Ensure all required directories exist
+    for directory in [src_dir, include_dir, launch_dir, config_dir]:
+        directory.mkdir(parents=True, exist_ok=True)
+    
+    # Create default config YAML
+    config_file = config_dir / f"{node_base_name}.yaml"
+    if not config_file.exists():
+        with open(config_file, 'w') as f:
+            f.write(f"# Configuration for {node_name} node\n")
+            f.write("# Add your node parameters here\n")
+            f.write(f"{node_base_name}:\n")
+            f.write("  ros__parameters:\n")
+            f.write("    param1: value1\n")
     
     # Create node files
     create_node_files(project_path, node_name, language, 
