@@ -1,8 +1,19 @@
-# 🛠 RoboDSL Developer Guide
+# RoboDSL Developer Guide
 
 Welcome to the RoboDSL developer guide! This document provides comprehensive information about the project's architecture, code organization, and development workflow to help you understand and contribute effectively.
 
-## 🚀 Project Overview
+## Table of Contents
+1. [Project Overview](#project-overview)
+2. [Architecture](#architecture)
+3. [Module Reference](#module-reference)
+4. [Code Organization](#code-organization)
+5. [Development Workflow](#development-workflow)
+6. [Extending RoboDSL](#extending-robodsl)
+7. [Troubleshooting](#troubleshooting)
+8. [Contributing](#contributing)
+9. [Additional Resources](#additional-resources)
+
+## Project Overview
 
 RoboDSL is a domain-specific language (DSL) and compiler designed to simplify the development of GPU-accelerated robotics applications using ROS2 and CUDA. The project addresses several key challenges:
 
@@ -11,7 +22,24 @@ RoboDSL is a domain-specific language (DSL) and compiler designed to simplify th
 - **Build System**: Handles complex CMake configurations
 - **Standardization**: Enforces best practices for ROS2/CUDA development
 
-## 🏗 Architecture
+### Key Concepts
+
+1. **DSL (Domain-Specific Language)**
+   - Declarative syntax for defining robotics nodes
+   - Supports both C++ and Python node generation
+   - Enables CUDA kernel integration
+
+2. **Code Generation**
+   - Generates ROS2 node templates
+   - Creates build system configurations
+   - Produces launch files and parameter configurations
+
+3. **Project Structure**
+   - Standardized directory layout
+   - Separation of generated and source code
+   - Support for nested node organization
+
+## Architecture
 
 ### Core Components
 
@@ -19,35 +47,131 @@ RoboDSL is a domain-specific language (DSL) and compiler designed to simplify th
    - Command-line interface using Click
    - Handles project and node lifecycle
    - Coordinates code generation
+   - Manages command execution flow
 
 2. **DSL Parser** (`parser.py`)
    - Parses `.robodsl` files
    - Validates syntax and semantics
-   - Generates intermediate representation
+   - Generates abstract syntax tree (AST)
+   - Handles error reporting
 
-3. **Code Generators**
-   - C++ node generation
-   - Python node generation
-   - CUDA kernel templates (coming soon)
-   - Build system files (CMake, package.xml)
+3. **Code Generator** (`generator.py`)
+   - Transforms AST into target code
+   - Manages template rendering
+   - Handles file system operations
+   - Supports multiple target languages
 
 4. **Templates**
    - Node templates for different languages
    - Launch file templates
    - Configuration templates
+   - Build system templates
 
-## 📁 Directory Structure
+### Data Flow
+
+1. **Initialization**
+   ```
+   User Command → CLI → Project Setup → File Generation
+   ```
+
+2. **Node Addition**
+   ```
+   User Command → CLI → Parser → AST → Generator → File Creation
+   ```
+
+3. **Build Process**
+   ```
+   User Command → CLI → Build System Generation → Build Execution
+   ```
+
+## Module Reference
+
+### CLI Module (`cli.py`)
+
+The CLI module provides the command-line interface for RoboDSL, handling user interactions and orchestrating the code generation process.
+
+#### Key Functions
+
+1. **`init(project_name, template, output_dir)`**
+   - Creates a new RoboDSL project
+   - Sets up the directory structure
+   - Initializes configuration files
+
+2. **`add_node(node_name, publisher, subscriber, language, project_dir)`**
+   - Adds a new node to an existing project
+   - Handles file generation for the specified language
+   - Updates build configurations
+
+3. **`build(project_dir)`**
+   - Generates build files
+   - Executes the build process
+   - Handles build artifacts
+
+### Parser Module (`parser.py`)
+
+The parser module processes the RoboDSL syntax and generates an abstract syntax tree (AST).
+
+#### Key Components
+
+1. **Lexer**
+   - Tokenizes input files
+   - Handles syntax highlighting
+   - Reports lexical errors
+
+2. **Parser**
+   - Validates syntax
+   - Builds AST
+   - Enforces semantic rules
+
+3. **AST**
+   - Represents the program structure
+   - Enables code generation
+   - Supports transformations
+
+### Generator Module (`generator.py`)
+
+The generator module transforms the AST into target code.
+
+#### Key Features
+
+1. **Template Rendering**
+   - Uses Jinja2 for templating
+   - Supports multiple output formats
+   - Handles indentation and formatting
+
+2. **File Management**
+   - Creates directories as needed
+   - Handles file overwrites
+   - Manages file permissions
+
+3. **Code Generation**
+   - C++ node generation
+   - Python node generation
+   - Build system files
+   - Launch configurations
+
+## Code Organization
 
 ### Source Code (`src/robodsl/`)
 
-- **`__init__.py`**: Package initialization
-- **`cli.py`**: Command-line interface implementation
-- **`parser.py`**: DSL parsing and validation
-- **`generators/`**: Code generation modules
-  - `cpp_generator.py`: C++ node generation
-  - `python_generator.py`: Python node generation
-  - `cuda_generator.py`: CUDA kernel generation (coming soon)
-  - `build_system.py`: CMake and build system generation
+- **`__init__.py`**: Package initialization and version information
+- **`cli.py`**: Command-line interface implementation using Click
+- **`parser.py`**: DSL parsing and validation logic
+- **`generator.py`**: Code generation logic and template handling
+
+### Test Structure (`tests/`)
+
+- **`test_cli.py`**: Tests for command-line interface
+- **`test_parser.py`**: Tests for DSL parsing and validation
+- **`test_add_node.py`**: Tests for node generation
+- **`test_subnodes.py`**: Tests for nested node functionality
+- **`fixtures/`**: Test fixtures and helper functions
+
+### Templates (`templates/`)
+- **`cpp/`**: C++ node templates
+- **`python/`**: Python node templates
+- **`launch/`**: ROS2 launch file templates
+- **`cmake/`**: CMake configuration templates
 
 ### Generated Project Structure
 
@@ -122,7 +246,7 @@ my_project/
 - **`test_parser.py`**: Tests for the RoboDSL parser, ensuring that `.robodsl` files are parsed correctly.
 - **`test_subnodes.py`**: Tests for the subnode functionality, ensuring that nested nodes are created and configured correctly.
 
-## 🧩 Core Components
+## Core Components
 
 ### 1. Command-Line Interface (`cli.py`)
 
@@ -183,7 +307,7 @@ Parses `.robodsl` files and validates the syntax.
 - Handles dependencies
 - Configures CUDA compilation (coming soon)
 
-## 🛠 Development Workflow
+## Development Workflow
 
 ### Setting Up for Development
 
@@ -234,7 +358,7 @@ flake8
 mypy .
 ```
 
-## 🚀 Contributing
+## Contributing
 
 We welcome contributions! Here's how to get started:
 
@@ -252,14 +376,14 @@ We welcome contributions! Here's how to get started:
 - Follow the existing code style
 - Keep PRs focused and small
 
-## 📚 Additional Resources
+## Additional Resources
 
 - [ROS2 Documentation](https://docs.ros.org/)
 - [CUDA Toolkit Documentation](https://docs.nvidia.com/cuda/)
 - [Click Documentation](https://click.palletsprojects.com/)
 - [Pytest Documentation](https://docs.pytest.org/)
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - The ROS2 and CUDA communities
 - All contributors who have helped improve RoboDSL

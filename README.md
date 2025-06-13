@@ -17,34 +17,34 @@ RoboDSL simplifies the development of GPU-accelerated robotics applications by p
 - Build system integration
 - Project scaffolding
 
-## ✨ Features
+## Features
 
-- **🚀 Easy Node Definition**
+- **Easy Node Definition**
   - Define ROS2 nodes with publishers, subscribers, services, and parameters
   - Support for both C++ and Python nodes
   - Nested node organization with dot notation (e.g., `sensors.camera`)
 
-- **⚡ CUDA Integration**
+- **CUDA Integration**
   - Seamless CUDA kernel integration with ROS2 nodes
   - Automatic memory management between CPU and GPU
   - Optimized data transfer patterns
 
-- **🔧 Project Management**
+- **Project Management**
   - Project initialization and scaffolding
   - Add new nodes to existing projects
   - Automatic file organization
 
-- **🛠 Build System**
+- **Build System**
   - Automatic CMake configuration
   - ROS2 package generation
   - CUDA compilation support
 
-- **🧪 Testing & Validation**
+- **Testing & Validation**
   - Comprehensive test suite
   - Input validation
   - Helpful error messages
 
-## 🚀 Installation
+## Installation
 
 ### Prerequisites
 - Python 3.8+
@@ -77,7 +77,7 @@ RoboDSL simplifies the development of GPU-accelerated robotics applications by p
    robodsl --help
    ```
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Initialize a New Project
 ```bash
@@ -118,7 +118,7 @@ Launch files are automatically generated for each node:
 ros2 launch my_robot_project sensors.camera.launch.py
 ```
 
-## 📝 DSL Syntax
+## DSL Syntax
 
 ### Node Definition
 ```ruby
@@ -169,7 +169,7 @@ kernel image_processor {
 }
 ```
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 my_robot_project/
@@ -199,7 +199,7 @@ my_robot_project/
 └── package.xml            # ROS2 package definition
 ```
 
-## 🤝 Contributing
+## Contributing
 
 We welcome contributions! Here's how to get started:
 
@@ -228,17 +228,17 @@ We welcome contributions! Here's how to get started:
    mypy .
    ```
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 📚 Resources
+## Resources
 
 - [ROS2 Documentation](https://docs.ros.org/)
 - [CUDA Toolkit Documentation](https://docs.nvidia.com/cuda/)
 - [CMake Documentation](https://cmake.org/documentation/)
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - The ROS2 and CUDA communities for their amazing tools and libraries
 - All contributors who have helped improve RoboDSL
