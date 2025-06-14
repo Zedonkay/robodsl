@@ -222,7 +222,7 @@ Documentation website coming soon.
 
 ## Contributing
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+We welcome contributions! Please see our [Contributing Guide](docs/contributing.md) for details.
 
 1. Fork the repository
 2. Create a feature branch
