@@ -10,10 +10,10 @@ RoboDSL is a Domain-Specific Language (DSL) and compiler designed to simplify th
 4. **Improve Performance**: Facilitate efficient GPU-CPU communication patterns
 
 ## Current Status
-- [x] Project setup and CLI scaffolding
+- [x] Project setup and single-source CLI (Click)
 - [x] Basic DSL parser implementation
-- [ ] ROS2 node generation
-- [ ] CUDA kernel management
+- [x] ROS2 node generation
+- [x] CUDA kernel management
 - [ ] Build system integration
 - [ ] Documentation and examples
 
@@ -22,14 +22,14 @@ RoboDSL is a Domain-Specific Language (DSL) and compiler designed to simplify th
 ### Phase 1: Core Functionality (MVP)
 - [x] Define DSL syntax for nodes and CUDA kernels
 - [x] Implement parser for the DSL
-- [ ] Generate ROS2 node templates
-  - [ ] Basic node structure
-  - [ ] Publisher/Subscriber generation
-  - [ ] Service and Action server/client support
-- [ ] CUDA kernel generation
-  - [ ] Kernel template generation
-  - [ ] Memory management helpers
-  - [ ] CPU-GPU bridge code
+- [x] Generate ROS2 node templates
+  - [x] Basic node structure
+  - [x] Publisher/Subscriber generation
+  - [x] Service and Action server/client support
+- [x] CUDA kernel generation
+  - [x] Kernel template generation
+  - [x] Memory management helpers
+  - [x] CPU-GPU bridge code
 
 ### Phase 2: Build System & Integration
 - [ ] CMake generator
@@ -48,9 +48,9 @@ RoboDSL is a Domain-Specific Language (DSL) and compiler designed to simplify th
 
 ## Usage Examples
 
-### Create a new project
+### Initialize a new project
 ```bash
-robodsl new my_robot_project
+robodsl init my_robot_project
 ```
 
 ### Add a node to an existing project
