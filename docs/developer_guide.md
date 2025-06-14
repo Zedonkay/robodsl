@@ -5,13 +5,42 @@ Welcome to the RoboDSL developer guide! This document provides comprehensive inf
 ## Table of Contents
 1. [Project Overview](#project-overview)
 2. [Architecture](#architecture)
+   - [Core Components](#core-components)
+   - [Data Flow](#data-flow)
+   - [Error Handling](#error-handling)
 3. [Module Reference](#module-reference)
+   - [Parser Module](#parser-module)
+   - [Generator Module](#generator-module)
+   - [CLI Module](#cli-module)
 4. [Code Organization](#code-organization)
+   - [Source Code Structure](#source-code-structure)
+   - [Build System](#build-system)
+   - [Testing Framework](#testing-framework)
 5. [Development Workflow](#development-workflow)
+   - [Setting Up the Development Environment](#setting-up-the-development-environment)
+   - [Coding Standards](#coding-standards)
+   - [Testing Guidelines](#testing-guidelines)
+   - [Documentation Standards](#documentation-standards)
 6. [Extending RoboDSL](#extending-robodsl)
-7. [Troubleshooting](#troubleshooting)
-8. [Contributing](#contributing)
-9. [Additional Resources](#additional-resources)
+   - [Adding New Node Types](#adding-new-node-types)
+   - [Custom Code Generators](#custom-code-generators)
+   - [Template Customization](#template-customization)
+7. [Performance Considerations](#performance-considerations)
+8. [Troubleshooting](#troubleshooting)
+   - [Common Issues](#common-issues)
+   - [Debugging Tips](#debugging-tips)
+   - [Performance Profiling](#performance-profiling)
+9. [Contributing](#contributing)
+   - See [Contributing](contributing.md) for detailed contribution guidelines.
+   - [Pull Request Process](#pull-request-process)
+   - [Code Review Guidelines](#code-review-guidelines)
+   - [Release Process](#release-process)
+10. [Code of Conduct](#code-of-conduct)
+   - Please review our [Code of Conduct](code_of_conduct.md) before contributing to ensure a welcoming and inclusive environment for all contributors.
+11. [Additional Resources](#additional-resources)
+    - [ROS2 Documentation](#ros2-documentation)
+    - [CUDA Documentation](#cuda-documentation)
+    - [Related Projects](#related-projects)
 
 ## Project Overview
 
@@ -41,35 +70,45 @@ RoboDSL is a domain-specific language (DSL) and compiler designed to simplify th
 
 ## Architecture
 
+RoboDSL follows a modular architecture designed for extensibility and maintainability. The system is composed of several core components that work together to provide a seamless development experience for GPU-accelerated robotics applications.
+
 ### Core Components
 
-1. **CLI Interface** (`cli.py`)
-   - Command-line interface using Click
-   - Handles project and node lifecycle
-   - Coordinates code generation
-   - Manages command execution flow
+1. **CLI Interface** (`src/robodsl/cli.py`)
+   - Built on top of Python's Click library
+   - Provides a user-friendly command-line interface
+   - Handles command parsing and validation
+   - Manages the execution flow of code generation
+   - Implements command grouping for better organization
+   - Supports both interactive and non-interactive modes
+   - Provides helpful error messages and usage instructions
 
-2. **DSL Parser** (`parser.py`)
-   - Parses `.robodsl` files
-   - Validates syntax and semantics
-   - Generates abstract syntax tree (AST)
-   - Handles error reporting
+2. **Parser Module** (`src/robodsl/parser.py`)
+   - Implements the RoboDSL language parser
+   - Uses a lexer/parser architecture to process input files
+   - Validates syntax and semantic rules
+   - Generates an Abstract Syntax Tree (AST)
+   - Provides detailed error reporting with line numbers
+   - Supports custom syntax extensions
 
-3. **Code Generator** (`generator.py`)
-   - Transforms AST into target code
-   - Manages template rendering
+3. **Generator Module** (`src/robodsl/generator.py`)
+   - Converts AST into executable code
+   - Manages template rendering with Jinja2
    - Handles file system operations
-   - Supports multiple target languages
+   - Ensures consistent code style and formatting
+   - Supports multiple output formats (C++, CUDA, CMake, etc.)
+   - Implements code optimization passes
 
-4. **Templates**
-   - Node templates for different languages
-   - Launch file templates
-   - Configuration templates
-   - Build system templates
+4. **Template System** (`src/robodsl/templates/`)
+   - Jinja2-based templates for code generation
+   - Organized by component type and target language
+   - Supports template inheritance and includes
+   - Implements custom filters and extensions
+   - Handles whitespace control
 
 ### Data Flow
 
-1. **Initialization**
+1. **Input Processing**
    ```
    User Command → CLI → Project Setup → File Generation
    ```

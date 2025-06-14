@@ -15,11 +15,30 @@ class NodeConfig:
 
 @dataclass
 class CudaKernelConfig:
-    """Configuration for a CUDA kernel."""
+    """Configuration for a CUDA kernel.
+    
+    Attributes:
+        name: Name of the kernel
+        inputs: List of input parameters with their types
+        outputs: List of output parameters with their types
+        block_size: 3D block dimensions (x, y, z)
+        grid_size: 3D grid dimensions (x, y, z). If None, will be calculated
+        shared_mem_bytes: Bytes of shared memory to allocate per block
+        use_thrust: Whether to include Thrust headers and support
+        code: The actual CUDA kernel code
+        includes: List of additional CUDA/Thrust includes needed
+        defines: Preprocessor definitions for the kernel
+    """
     name: str
     inputs: List[Dict[str, str]] = field(default_factory=list)
     outputs: List[Dict[str, str]] = field(default_factory=list)
-    block_size: tuple = (32, 1, 1)  # Default block size
+    block_size: tuple = (256, 1, 1)  # Default block size (1D)
+    grid_size: Optional[tuple] = None  # Auto-calculated if None
+    shared_mem_bytes: int = 0
+    use_thrust: bool = False
+    code: str = ""
+    includes: List[str] = field(default_factory=list)
+    defines: Dict[str, str] = field(default_factory=dict)
 
 @dataclass
 class RoboDSLConfig:
@@ -82,42 +101,28 @@ def parse_robodsl(content: str) -> RoboDSLConfig:
             
         config.nodes.append(node)
     
-    # Parse CUDA kernels
-    kernel_pattern = r'kernel\s+(\w+)\s*\{([^}]*)\}'
-    for match in re.finditer(kernel_pattern, content, re.DOTALL):
+    # Parse CUDA kernel configurations
+    kernel_pattern = r'kernel\s+(\w+)\s*\{([^}]*?)(?=^\s*\w|\Z)'
+    for match in re.finditer(kernel_pattern, content, re.DOTALL | re.MULTILINE):
         kernel_name = match.group(1)
         kernel_content = match.group(2).strip()
         kernel = CudaKernelConfig(name=kernel_name)
         
         # Parse inputs and outputs
-        io_pattern = r'(input|output):\s*(\w+)(?:\s*\(\s*(.*)\s*\))?'
-        for io_match in re.finditer(io_pattern, kernel_content):
-            io_type = io_match.group(1)
-            data_type = io_match.group(2)
-            params = {}
+        input_pattern = r'input\s+([\w:]+)\s+(\w+)'
+        for input_match in re.finditer(input_pattern, kernel_content):
+            kernel.inputs.append({'type': input_match.group(1), 'name': input_match.group(2)})
             
-            # Parse parameters if they exist
-            if io_match.group(3):
-                params_str = io_match.group(3).strip()
-                for param in re.finditer(r'(\w+)\s*[:=]\s*([^,]+)', params_str):
-                    params[param.group(1)] = param.group(2).strip()
+        output_pattern = r'output\s+([\w:]+)\s+(\w+)'
+        for output_match in re.finditer(output_pattern, kernel_content):
+            kernel.outputs.append({'type': output_match.group(1), 'name': output_match.group(2)})
             
-            if io_type == 'input':
-                kernel.inputs.append({'type': data_type, **params})
-            else:
-                kernel.outputs.append({'type': data_type, **params})
-        
-        # Parse block size if specified - handle multiple formats:
-        # block_size: (x, y, z)
-        # block_size: [x, y, z]
-        # block_size: x, y, z
+        # Parse block size (x, y, z)
         block_size_match = re.search(
-            r'block_size\s*[:=]\s*'  # block_size: or block_size=
-            r'[\(\[\s]*'  # Optional opening ( or [ or whitespace
-            r'(\d+)\s*[,\s]+'  # First number
-            r'(\d+)\s*[,\s]+'  # Second number
-            r'(\d+)'  # Third number
-            r'[\s\]\)]*',  # Optional closing ) or ] or whitespace
+            r'block_size\s*[\[\(]?\s*'
+            r'(\d+)\s*[,\s]+'
+            r'(\d+)\s*[,\s]+'
+            r'(\d+)',
             kernel_content
         )
         if block_size_match:
@@ -126,6 +131,47 @@ def parse_robodsl(content: str) -> RoboDSLConfig:
                 int(block_size_match.group(2)),
                 int(block_size_match.group(3))
             )
+            
+        # Parse grid size (x, y, z)
+        grid_size_match = re.search(
+            r'grid_size\s*[\[\(]?\s*'
+            r'(\d+)\s*[,\s]+'
+            r'(\d+)\s*[,\s]+'
+            r'(\d+)',
+            kernel_content
+        )
+        if grid_size_match:
+            kernel.grid_size = (
+                int(grid_size_match.group(1)),
+                int(grid_size_match.group(2)),
+                int(grid_size_match.group(3))
+            )
+            
+        # Parse shared memory
+        shared_mem_match = re.search(r'shared_memory\s+(\d+)', kernel_content)
+        if shared_mem_match:
+            kernel.shared_mem_bytes = int(shared_mem_match.group(1))
+            
+        # Check for Thrust usage
+        if 'use_thrust' in kernel_content.lower():
+            kernel.use_thrust = True
+            kernel.includes.append('thrust/device_vector.h')
+            kernel.includes.append('thrust/execution_policy.h')
+            
+        # Parse additional includes
+        include_matches = re.finditer(r'include\s+[<"]([^>"]+)[>"]', kernel_content)
+        for include_match in include_matches:
+            kernel.includes.append(include_match.group(1))
+            
+        # Parse defines
+        define_matches = re.finditer(r'define\s+(\w+)(?:\s+(.*?))?$', kernel_content, re.MULTILINE)
+        for define_match in define_matches:
+            kernel.defines[define_match.group(1)] = define_match.group(2) or ''
+            
+        # Parse kernel code block
+        code_match = re.search(r'code\s*\"\"\"(.*?)\"\"\"', kernel_content, re.DOTALL)
+        if code_match:
+            kernel.code = code_match.group(1).strip()
             
         config.cuda_kernels.append(kernel)
     

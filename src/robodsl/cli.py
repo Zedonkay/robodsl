@@ -364,6 +364,49 @@ def build(project_dir: str) -> None:
     click.echo("Build command not yet implemented")
 
 @main.command()
+@click.argument('input_file', type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option('--output-dir', '-o', type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
+              default=None, help='Output directory for generated files')
+@click.option('--force', '-f', is_flag=True, help='Overwrite existing files')
+def generate(input_file: Path, output_dir: Optional[Path], force: bool) -> None:
+    """
+    Generate code from a RoboDSL file.
+    
+    This command processes a .robodsl file and generates the corresponding
+    CUDA/ROS2 source files, headers, and build configuration.
+    """
+    try:
+        from robodsl.parser import parse_robodsl
+        from robodsl.generator import CodeGenerator
+        
+        # Set default output directory if not specified
+        if output_dir is None:
+            output_dir = input_file.parent
+            
+        # Create output directory if it doesn't exist
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        click.echo(f"Processing {input_file}...")
+        
+        # Parse the input file
+        config = parse_robodsl(input_file.read_text())
+        
+        # Generate code
+        generator = CodeGenerator(config, output_dir=output_dir)
+        generated_files = generator.generate()
+        
+        click.echo(f"Generated {len(generated_files)} files in {output_dir}:")
+        for file_path in generated_files:
+            click.echo(f"  - {file_path.relative_to(output_dir)}")
+            
+    except Exception as e:
+        click.echo(f"Error: {str(e)}", err=True)
+        if hasattr(e, '__traceback__'):
+            import traceback
+            traceback.print_exc()
+        sys.exit(1)
+
+@main.command()
 @click.argument('node_name')
 @click.option('--publisher', '-p', multiple=True, nargs=2,
               help='Add a publisher with format: TOPIC MESSAGE_TYPE')
