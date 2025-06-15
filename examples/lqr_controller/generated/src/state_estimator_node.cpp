@@ -2,6 +2,11 @@
 
 #include "robodsl/state_estimator_node.hpp"
 #include <memory>
+#include <iostream>
+
+#include "robodsl/state_estimator_node.hpp"
+#include <memory>
+#include <iostream>
 
 #if ENABLE_ROS2
 #include "std_msgs/msg/Float32.hpp"
@@ -9,7 +14,6 @@
 #else
 // ROS2 message includes stubbed out for non-ROS2 builds
 #endif
-
 
 namespace robodsl {
 
@@ -20,16 +24,11 @@ StateEstimator::StateEstimator() : Node("state_estimator")
     this->declare_parameter("filter_gain", /* default value */);
 
     // Initialize publishers
-    estimated_state_pub_ = this->create_publisher<std_msgs/msg/Float32MultiArray>(
-        "/estimated_state", 10);
+    estimated_state_pub_ = this->create_publisher<std_msgs/msg/Float32MultiArray>("/estimated_state", 10);
 
     // Initialize subscribers
-    this->create_subscription<std_msgs/msg/Float32MultiArray>(
-        "/imu", 10, 
-        std::bind(&StateEstimator::imu_callback, this, std::placeholders::_1));
-    this->create_subscription<std_msgs/msg/Float32>(
-        "/wheel_odometry", 10, 
-        std::bind(&StateEstimator::wheel_odometry_callback, this, std::placeholders::_1));
+    this->create_subscription<std_msgs/msg/Float32MultiArray>("/imu", 10, std::bind(&StateEstimator::imu_callback, this, std::placeholders::_1));
+    this->create_subscription<std_msgs/msg/Float32>("/wheel_odometry", 10, std::bind(&StateEstimator::wheel_odometry_callback, this, std::placeholders::_1));
 }
 
 StateEstimator::~StateEstimator()
@@ -41,18 +40,28 @@ StateEstimator::~StateEstimator()
 void StateEstimator::initialize()
 {
     // TODO: Initialize the node
+    #if !ENABLE_ROS2
+    std::cout << "[state_estimator] Initializing (non-ROS2 mode)" << std::endl;
+    #endif
 }
 
 void StateEstimator::update()
 {
     // TODO: Update the node state
+    #if !ENABLE_ROS2
+    // Non-ROS2 update logic here
+    #endif
 }
 
 void StateEstimator::cleanup()
 {
     // TODO: Cleanup resources
+    #if !ENABLE_ROS2
+    std::cout << "[state_estimator] Cleaning up (non-ROS2 mode)" << std::endl;
+    #endif
 }
 
+#if ENABLE_ROS2
 void StateEstimator::imu_callback(const std_msgs/msg/Float32MultiArray::SharedPtr msg) const
 {
     // Process incoming message
@@ -61,7 +70,15 @@ void StateEstimator::imu_callback(const std_msgs/msg/Float32MultiArray::SharedPt
     // TODO: Implement message processing
     (void)msg;  // Avoid unused parameter warning
 }
-
+#else
+void StateEstimator::imu_callback(const void* /*msg*/) const
+{
+    // Stub implementation for non-ROS2 builds
+    std::cout << "[state_estimator] Received message on topic: /imu" << std::endl;
+    // TODO: Implement non-ROS2 message processing
+}
+#endif
+#if ENABLE_ROS2
 void StateEstimator::wheel_odometry_callback(const std_msgs/msg/Float32::SharedPtr msg) const
 {
     // Process incoming message
@@ -70,8 +87,16 @@ void StateEstimator::wheel_odometry_callback(const std_msgs/msg/Float32::SharedP
     // TODO: Implement message processing
     (void)msg;  // Avoid unused parameter warning
 }
-
-
+#else
+void StateEstimator::wheel_odometry_callback(const void* /*msg*/) const
+{
+    // Stub implementation for non-ROS2 builds
+    std::cout << "[state_estimator] Received message on topic: /wheel_odometry" << std::endl;
+    // TODO: Implement non-ROS2 message processing
+}
+#endif
 }  // namespace robodsl
 
+#if ENABLE_ROS2
 RCLCPP_COMPONENTS_REGISTER_NODE(robodsl::StateEstimator)
+#endif

@@ -13,9 +13,16 @@ namespace rclcpp { class Node {}; }
 #include <vector>
 #include <map>
 
-// ROS2 message includes
+#if ENABLE_ROS2
 #include "std_msgs/msg/Float32.hpp"
 #include "std_msgs/msg/Float32MultiArray.hpp"
+#else
+// Stub message/service types for non-ROS2 builds
+#include <memory>
+namespace std_msgs { namespace msg { struct Float32 "{} using SharedPtr = std::shared_ptr<Float32>; using ConstSharedPtr = std::shared_ptr<const Float32>; }; }
+namespace std_msgs { namespace msg { struct Float32MultiArray "{} using SharedPtr = std::shared_ptr<Float32MultiArray>; using ConstSharedPtr = std::shared_ptr<const Float32MultiArray>; }; }
+#endif
+
 
 
 class StateEstimator : public rclcpp::Node {
@@ -30,7 +37,7 @@ public:
 
 private:
     // ROS2 Publishers
-    rclcpp::Publisher<std_msgs/msg/Float32MultiArray>::<class 'type'> estimated_state_pub_;
+    rclcpp::Publisher<std_msgs/msg/Float32MultiArray>::SharedPtr estimated_state_pub_;
     
     // ROS2 Subscribers
     void imu_callback(const std_msgs/msg/Float32MultiArray::ConstSharedPtr msg) const;
