@@ -272,8 +272,8 @@ int main(int argc, char * argv[])
     return 0;
 }}""")
 
-def create_launch_file(project_path: Path, node_name: str, language: str = 'python') -> None:
-    """Create a launch file for the node.
+def _create_launch_file_impl(project_path: Path, node_name: str, language: str = 'python') -> None:
+    """Internal implementation for creating a launch file for the node.
     
     Args:
         project_path: Path to the project directory
@@ -362,6 +362,39 @@ def build(project_dir: str) -> None:
     
     # TODO: Implement build logic
     click.echo("Build command not yet implemented")
+
+@main.command()
+@click.argument('node_name')
+@click.option('--language', '-l', type=click.Choice(['cpp', 'python'], case_sensitive=False),
+              default='cpp', help='Programming language for the node')
+@click.option('--project-dir', type=click.Path(file_okay=False, dir_okay=True, path_type=Path, exists=True),
+              default='.', help='Project directory (default: current directory)')
+def create_launch_file(node_name: str, language: str, project_dir: Path) -> None:
+    """Create a launch file for a node.
+    
+    Args:
+        node_name: Name of the node (can contain dots for subnodes)
+        language: Programming language of the node ('python' or 'cpp')
+        project_dir: Path to the project directory
+    """
+    project_path = Path(project_dir).resolve()
+    try:
+        click.echo(f"Creating launch file for node '{node_name}' in {project_path}...")
+        _create_launch_file_impl(project_path, node_name, language)
+        
+        # Get the launch file path for the success message
+        parts = node_name.split('.')
+        node_base_name = parts[-1]
+        launch_dir = project_path / 'launch' / '/'.join(parts[:-1]) if len(parts) > 1 else project_path / 'launch'
+        launch_file = launch_dir / f"{node_base_name}.launch.py"
+        
+        click.echo(f"Created launch file: {launch_file.relative_to(project_path)}")
+        click.echo("\nTo use this launch file, run:")
+        click.echo(f"  ros2 launch {project_path.name} {node_base_name}.launch.py")
+        
+    except Exception as e:
+        click.echo(f"Error: {str(e)}", err=True)
+        sys.exit(1)
 
 @main.command()
 @click.argument('input_file', type=click.Path(exists=True, dir_okay=False, path_type=Path))
