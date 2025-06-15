@@ -13,26 +13,26 @@ A domain-specific language and compiler for building high-performance, GPU-accel
 
 RoboDSL is a powerful framework that simplifies the development of GPU-accelerated robotics applications by providing a clean, declarative syntax for defining ROS2 nodes and CUDA kernels. It handles all the boilerplate code and build system configuration, allowing developers to focus on algorithm development and system integration.
 
-## ✨ Key Features
+## Key Features
 
-### 🚀 High-Performance Computing
+### High-Performance Computing
 - **GPU Acceleration**: Seamless CUDA integration with automatic memory management
 - **Multi-Threading**: Built-in support for parallel processing and thread safety
 - **Optimized Builds**: Advanced compilation flags and optimizations for maximum performance
 
-### 🤖 ROS2 Integration
+### ROS2 Integration
 - **Lifecycle Nodes**: Full support for managed nodes with state management
 - **Quality of Service**: Fine-grained control over communication reliability and performance
 - **Namespacing**: Hierarchical organization of nodes and topics
 - **Parameter Server**: Dynamic configuration with type safety
 
-### 🛠 Developer Experience
+### Developer Experience
 - **Declarative Syntax**: Define complex robotics applications with clean, readable code
 - **Build System**: Automatic CMake configuration for easy compilation and deployment
 - **Cross-Platform**: Consistent behavior across Linux, Windows, and macOS
 - **Extensible**: Custom node types, message types, and code generation templates
 
-### 📊 Advanced Features
+### Advanced Features
 - **Conditional Compilation**: Feature flags for different hardware targets
 - **Component Model**: Build modular, reusable components
 - **Performance Profiling**: Built-in tools for performance analysis
@@ -113,7 +113,7 @@ pip install robodsl
 
 For more detailed examples, see the [examples](examples/) directory.
 
-## 📚 Documentation
+## Documentation
 
 Comprehensive documentation is available in the [docs](docs/) directory:
 
@@ -154,7 +154,7 @@ robodsl/
 └── ...
 ```
 
-## 🤝 Contributing
+## Contributing
 
 We welcome contributions from the community! Here's how you can help:
 
