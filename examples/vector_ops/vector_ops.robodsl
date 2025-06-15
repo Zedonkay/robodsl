@@ -1,0 +1,27 @@
+project "vector_ops"
+
+cuda_kernel vector_add {
+    inputs: [
+        {name: "a", type: "float"},
+        {name: "b", type: "float"}
+    ],
+    outputs: [
+        {name: "c", type: "float"}
+    ],
+    block_size: [256, 1, 1],
+    grid_size: [1, 1, 1],
+    shared_mem_bytes: 0,
+    use_thrust: false,
+    code: """
+        int idx = blockIdx.x * blockDim.x + threadIdx.x;
+        if (idx < N) {
+            c[idx] = a[idx] + b[idx];
+        }
+    """,
+    includes: ["<vector>", "<cuda_runtime.h>"],
+    defines: ["N 1024"]
+}
+
+node vector_ops {
+    cuda_kernels: [vector_add]
+}
