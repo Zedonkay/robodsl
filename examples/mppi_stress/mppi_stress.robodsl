@@ -1,0 +1,62 @@
+# MPPI Stress Test Example RoboDSL
+
+project "mppi_stress"
+
+node mppi_node {
+    # Publish computed control command
+    publisher /control std_msgs/msg/Float32
+
+    # Subscribe to current robot state
+    subscriber /state std_msgs/msg/Float32
+
+    # Example configurable parameter
+    parameter rollout_count : 1024
+}
+
+kernel mppi_rollout {
+    # Input arrays (device pointers will be generated)
+    input float x               # initial states
+    input float noise           # random noise to perturb controls
+
+    # Output array
+    output float cost           # resulting cost of each rollout
+
+    # CUDA launch configuration
+    block_size (256, 1, 1)
+    grid_size (4, 1, 1)         # 4 * 256 = 1024 threads (matches rollout_count)
+    shared_memory 0
+
+    # Enable Thrust usage in generated kernel wrapper
+    use_thrust
+
+    # Additional headers & definitions
+    include <thrust/device_vector.h>
+    include <thrust/transform.h>
+    include <thrust/reduce.h>
+    define N 1024
+
+    # Actual CUDA kernel code (injected verbatim)
+    code """
+    // Custom functor for squared value – demonstrates device functor object
+    struct SquareFunctor {
+        __device__ float operator()(float val) const {
+            return val * val;
+        }
+    };
+
+    // Allocate dynamic shared memory for partial costs
+    extern __shared__ float shmem[];
+
+    const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= N) return;
+
+    // Example dynamics: x' = x + noise
+    float xi = x[idx] + noise[idx];
+
+    // Example cost calculation using Thrust-style functor (though inline here)
+    float c = xi * xi;  // squared error cost
+
+    // Write result
+    cost[idx] = c;
+    """
+}
