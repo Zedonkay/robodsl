@@ -6,12 +6,27 @@ import re
 
 @dataclass
 class NodeConfig:
-    """Configuration for a ROS2 node."""
+    """Configuration for a ROS 2 node (extended)."""
     name: str
+
+    # Messaging primitives
     publishers: List[Dict[str, str]] = field(default_factory=list)
     subscribers: List[Dict[str, str]] = field(default_factory=list)
     services: List[Dict[str, str]] = field(default_factory=list)
+    actions: List[Dict[str, str]] = field(default_factory=list)
+
+    # Parameters & QoS
     parameters: Dict[str, Any] = field(default_factory=dict)
+    qos_profiles: Dict[str, Any] = field(default_factory=dict)
+
+    # Execution model / lifecycle
+    lifecycle: bool = False
+    timers: List[Dict[str, Any]] = field(default_factory=list)
+    namespace: str = ""
+    remap: Dict[str, str] = field(default_factory=dict)
+    
+    # Parameter callback handling
+    parameter_callbacks: bool = False
 
 @dataclass
 class CudaKernelConfig:
@@ -87,19 +102,34 @@ def parse_robodsl(content: str) -> RoboDSLConfig:
         node = NodeConfig(name=node_name)
         
         # Parse publishers
-        pub_matches = re.finditer(r'publisher\s+([\w/]+)\s+([\w/]+)', node_content)
+        pub_matches = re.finditer(r'publisher\s+([\w/]+)\s+([\w/]+)(?:\s+qos\s+([^\n]+))?', node_content)
         for pub in pub_matches:
+            qos_options = {}
+            if pub.lastindex and pub.group(3):
+                # Parse qos options key:value
+                for kv in pub.group(3).strip().split():
+                    if ':' in kv:
+                        k, v = kv.split(':', 1)
+                        qos_options[k] = v
             node.publishers.append({
                 'topic': pub.group(1),
-                'msg_type': pub.group(2)
+                'msg_type': pub.group(2),
+                'qos': qos_options
             })
             
         # Parse subscribers
-        sub_matches = re.finditer(r'subscriber\s+([\w/]+)\s+([\w/]+)', node_content)
+        sub_matches = re.finditer(r'subscriber\s+([\w/]+)\s+([\w/]+)(?:\s+qos\s+([^\n]+))?', node_content)
         for sub in sub_matches:
+            qos_options = {}
+            if sub.lastindex and sub.group(3):
+                for kv in sub.group(3).strip().split():
+                    if ':' in kv:
+                        k, v = kv.split(':', 1)
+                        qos_options[k] = v
             node.subscribers.append({
                 'topic': sub.group(1),
-                'msg_type': sub.group(2)
+                'msg_type': sub.group(2),
+                'qos': qos_options
             })
             
         # Parse services
@@ -113,10 +143,42 @@ def parse_robodsl(content: str) -> RoboDSLConfig:
         # Parse parameters
         param_matches = re.finditer(r'parameter\s+(\w+)\s*[:=]\s*([^\n]+)', node_content)
         for param in param_matches:
-            # Simple value parsing (can be extended for types)
             value = param.group(2).strip()
             node.parameters[param.group(1)] = value
-            
+
+        # Lifecycle flag
+        if re.search(r'\blifecycle\b', node_content):
+            node.lifecycle = True
+
+        # Parameter callbacks flag
+        if re.search(r'\bparameter_callbacks\b', node_content):
+            node.parameter_callbacks = True
+
+        # Timers:   timer <name> <period_ms>
+        for tmr in re.finditer(r'timer\s+(\w+)\s+(\d+)', node_content):
+            node.timers.append({
+                'name': tmr.group(1),
+                'period_ms': int(tmr.group(2))
+            })
+
+        # Actions: action <name> <goal_type> <result_type> <feedback_type>
+        for act in re.finditer(r'action\s+(\w+)\s+([\w/]+)\s+([\w/]+)\s+([\w/]+)', node_content):
+            node.actions.append({
+                'name': act.group(1),
+                'goal_type': act.group(2),
+                'result_type': act.group(3),
+                'feedback_type': act.group(4)
+            })
+
+        # Namespace
+        ns_match = re.search(r'namespace\s+([/\w]+)', node_content)
+        if ns_match:
+            node.namespace = ns_match.group(1)
+
+        # Remap rules: remap <from> <to>
+        for rm in re.finditer(r'remap\s+([/\w]+)\s+([/\w]+)', node_content):
+            node.remap[rm.group(1)] = rm.group(2)
+
         config.nodes.append(node)
     
     # Parse CUDA kernel configurations

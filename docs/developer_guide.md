@@ -7,25 +7,29 @@ Welcome to the RoboDSL developer guide! This document provides comprehensive inf
 2. [Architecture](#architecture)
    - [Core Components](#core-components)
    - [Data Flow](#data-flow)
-   - [Error Handling](#error-handling)
+   - [Build System Integration](#build-system-integration)
 3. [Module Reference](#module-reference)
+   - [CLI Module](#cli-module)
    - [Parser Module](#parser-module)
    - [Generator Module](#generator-module)
-   - [CLI Module](#cli-module)
+   - [Template System](#template-system)
 4. [Code Organization](#code-organization)
    - [Source Code Structure](#source-code-structure)
    - [Build System](#build-system)
    - [Testing Framework](#testing-framework)
 5. [Development Workflow](#development-workflow)
-   - [Setting Up the Development Environment](#setting-up-the-development-environment)
-   - [Coding Standards](#coding-standards)
-   - [Testing Guidelines](#testing-guidelines)
-   - [Documentation Standards](#documentation-standards)
+   - [Environment Setup](#environment-setup)
+   - [Building from Source](#building-from-source)
+   - [Running Tests](#running-tests)
+   - [Debugging](#debugging)
 6. [Extending RoboDSL](#extending-robodsl)
    - [Adding New Node Types](#adding-new-node-types)
    - [Custom Code Generators](#custom-code-generators)
    - [Template Customization](#template-customization)
-7. [Performance Considerations](#performance-considerations)
+7. [Performance Optimization](#performance-optimization)
+   - [Code Generation](#code-generation-performance)
+   - [Runtime Performance](#runtime-performance)
+   - [Memory Management](#memory-management)
 8. [Troubleshooting](#troubleshooting)
    - [Common Issues](#common-issues)
    - [Debugging Tips](#debugging-tips)
@@ -36,37 +40,376 @@ Welcome to the RoboDSL developer guide! This document provides comprehensive inf
    - [Code Review Guidelines](#code-review-guidelines)
    - [Release Process](#release-process)
 10. [Code of Conduct](#code-of-conduct)
-   - Please review our [Code of Conduct](code_of_conduct.md) before contributing to ensure a welcoming and inclusive environment for all contributors.
+   - Please review our [Code of Conduct](code_of_conduct.md) before contributing.
 11. [Additional Resources](#additional-resources)
-    - [ROS2 Documentation](#ros2-documentation)
-    - [CUDA Documentation](#cuda-documentation)
-    - [Related Projects](#related-projects)
+    - [ROS2 Documentation](https://docs.ros.org/)
+    - [CUDA Toolkit Documentation](https://docs.nvidia.com/cuda/)
+    - [Python Packaging Guide](https://packaging.python.org/)
 
 ## Project Overview
 
-RoboDSL is a domain-specific language (DSL) and compiler designed to simplify the development of GPU-accelerated robotics applications using ROS2 and CUDA. The project addresses several key challenges:
+RoboDSL is a domain-specific language (DSL) and compiler designed to simplify the development of GPU-accelerated robotics applications using ROS2 and CUDA. The project addresses several key challenges in robotics software development:
 
-- **Complex Integration**: Simplifies ROS2 and CUDA integration
+- **Complex Integration**: Streamlines ROS2 and CUDA integration
 - **Boilerplate Reduction**: Automates repetitive code generation
 - **Build System**: Handles complex CMake configurations
 - **Standardization**: Enforces best practices for ROS2/CUDA development
+- **Performance**: Optimized code generation for real-time systems
 
-### Key Concepts
+### Key Components
 
-1. **DSL (Domain-Specific Language)**
-   - Declarative syntax for defining robotics nodes
-   - Supports both C++ and Python node generation
-   - Enables CUDA kernel integration
+1. **DSL Parser**
+   - Parses RoboDSL source files
+   - Validates syntax and semantics
+   - Generates an Abstract Syntax Tree (AST)
+
+2. **Code Generator**
+   - Converts AST into executable code
+   - Supports C++17 and CUDA
+   - Generates ROS2 nodes with lifecycle support
+
+3. **Template System**
+   - Jinja2-based template engine
+   - Extensible template architecture
+   - Support for custom templates
+
+4. **Build System**
+   - CMake integration
+   - Cross-platform support
+   - Dependency management
+
+### Project Structure
+
+```
+robodsl/
+├── src/                    # Source code
+│   ├── robodsl/            # Core package
+│   │   ├── cli.py          # Command-line interface
+│   │   ├── parser.py       # DSL parser
+│   │   ├── generator.py    # Code generator
+│   │   └── templates/      # Code templates
+├── examples/               # Example projects
+├── tests/                  # Test suite
+└── docs/                   # Documentation
+```
+
+## Architecture
+
+RoboDSL follows a modular architecture designed for extensibility and maintainability. The system is composed of several core components that work together to provide a seamless development experience for GPU-accelerated robotics applications.
+
+### Core Components
+
+1. **CLI Interface** (`src/robodsl/cli.py`)
+   - Built on top of Python's Click library
+   - Provides a user-friendly command-line interface
+   - Handles command parsing and validation
+   - Manages the execution flow of code generation
+   - Implements command grouping for better organization
+   - Supports both interactive and non-interactive modes
+   - Provides helpful error messages and usage instructions
+
+2. **Parser Module** (`src/robodsl/parser.py`)
+   - Implements the RoboDSL language parser
+   - Uses a lexer/parser architecture to process input files
+   - Validates syntax and semantic rules
+   - Generates an Abstract Syntax Tree (AST)
+   - Provides detailed error reporting with line numbers
+   - Supports custom syntax extensions
+
+3. **Generator Module** (`src/robodsl/generator.py`)
+   - Converts AST into executable code
+   - Manages template rendering with Jinja2
+   - Handles file system operations
+   - Ensures consistent code style and formatting
+   - Supports multiple output formats (C++, CUDA, CMake, etc.)
+   - Implements code optimization passes
+
+4. **Template System**
+   - Jinja2-based template engine
+   - Template inheritance and composition
+   - Custom filters and extensions
+   - Support for multiple template directories
+
+### Data Flow
+
+1. **Source Processing**
+   ```
+   .robodsl file → Lexer → Parser → AST → Validator → Intermediate Representation
+   ```
 
 2. **Code Generation**
-   - Generates ROS2 node templates
-   - Creates build system configurations
-   - Produces launch files and parameter configurations
+   ```
+   IR → Template Selection → Template Rendering → Code Generation → File Writing
+   ```
 
-3. **Project Structure**
-   - Standardized directory layout
-   - Separation of generated and source code
-   - Support for nested node organization
+3. **Build Process**
+   ```
+   Generated Code → CMake Configuration → Build System → Executable/Library
+   ```
+
+### Build System Integration
+
+RoboDSL generates CMake files that integrate with the ROS2 build system:
+
+- Automatic dependency resolution
+- CUDA compilation flags
+- Installation rules
+- Testing infrastructure
+- Documentation generation
+
+## Module Reference
+
+### CLI Module (`src/robodsl/cli.py`)
+
+#### Key Functions
+
+```python
+def init_project(project_name: str, template: str = "default") -> None:
+    """Initialize a new RoboDSL project."""
+    # Implementation...
+
+def add_node(node_name: str, node_type: str = "basic") -> None:
+    """Add a new node to the project."""
+    # Implementation...
+
+def generate_code(force: bool = False) -> None:
+    """Generate code from RoboDSL files."""
+    # Implementation...
+```
+
+### Parser Module (`src/robodsl/parser.py`)
+
+#### Key Classes
+
+```python
+class ASTNode:
+    """Base class for all AST nodes."""
+    pass
+
+class Parser:
+    """Parses RoboDSL source files into an AST."""
+    
+    def parse(self, source: str) -> ASTNode:
+        """Parse source code into an AST."""
+        # Implementation...
+```
+
+### Generator Module (`src/robodsl/generator.py`)
+
+#### Key Components
+
+```python
+class CodeGenerator:
+    """Generates code from an AST using templates."""
+    
+    def generate(self, ast: ASTNode) -> Dict[str, str]:
+        """Generate code files from AST."""
+        # Implementation...
+
+class TemplateManager:
+    """Manages template loading and rendering."""
+    
+    def render(self, template_name: str, context: Dict) -> str:
+        """Render a template with the given context."""
+        # Implementation...
+```
+
+## Development Workflow
+
+### Environment Setup
+
+1. **Prerequisites**
+   - Python 3.8+
+   - ROS2 Humble or newer
+   - CUDA Toolkit 11.0+
+   - CMake 3.15+
+
+2. **Installation**
+   ```bash
+   # Clone the repository
+   git clone https://github.com/yourusername/robodsl.git
+   cd robodsl
+   
+   # Create and activate a virtual environment
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   
+   # Install development dependencies
+   pip install -e ".[dev]"
+   ```
+
+### Building from Source
+
+```bash
+# Configure the build
+mkdir -p build && cd build
+cmake ..
+
+# Build the project
+cmake --build . --parallel $(nproc)
+
+
+# Install
+cmake --install .
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+pytest tests/
+
+
+# Run a specific test file
+pytest tests/test_parser.py
+
+# Run with coverage report
+pytest --cov=robodsl tests/
+```
+
+### Debugging
+
+1. **Logging**
+   ```python
+   import logging
+   logging.basicConfig(level=logging.DEBUG)
+   ```
+
+2. **Debugging Tests**
+   ```bash
+   # Run pytest with Python debugger
+   pytest --pdb
+   ```
+
+## Extending RoboDSL
+
+### Adding New Node Types
+
+1. Create a new template directory in `src/robodsl/templates/nodes/`
+2. Add template files (e.g., `node.hpp.j2`, `node.cpp.j2`)
+3. Update the node registry in `src/robodsl/generator.py`
+4. Add validation rules in `src/robodsl/parser.py`
+
+### Custom Code Generators
+
+```python
+from robodsl.generator import CodeGenerator
+
+class CustomGenerator(CodeGenerator):
+    def generate(self, ast):
+        # Custom generation logic
+        pass
+```
+
+### Template Customization
+
+1. **Template Inheritance**
+   ```jinja
+   {% extends "base_node.cpp.j2" %}
+   
+   {% block node_implementation %}
+   // Custom implementation
+   {% endblock %}
+   ```
+
+2. **Custom Filters**
+   ```python
+   def to_upper(value):
+       return value.upper()
+   
+   env.filters['upper'] = to_upper
+   ```
+
+## Performance Optimization
+
+### Code Generation Performance
+
+- Template pre-compilation
+- AST caching
+- Parallel code generation
+
+### Runtime Performance
+
+- Zero-copy data transfer
+- Memory pooling
+- Kernel optimization
+
+### Memory Management
+
+- RAII for resource management
+- Smart pointers
+- Memory pooling for real-time safety
+
+## Troubleshooting
+
+### Common Issues
+
+1. **CUDA Compilation Errors**
+   - Verify CUDA toolkit installation
+   - Check compute capability compatibility
+   - Review kernel launch parameters
+
+2. **ROS2 Integration**
+   - Source ROS2 setup files
+   - Verify package dependencies
+   - Check topic and service names
+
+### Debugging Tips
+
+1. **Verbose Output**
+   ```bash
+   robodsl --verbose generate
+   ```
+
+2. **Debug Symbols**
+   ```bash
+   cmake -DCMAKE_BUILD_TYPE=Debug ..
+   ```
+
+### Performance Profiling
+
+1. **CPU Profiling**
+   ```bash
+   perf record -g ./your_node
+   perf report
+   ```
+
+2. **GPU Profiling**
+   ```bash
+   nvprof ./your_node
+   ```
+
+## Contributing
+
+### Pull Request Process
+
+1. Fork the repository
+2. Create a feature branch
+3. Commit changes with descriptive messages
+4. Push to the branch
+5. Create a pull request
+
+### Code Review Guidelines
+
+- Follow the existing code style
+- Include unit tests
+- Update documentation
+- Keep commits atomic
+
+### Release Process
+
+1. Update version in `pyproject.toml`
+2. Update changelog
+3. Create a release tag
+4. Build and publish packages
+
+## Additional Resources
+
+- [ROS2 Documentation](https://docs.ros.org/)
+- [CUDA Toolkit Documentation](https://docs.nvidia.com/cuda/)
+- [Python Packaging Guide](https://packaging.python.org/)
+- [CMake Documentation](https://cmake.org/documentation/)
+- [Jinja2 Template Documentation](https://jinja.palletsprojects.com/)
 
 ## Architecture
 

@@ -13,8 +13,14 @@ namespace rclcpp { class Node {}; }
 #include <vector>
 #include <map>
 
-// ROS2 message includes
+#if ENABLE_ROS2
 #include "std_msgs/msg/Float32MultiArray.hpp"
+#else
+// Stub message/service types for non-ROS2 builds
+#include <memory>
+namespace std_msgs { namespace msg { struct Float32MultiArray "{} using SharedPtr = std::shared_ptr<Float32MultiArray>; using ConstSharedPtr = std::shared_ptr<const Float32MultiArray>; }; }
+#endif
+
 
 
 class LqrNode : public rclcpp::Node {
@@ -29,7 +35,7 @@ public:
 
 private:
     // ROS2 Publishers
-    rclcpp::Publisher<std_msgs/msg/Float32MultiArray>::<class 'type'> control_pub_;
+    rclcpp::Publisher<std_msgs/msg/Float32MultiArray>::SharedPtr control_pub_;
     
     // ROS2 Subscribers
     void state_callback(const std_msgs/msg/Float32MultiArray::ConstSharedPtr msg) const;

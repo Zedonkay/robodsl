@@ -2,13 +2,17 @@
 
 #include "robodsl/lqr_node_node.hpp"
 #include <memory>
+#include <iostream>
+
+#include "robodsl/lqr_node_node.hpp"
+#include <memory>
+#include <iostream>
 
 #if ENABLE_ROS2
 #include "std_msgs/msg/Float32MultiArray.hpp"
 #else
 // ROS2 message includes stubbed out for non-ROS2 builds
 #endif
-
 
 namespace robodsl {
 
@@ -22,16 +26,11 @@ LqrNode::LqrNode() : Node("lqr_node")
     this->declare_parameter("r_control", /* default value */);
 
     // Initialize publishers
-    control_pub_ = this->create_publisher<std_msgs/msg/Float32MultiArray>(
-        "/control", 10);
+    control_pub_ = this->create_publisher<std_msgs/msg/Float32MultiArray>("/control", 10);
 
     // Initialize subscribers
-    this->create_subscription<std_msgs/msg/Float32MultiArray>(
-        "/state", 10, 
-        std::bind(&LqrNode::state_callback, this, std::placeholders::_1));
-    this->create_subscription<std_msgs/msg/Float32MultiArray>(
-        "/estimated_state", 10, 
-        std::bind(&LqrNode::estimated_state_callback, this, std::placeholders::_1));
+    this->create_subscription<std_msgs/msg/Float32MultiArray>("/state", 10, std::bind(&LqrNode::state_callback, this, std::placeholders::_1));
+    this->create_subscription<std_msgs/msg/Float32MultiArray>("/estimated_state", 10, std::bind(&LqrNode::estimated_state_callback, this, std::placeholders::_1));
 }
 
 LqrNode::~LqrNode()
@@ -43,18 +42,28 @@ LqrNode::~LqrNode()
 void LqrNode::initialize()
 {
     // TODO: Initialize the node
+    #if !ENABLE_ROS2
+    std::cout << "[lqr_node] Initializing (non-ROS2 mode)" << std::endl;
+    #endif
 }
 
 void LqrNode::update()
 {
     // TODO: Update the node state
+    #if !ENABLE_ROS2
+    // Non-ROS2 update logic here
+    #endif
 }
 
 void LqrNode::cleanup()
 {
     // TODO: Cleanup resources
+    #if !ENABLE_ROS2
+    std::cout << "[lqr_node] Cleaning up (non-ROS2 mode)" << std::endl;
+    #endif
 }
 
+#if ENABLE_ROS2
 void LqrNode::state_callback(const std_msgs/msg/Float32MultiArray::SharedPtr msg) const
 {
     // Process incoming message
@@ -63,7 +72,15 @@ void LqrNode::state_callback(const std_msgs/msg/Float32MultiArray::SharedPtr msg
     // TODO: Implement message processing
     (void)msg;  // Avoid unused parameter warning
 }
-
+#else
+void LqrNode::state_callback(const void* /*msg*/) const
+{
+    // Stub implementation for non-ROS2 builds
+    std::cout << "[lqr_node] Received message on topic: /state" << std::endl;
+    // TODO: Implement non-ROS2 message processing
+}
+#endif
+#if ENABLE_ROS2
 void LqrNode::estimated_state_callback(const std_msgs/msg/Float32MultiArray::SharedPtr msg) const
 {
     // Process incoming message
@@ -72,8 +89,16 @@ void LqrNode::estimated_state_callback(const std_msgs/msg/Float32MultiArray::Sha
     // TODO: Implement message processing
     (void)msg;  // Avoid unused parameter warning
 }
-
-
+#else
+void LqrNode::estimated_state_callback(const void* /*msg*/) const
+{
+    // Stub implementation for non-ROS2 builds
+    std::cout << "[lqr_node] Received message on topic: /estimated_state" << std::endl;
+    // TODO: Implement non-ROS2 message processing
+}
+#endif
 }  // namespace robodsl
 
+#if ENABLE_ROS2
 RCLCPP_COMPONENTS_REGISTER_NODE(robodsl::LqrNode)
+#endif

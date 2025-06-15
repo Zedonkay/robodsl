@@ -1,52 +1,174 @@
 # RoboDSL
 
-A domain-specific language and compiler for GPU-accelerated robotics applications with ROS2 and CUDA.
+A domain-specific language and compiler for GPU-accelerated robotics applications with ROS2 and CUDA integration.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/)
 [![ROS2 Version](https://img.shields.io/badge/ROS2-Humble%20%7C%20Foxy%20%7C%20Galactic-blueviolet)](https://docs.ros.org/)
-
+[![CUDA](https://img.shields.io/badge/CUDA-11.0%2B-green.svg)](https://developer.nvidia.com/cuda-toolkit)
+[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg)](docs/)
 [![Build Status](https://github.com/yourusername/robodsl/actions/workflows/ci.yml/badge.svg)](https://github.com/yourusername/robodsl/actions)
 [![Code Coverage](https://codecov.io/gh/yourusername/robodsl/branch/main/graph/badge.svg)](https://codecov.io/gh/yourusername/robodsl)
+[![Code Style: Black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 RoboDSL is a powerful framework that simplifies the development of GPU-accelerated robotics applications by providing a clean, declarative syntax for defining ROS2 nodes and CUDA kernels. It handles all the boilerplate code and build system configuration, allowing developers to focus on algorithm development and system integration.
 
+## Features
+
+- **ROS2 Integration**: Full support for ROS2 nodes, lifecycle management, and communication patterns
+- **CUDA Acceleration**: Seamless GPU integration with automatic memory management
+- **Declarative Syntax**: Define complex robotics applications with clean, readable code
+- **Build System**: Automatic CMake configuration for easy compilation and deployment
+- **Extensible**: Custom node types, message types, and code generation templates
+
 ## Table of Contents
 
-- [Overview](#overview)
-- [Key Features](#key-features)
 - [Installation](#installation)
   - [Prerequisites](#prerequisites)
   - [Installation Methods](#installation-methods)
 - [Quick Start](#quick-start)
 - [Documentation](#documentation)
-
+- [Examples](#examples)
+- [Development](#development)
 - [Contributing](#contributing)
 - [License](#license)
 - [Acknowledgements](#acknowledgements)
 
-## Overview
+## Installation
 
-RoboDSL is designed to bridge the gap between robotic algorithm development and high-performance computing. It provides a clean, intuitive syntax for defining both the computational graph of a robotics application and the GPU-accelerated algorithms that power it.
+### Prerequisites
 
-### Core Concepts
+- **Python**: 3.8 or higher
+- **ROS2**: Humble, Foxy, or Galactic (for ROS2 features)
+- **CUDA Toolkit**: 11.0 or higher (for GPU acceleration)
+- **CMake**: 3.15 or higher
+- **pip**: Latest version
 
-- **Declarative Syntax**: Define your robotics application's structure and behavior in a human-readable format
-- **Automatic Code Generation**: Generate optimized C++ and CUDA code from high-level specifications
-- **ROS2 Integration**: Seamless integration with the Robot Operating System 2 (ROS2) ecosystem
-- **GPU Acceleration**: First-class support for CUDA and Thrust for high-performance computing
-- **Build System**: Automatic CMake configuration for easy compilation and deployment
+### Installation Methods
 
-### Architecture
+#### From PyPI (Recommended)
 
-RoboDSL follows a modular architecture:
+```bash
+pip install robodsl
+```
 
-1. **DSL Parser**: Parses the RoboDSL syntax into an abstract syntax tree (AST)
-2. **Code Generator**: Converts the AST into executable code (C++, CUDA, CMake)
-3. **Build System**: Manages dependencies and compilation of generated code
-4. **Runtime**: Provides necessary libraries and utilities for execution
+#### From Source
 
-## Key Features
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/robodsl.git
+   cd robodsl
+   ```
+
+2. Install in development mode:
+   ```bash
+   pip install -e ".[dev]"
+   ```
+
+3. Verify installation:
+   ```bash
+   robodsl --version
+   ```
+
+## Quick Start
+
+1. Create a new RoboDSL project:
+   ```bash
+   mkdir my_robodsl_project
+   cd my_robodsl_project
+   robodsl init
+   ```
+
+2. Edit the generated `.robodsl` file to define your nodes and components
+
+3. Generate the code:
+   ```bash
+   robodsl generate
+   ```
+
+4. Build and run your application:
+   ```bash
+   mkdir -p build && cd build
+   cmake ..
+   make
+   ./my_robodsl_app
+   ```
+
+For more detailed examples, see the [examples](examples/) directory.
+
+## Documentation
+
+Comprehensive documentation is available in the [docs](docs/) directory:
+
+- [DSL Specification](docs/dsl_specification.md) - Complete reference of the RoboDSL language
+- [Developer Guide](docs/developer_guide.md) - Architecture, development workflow, and extension points
+- [Examples](examples/README.md) - Tutorials and example projects
+- [Contributing](docs/contributing.md) - How to contribute to the project
+- [Changelog](docs/changelog.md) - Release notes and version history
+
+## Examples
+
+Explore the [examples](examples/) directory for complete, runnable examples:
+
+- **Basic Examples**: Simple publisher/subscriber patterns
+- **Intermediate**: Lifecycle nodes, custom message types
+- **Advanced**: CUDA acceleration, action servers, component nodes
+
+Each example includes a README with build and run instructions.
+
+## Development
+
+To set up a development environment:
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/robodsl.git
+cd robodsl
+
+# Create and activate a virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install development dependencies
+pip install -e ".[dev]"
+
+# Install pre-commit hooks
+pre-commit install
+```
+
+Run the test suite:
+
+```bash
+pytest
+```
+
+## Contributing
+
+We welcome contributions! Please see our [Contributing Guidelines](docs/contributing.md) for details on how to get started.
+
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Open a pull request
+
+Please ensure your code follows our style guidelines and includes appropriate tests.
+
+## License
+
+RoboDSL is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## Acknowledgements
+
+RoboDSL builds upon several amazing open source projects:
+
+- [ROS2](https://docs.ros.org/) - Robot Operating System 2
+- [CUDA](https://developer.nvidia.com/cuda-toolkit) - NVIDIA's parallel computing platform
+- [Thrust](https://github.com/NVIDIA/thrust) - Parallel algorithms library
+- [Jinja2](https://palletsprojects.com/p/jinja/) - Templating engine
+- [Click](https://click.palletsprojects.com/) - Command line interface creation
+
+We're grateful to the open source community for their contributions and support.
 
 ### ROS2 Node Development
 
@@ -136,8 +258,73 @@ cd my_robot_project
 Create a file named `my_node.robodsl`:
 
 ```python
-project "MyRobot"
+project "MyRobo"
 
+# Example of a lifecycle node with QoS and namespaces
+lifecycle_node navigation_node {
+    # Node configuration
+    namespace = "robot1"
+    remap = {
+        "cmd_vel": "cmd_vel_nav"
+    }
+    
+    # QoS configuration for publishers
+    publishers = [
+        {
+            name: "path",
+            type: "nav_msgs/msg/Path",
+            qos: {
+                depth: 10,
+                reliability: "reliable",
+                durability: "transient_local"
+            }
+        }
+    ]
+    
+    # Subscriber with custom QoS
+    subscribers = [
+        {
+            topic: "odom",
+            type: "nav_msgs/msg/Odometry",
+            qos: { reliability: "best_effort" }
+        }
+    ]
+    
+    # Action server with CUDA offloading
+    actions = [
+        {
+            name: "navigate_to_pose",
+            action_type: "nav2_msgs/action/NavigateToPose"
+        }
+    ]
+    
+    # Enable parameter callbacks
+    parameter_callbacks = true
+    
+    # CUDA kernel for path planning
+    cuda_kernels = ["plan_path"]
+}
+
+# CUDA kernel definition
+cuda_kernel plan_path {
+    input {
+        start_pose: geometry_msgs/msg/Pose
+        goal_pose: geometry_msgs/msg/Pose
+        map: nav_msgs/msg/OccupancyGrid
+    }
+    output {
+        path: nav_msgs/msg/Path
+        cost: float
+    }
+    code = """
+    // CUDA kernel implementation
+    __global__ void plan_kernel(...) {
+        // GPU-accelerated path planning
+    }
+    """
+}
+
+# Example of a regular node
 node my_robot_node {
     # Define publishers
     publishers = [
@@ -206,312 +393,77 @@ make
 ./bin/my_robot_node
 ```
 
-## Documentation
-
-Comprehensive documentation is available in the `docs/` directory:
-
-- [Developer Guide](docs/developer_guide.md) - Architecture and development workflow
-- [DSL Specification](docs/dsl_specification.md) - Complete language reference
-- [Contributing](docs/contributing.md) - How to contribute to the project
-- [Code of Conduct](docs/code_of_conduct.md) - Community guidelines
-- [Changelog](docs/changelog.md) - Project history and changes
-
-Documentation website coming soon.
-
-
-
 ## Contributing
 
-We welcome contributions! Please see our [Contributing Guide](docs/contributing.md) for details.
+We welcome contributions from the community! Please read our [Contributing Guidelines](docs/contributing.md) for details on how to contribute to this project. This includes information about:
 
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
+- Reporting issues
+- Feature requests
+- Code contributions
+- Documentation improvements
+- Community support
 
-### Development Setup
+## Code of Conduct
 
-```bash
-# Install development dependencies
-pip install -r requirements-dev.txt
-
-# Run tests
-pytest
-
-# Run linters
-flake8 src/
-mypy src/
-```
-
-## License
-
-RoboDSL is licensed under the MIT License. See [LICENSE](LICENSE) for details.
-
-## Acknowledgements
-
-- ROS2 Community
-- NVIDIA for CUDA
-- The Thrust Development Team
-- All our contributors
-
-## Support
-
-### Getting Help
-
-If you encounter any issues or have questions:
-
-1. Check the [FAQ](docs/FAQ.md)
-2. Search the [issue tracker](https://github.com/yourusername/robodsl/issues)
-3. Open a new issue if your problem isn't addressed
-
-### Community
-
-- [GitHub Discussions](https://github.com/yourusername/robodsl/discussions)
-- [ROS Discourse](https://discourse.ros.org/)
-- [ROS Answers](https://answers.ros.org/)
-
-## Roadmap
-
-### Upcoming Features
-
-- Support for more ROS2 message types
-- Enhanced visualization tools
-- Performance profiling
-- Additional language bindings
-- Cloud deployment support
-
-### Version History
-
-See [CHANGELOG.md](CHANGELOG.md) for a detailed history of changes.
-
----
-
-RoboDSL is developed with ❤️ by the robotics community.
-- ROS2 (Humble, Foxy, or Galactic)
-- CUDA Toolkit (for GPU acceleration)
-- CMake 3.15+
-
-### Installation Steps
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/yourusername/robodsl.git
-   cd robodsl
-   ```
-
-2. **Set up a virtual environment**
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-3. **Install the package in development mode**
-   ```bash
-   pip install -e .
-   ```
-
-4. **Verify installation**
-   ```bash
-   robodsl --version
-   robodsl --help
-   ```
-
-## Building with CUDA and Thrust
-
-### Prerequisites
-- CUDA Toolkit 11.0 or later
-- CMake 3.15 or later
-- C++17 compatible compiler
-- (Optional) Thrust library (usually included with CUDA)
-
-### Building the Project
-
-1. **Create a build directory**
-   ```bash
-   mkdir -p build && cd build
-   ```
-
-2. **Configure with CMake**
-   ```bash
-   cmake .. -DCMAKE_BUILD_TYPE=Release -DENABLE_THRUST=ON
-   ```
-   
-   Options:
-   - `-DENABLE_THRUST=ON/OFF`: Enable/disable Thrust support (default: ON)
-   - `-DCMAKE_CUDA_ARCHITECTURES="75"`: Specify target GPU architecture (e.g., 75 for Turing, 86 for Ampere)
-
-3. **Build the project**
-   ```bash
-   cmake --build . --config Release -- -j$(nproc)
-   ```
-
-4. **Install (optional)**
-   ```bash
-   sudo cmake --install .
-   ```
-
-## Quick Start
-
-### 1. Initialize a New Project
-```bash
-# Create a new project directory
-robodsl init my_robot_project
-cd my_robot_project
-```
-
-### 2. Add a Node
-Add a simple Python node:
-```bash
-robodsl add-node my_node --language python
-```
-
-Add a C++ node with publishers and subscribers:
-```bash
-robodsl add-node sensors.camera \
-  --publisher /camera/image sensor_msgs/msg/Image \
-  --subscriber /camera/control std_msgs/msg/Bool \
-  --language cpp
-```
-
-### 3. Build and Run
-```bash
-# Build the project
-colcon build --packages-select my_robot_project --cmake-args -DCMAKE_BUILD_TYPE=Release -DENABLE_THRUST=ON
-source install/setup.bash
-```
-
-### 4. Launch Files
-Launch files are automatically generated for each node:
-```bash
-ros2 launch my_robot_project sensors.camera.launch.py
-```
-
-## DSL Syntax
-
-### Node Definition
-```ruby
-# Basic node with publishers and subscribers
-node my_node {
-    # Publishers
-    publisher /output_topic std_msgs/msg/String "Hello, World!"
-    
-    # Subscribers
-    subscriber /input_topic std_msgs/msg/String
-    
-    # Parameters with default values
-    parameter my_param 42
-    parameter use_gpu true
-    
-    # Services
-    service /process_image example_interfaces/srv/Trigger
-}
-
-# Nested node structure
-node sensors.camera {
-    publisher /camera/image sensor_msgs/msg/Image
-    parameter frame_id "camera_frame"
-}
-```
-
-### CUDA Kernel Definition (Coming Soon)
-```ruby
-kernel image_processor {
-    # Input and output specifications
-    input Image input_image
-    output Image output_image
-    
-    # Kernel configuration
-    block_size 256
-    grid_size "ceil(input_image.width * input_image.height / block_size)"
-    
-    # Kernel code (CUDA C++)
-    code """
-    __global__ void process(float* input, float* output, int width, int height) {
-        int idx = blockIdx.x * blockDim.x + threadIdx.x;
-        if (idx < width * height) {
-            // Your CUDA kernel code here
-            output[idx] = input[idx] * 2.0f;
-        }
-    }
-    """
-}
-```
-
-## Project Structure
-
-```
-my_robot_project/
-├── src/                    # Source files
-│   ├── my_node.py          # Python node implementation
-│   └── my_node.cpp         # C++ node implementation
-│
-├── include/                # C++ header files
-│   └── my_node/            # Node-specific headers
-│       └── my_node.hpp     # C++ node header
-│
-├── launch/                 # Launch files
-│   ├── my_node.launch.py   # Node launch file
-│   └── sensors.camera.launch.py
-│
-├── config/                 # Configuration files
-│   ├── my_node.yaml        # Node parameters
-│   └── sensors.camera.yaml
-│
-├── robodsl/                # RoboDSL configuration
-│   └── nodes/              # Node definitions
-│       ├── my_node.robodsl
-│       └── sensors/
-│           └── camera.robodsl
-│
-├── CMakeLists.txt         # Build configuration
-└── package.xml            # ROS2 package definition
-```
-
-## Contributing
-
-We welcome contributions! Here's how to get started:
-
-1. **Fork** the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Commit your changes: `git commit -m 'Add amazing feature'`
-4. Push to the branch: `git push origin feature/amazing-feature`
-5. Open a **Pull Request**
-
-### Development Setup
-
-1. Install development dependencies:
-   ```bash
-   pip install -e ".[dev]"
-   ```
-
-2. Run tests:
-   ```bash
-   pytest tests/ -v
-   ```
-
-3. Run linters:
-   ```bash
-   black .
-   flake8
-   mypy .
-   ```
+This project adheres to a [Code of Conduct](docs/code_of_conduct.md) to ensure a welcoming and inclusive environment for all contributors. By participating, you are expected to uphold this code.
 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Resources
+## Support
 
-- [ROS2 Documentation](https://docs.ros.org/)
-- [CUDA Toolkit Documentation](https://docs.nvidia.com/cuda/)
-- [CMake Documentation](https://cmake.org/documentation/)
+For questions and support, please:
+1. Check the [documentation](#documentation)
+2. Search the [issue tracker](https://github.com/yourusername/robodsl/issues)
+3. Open a new issue if your question hasn't been answered
 
-## Acknowledgments
+## Acknowledgements
 
-- The ROS2 and CUDA communities for their amazing tools and libraries
-- All contributors who have helped improve RoboDSL
+RoboDSL builds upon these amazing open source projects:
 
+- [ROS2](https://docs.ros.org/) - Robot Operating System
+- [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit) - GPU-accelerated computing
+- [Python](https://www.python.org/) - Programming language
+- [Jinja2](https://palletsprojects.com/p/jinja/) - Templating engine
+- [CMake](https://cmake.org/) - Build system generator
+- [Click](https://click.palletsprojects.com/) - Command line interface creation
+
+Special thanks to all our contributors and the open source community for their support and feedback.
+
+## Examples
+
+The `examples/` directory contains practical examples demonstrating RoboDSL features:
+
+### Basic Examples
+
+- [Simple Publisher/Subscriber](examples/basic_pubsub/) - Basic ROS2 communication
+- [Parameter Server](examples/parameters/) - Working with runtime parameters
+- [Lifecycle Node](examples/lifecycle_node/) - Managing node states
+
+### Advanced Examples
+
+- [CUDA Vector Operations](examples/cuda_vector_ops/) - Basic GPU acceleration
+- [Image Processing Pipeline](examples/image_processing/) - Computer vision with CUDA
+- [Neural Network Inference](examples/nn_inference/) - Deep learning integration
+
+Each example includes:
+- A `.robodsl` source file
+- Build and run instructions
+- Expected output
+
+To run an example:
+
+```bash
+cd examples/desired_example
+robodsl generate example.robodsl
+mkdir -p build && cd build
+cmake ..
+make
+./example_node
+```
+
+For detailed instructions, refer to each example's README file.
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

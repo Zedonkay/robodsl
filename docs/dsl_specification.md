@@ -5,18 +5,36 @@
 2. [Syntax Overview](#syntax-overview)
 3. [Project Definition](#project-definition)
 4. [Node Definition](#node-definition)
-5. [Message Types](#message-types)
-6. [Services](#services)
-7. [Parameters](#parameters)
-8. [CUDA Kernels](#cuda-kernels)
-9. [Expressions and Types](#expressions-and-types)
-10. [Standard Library](#standard-library)
-11. [Build Configuration](#build-configuration)
-12. [Examples](#examples)
+   - [Node Types](#node-types)
+   - [Lifecycle Nodes](#lifecycle-nodes)
+   - [Component Nodes](#component-nodes)
+5. [Communication](#communication)
+   - [Publishers](#publishers)
+   - [Subscribers](#subscribers)
+   - [Services](#services)
+   - [Actions](#actions)
+   - [Parameters](#parameters)
+6. [GPU Acceleration](#gpu-acceleration)
+   - [CUDA Kernels](#cuda-kernels)
+   - [Thrust Integration](#thrust-integration)
+7. [Build Configuration](#build-configuration)
+8. [Standard Library](#standard-library)
+9. [Best Practices](#best-practices)
+10. [Examples](#examples)
 
 ## Introduction
 
 RoboDSL is a domain-specific language designed for defining ROS2 nodes with CUDA acceleration. This document provides a complete specification of the RoboDSL syntax and semantics.
+
+### Version
+This specification applies to RoboDSL version 0.1.0 and later.
+
+### Design Goals
+- Provide a clean, declarative syntax for defining ROS2 nodes
+- Simplify integration of CUDA-accelerated computations
+- Enable code reuse through modular components
+- Support both simple and complex robotics applications
+- Maintain compatibility with ROS2 ecosystem
 
 ## Syntax Overview
 
@@ -67,8 +85,11 @@ project "my_robot" {
 
 ## Node Definition
 
-Nodes are the main building blocks of a RoboDSL application:
+Nodes are the main building blocks of a RoboDSL application. RoboDSL supports several node types, each with specific characteristics and use cases.
 
+### Node Types
+
+#### Basic Node
 ```python
 node my_node {
     # Node configuration
@@ -78,158 +99,468 @@ node my_node {
     # Dependencies
     depends = ["rclcpp", "std_msgs"]
     
-    # Publishers
-    publishers = [
+    # Enable debug output
+    debug = true
+    
+    # ROS parameters
+    parameters = [
         {
-            name = "odom"
-            type = "nav_msgs/msg/Odometry"
-            qos = "sensor_data"
-            queue_size = 10
+            name = "max_speed"
+            type = "double"
+            default = 1.0
+            description = "Maximum speed in meters per second"
         }
     ]
-    
-    # Subscribers
-    subscribers = [
-        {
-            name = "cmd_vel"
-            type = "geometry_msgs/msg/Twist"
-            callback = "cmd_vel_callback"
-            qos = "default"
-        }
-    ]
-    
-    # Parameters
-    parameters = {
-        "max_speed" = 1.0
-        "publish_rate" = 30.0
-        "use_sim_time" = false
-    }
-    
+}
+```
+
+### Lifecycle Nodes
+
+Lifecycle nodes provide managed states for better node lifecycle management:
+
+```python
+lifecycle_node navigation_node {
     # Lifecycle callbacks
     on_configure = "on_configure"
     on_activate = "on_activate"
     on_deactivate = "on_deactivate"
     on_cleanup = "on_cleanup"
     on_shutdown = "on_shutdown"
-}
-```
-
-## Message Types
-
-Define custom message types:
-
-```python
-message Point2D {
-    float64 x
-    float64 y
-}
-
-message Pose2D {
-    Point2D position
-    float64 theta
-}
-```
-
-## Services
-
-Define ROS2 services:
-
-```python
-service AddTwoInts {
-    request {
-        int64 a
-        int64 b
-    }
-    response {
-        int64 sum
+    
+    # QoS configuration
+    qos_overrides = {
+        "/cmd_vel": "sensor_data",
+        "/odom": "default"
     }
 }
 ```
 
-## Parameters
+### Component Nodes
 
-Define node parameters with types and defaults:
+Component nodes enable dynamic composition in ROS2:
 
 ```python
-parameters = {
-    "max_speed" = {
-        type = "double"
-        default = 1.0
-        description = "Maximum speed in m/s"
-        min = 0.0
-        max = 5.0
-    },
-    "use_sim_time" = {
-        type = "bool"
-        default = false
-    }
+component_node camera_node {
+    plugin = "my_package::CameraComponent"
+    parameters = [
+        {
+            name = "frame_rate"
+            type = "int"
+            default = 30
+        }
+    ]
 }
 ```
 
-## CUDA Kernels
+## Communication
 
-Define CUDA kernels for GPU acceleration:
+### Publishers
+
+Publishers send messages to topics:
 
 ```python
-cuda_kernel process_lidar {
-    # Input and output specifications
+publishers = [
+    {
+        name = "odom"
+        type = "nav_msgs/msg/Odometry"
+        qos = {
+            reliability = "reliable"  # or "best_effort"
+            durability = "volatile"   # or "transient_local"
+            depth = 10
+            deadline = 100ms
+            lifespan = 1000ms
+            liveliness = 1s
+            liveliness_lease_duration = 2s
+        }
+        latch = false
+    }
+]
+```
+
+### Subscribers
+
+Subscribers receive messages from topics:
+
+```python
+subscribers = [
+    {
+        topic = "cmd_vel"
+        type = "geometry_msgs/msg/Twist"
+        callback = "cmd_vel_callback"
+        qos = "sensor_data"
+        callback_group = "mutually_exclusive"  # or "reentrant"
+    }
+]
+```
+
+### Services
+
+Services provide request/response functionality:
+
+```python
+services = [
+    {
+        name = "set_parameters"
+        type = "rcl_interfaces/srv/SetParameters"
+        callback = "set_parameters_callback"
+        qos = "services_default"
+    }
+]
+```
+
+### Actions
+
+Actions support long-running operations with feedback and can be accelerated with CUDA:
+
+```python
+action_servers = [
+    {
+        name = "navigate_to_pose"
+        type = "nav2_msgs/action/NavigateToPose"
+        execute_callback = "navigate_to_pose_callback"
+        goal_callback = "navigate_goal_callback"
+        cancel_callback = "navigate_cancel_callback"
+        result_timeout = 30s
+        
+        # Optional: Configure action server QoS
+        qos = {
+            reliability = "reliable"
+            durability = "volatile"
+            history = { depth = 10, policy = "keep_last" }
+        }
+        
+        # Optional: Enable CUDA acceleration for action processing
+        cuda_acceleration = {
+            enabled = true
+            kernel = "process_navigation"  # Reference to a cuda_kernel
+            input_mapping = [
+                { action_field: "goal.pose", kernel_param: "target_pose" },
+                { action_field: "current_pose", kernel_param: "current_pose" }
+            ]
+            output_mapping = [
+                { kernel_param: "result_path", action_field: "result.path" },
+                { kernel_param: "feedback_progress", action_field: "feedback.progress" }
+            ]
+        }
+    }
+]
+```
+
+#### CUDA-Accelerated Actions
+
+When using CUDA with actions, the action server will automatically handle:
+1. Data transfer between host and device
+2. Kernel execution
+3. Progress feedback
+4. Result processing
+
+Example CUDA kernel for action processing:
+
+```python
+cuda_kernel process_navigation {
     inputs = [
-        { name: "input_scan", type: "sensor_msgs::msg::LaserScan::ConstPtr" },
-        { name: "params", type: "const LidarParams&" }
+        { name: "target_pose", type: "geometry_msgs::msg::PoseStamped" },
+        { name: "current_pose", type: "geometry_msgs::msg::PoseStamped" },
+        { name: "map_data", type: "nav_msgs::msg::OccupancyGrid::ConstPtr" }
     ]
     outputs = [
-        { name: "obstacles", type: "std::vector<Obstacle>&" }
+        { name: "result_path", type: "nav_msgs::msg::Path" },
+        { name: "feedback_progress", type: "float" }
     ]
     
-    # Kernel configuration
-    block_size = [256, 1, 1]
-    grid_size = [1, 1, 1]
-    shared_mem_bytes = 4096
-    use_thrust = true
-    
-    # Includes
-    includes = [
-        "sensor_msgs/msg/laser_scan.hpp",
-        "vector"
-    ]
-    
-    # Kernel code
     code = """
-    __global__ void process_lidar_kernel(
-        const float* ranges, int num_points,
-        const LidarParams* params,
-        Obstacle* obstacles, int* num_obstacles) {
+    __global__ void process_navigation(
+        const PoseStamped* target,
+        const PoseStamped* current,
+        const OccupancyGrid* map,
+        Path* result,
+        float* progress) {
         
-        int idx = blockIdx.x * blockDim.x + threadIdx.x;
-        if (idx >= num_points) return;
-        
-        // Your CUDA kernel code here
-        
+        // CUDA-accelerated path planning
+        // ...
     }
     """
 }
 ```
 
-## Expressions and Types
+### Parameters
 
-### Literals
+Parameters allow runtime configuration:
 
 ```python
-# Numbers
-42          # Integer
-3.14        # Float
-true        # Boolean
-"hello"     # String
-[1, 2, 3]   # List
-{x: 1, y: 2} # Dictionary
+parameters = [
+    {
+        name = "use_sim_time"
+        type = "bool"
+        default = false
+        description = "Use simulation time"
+        read_only = true
+    },
+    {
+        name = "sensor_config"
+        type = "string"
+        default = "default_config.yaml"
+        description = "Path to sensor configuration"
+    }
+]
 ```
 
-### Type System
+## GPU Acceleration
 
-- **Primitive Types**: `int`, `float`, `double`, `bool`, `string`
-- **ROS2 Types**: `nav_msgs/msg/Odometry`, `sensor_msgs/msg/Image`
-- **Containers**: `List[T]`, `Dict[K, V]`
-- **Custom Types**: User-defined messages and services
+### CUDA Kernels
+
+Define CUDA kernels for GPU acceleration:
+
+```python
+cuda_kernel pointcloud_processor {
+    inputs = ["input_cloud"]
+    outputs = ["processed_cloud"]
+    block_size = 256
+    shared_mem = 4096  # bytes
+    
+    code = """
+    __global__ void process_pointcloud(
+        const float4* input,
+        float4* output,
+        int num_points,
+        float threshold) {
+        
+        int idx = blockIdx.x * blockDim.x + threadIdx.x;
+        if (idx >= num_points) return;
+        
+        float4 point = input[idx];
+        // Process point...
+        output[idx] = point;
+    }
+    """
+}
+```
+
+### Thrust Integration
+
+Use Thrust for high-level parallel algorithms:
+
+```python
+thrust_operation sort_points {
+    algorithm = "sort"
+    input = "point_cloud"
+    output = "sorted_cloud"
+    
+    code = """
+        auto policy = thrust::device;
+        thrust::sort(policy, input.begin(), input.end(), 
+                    [] __device__ (const auto& a, const auto& b) {
+                        return a.z < b.z;  # Sort by z-coordinate
+                    });
+    """
+}
+```
+
+## Build Configuration
+
+RoboDSL provides flexible build configuration with conditional compilation:
+
+```python
+build_options = {
+    # Build type
+    "CMAKE_BUILD_TYPE" = "Release"  # or "Debug", "RelWithDebInfo", "MinSizeRel"
+    
+    # Feature flags
+    "ENABLE_ROS2" = true      # Enable ROS2 integration
+    "ENABLE_CUDA" = true      # Enable CUDA support
+    "ENABLE_THRUST" = true    # Enable Thrust library
+    
+    # CUDA configuration
+    "CUDA_ARCH" = "sm_75"     # Compute capability (e.g., sm_75 for Turing)
+    "CUDA_STANDARD" = 17      # C++ standard for CUDA
+    "CUDA_SEPARABLE_COMPILATION" = true
+    
+    # Build options
+    "BUILD_TESTING" = true
+    "BUILD_DOCS" = false
+    "BUILD_EXAMPLES" = true
+    
+    # Installation paths
+    "CMAKE_INSTALL_PREFIX" = "install"
+    "CMAKE_INSTALL_LIBDIR" = "lib"
+    "CMAKE_INSTALL_INCLUDEDIR" = "include"
+}
+
+# Conditional compilation
+conditional_features = [
+    {
+        name = "WITH_GPU_ACCELERATION"
+        condition = "ENABLE_CUDA"
+        description = "Enable GPU acceleration features"
+    },
+    {
+        name = "WITH_ROS2_LIFECYCLE"
+        condition = "ENABLE_ROS2"
+        description = "Enable ROS2 lifecycle node support"
+    }
+]
+
+# Dependencies with version constraints
+dependencies = [
+    "rclcpp >= 2.0.0",
+    "std_msgs >= 4.0.0",
+    "sensor_msgs >= 4.0.0",
+    "nav_msgs >= 4.0.0",
+    "tf2_ros >= 0.25.0",
+    "rclcpp_lifecycle >= 2.0.0" if build_options["ENABLE_ROS2"] else "",
+    "CUDA::cudart" if build_options["ENABLE_CUDA"] else ""
+]
+
+# Optional: Custom CMake code to include in the build
+cmake_extra = """
+# Add custom CMake code here
+if(ENABLE_CUDA)
+    find_package(CUDAToolkit REQUIRED)
+    enable_language(CUDA)
+    set(CMAKE_CUDA_STANDARD 17)
+    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+    add_compile_definitions(WITH_CUDA_ACCELERATION)
+endif()
+"""
+
+## Node Definition
+
+### Node Types
+
+RoboDSL supports different node types:
+
+```python
+# Standard ROS2 node
+node my_node {
+    executable = true
+    namespace = "sensors"  # Optional namespace
+    # ...
+}
+
+# Component node (for composition)
+component my_component {
+    plugin = "my_pkg::MyComponent"
+    # ...
+}
+```
+
+### Lifecycle Nodes
+
+Lifecycle nodes provide state management and are essential for system robustness. They follow the managed node pattern from `rclcpp_lifecycle`.
+
+#### Lifecycle States
+- **Unconfigured**: Initial state, node is not active
+- **Inactive**: Configured but not processing
+- **Active**: Fully operational
+- **Finalized**: Shutdown complete
+
+#### Configuration
+
+```python
+lifecycle_node navigation {
+    # Standard node configuration
+    executable = true
+    namespace = "navigation"  # Optional namespace
+    
+    # Lifecycle callbacks (all optional)
+    on_configure = "configure_callback"  # Called during configuration
+    on_activate = "activate_callback"    # Called when activating
+    on_deactivate = "deactivate_callback" # Called when deactivating
+    on_cleanup = "cleanup_callback"      # Cleanup resources
+    on_shutdown = "shutdown_callback"    # Shutdown handler
+    on_error = "error_callback"          # Error handler
+    
+    # State transition timeouts (optional, in seconds)
+    transition_timeouts = {
+        "configure" = 10.0
+        "activate" = 5.0
+        "deactivate" = 5.0
+        "cleanup" = 10.0
+        "shutdown" = 10.0
+    }
+}
+```
+
+#### Best Practices
+1. Keep callbacks short and non-blocking
+2. Use the `on_configure` callback to allocate resources
+3. Perform heavy initialization before activation
+4. Handle errors gracefully and transition to appropriate states
+
+### Publishers
+
+Define publishers with flexible configuration:
+
+```python
+publishers = [
+    {
+        name = "cmd_vel"
+        type = "geometry_msgs/msg/Twist"
+        qos = "sensor_data"  # Named QoS profile
+        queue_size = 10
+        # Optional: Custom QoS overrides
+        qos_overrides = {
+            reliability = "reliable"  # or "best_effort"
+            durability = "volatile"   # or "transient_local"
+            history = {
+                depth = 10
+                policy = "keep_last"  # or "keep_all"
+            }
+            deadline = "100ms"        # Duration
+            lifespan = "500ms"        # Duration
+            liveliness = {
+                lease_duration = "1s"
+                policy = "automatic"  # or "manual_by_topic", "manual_by_namespace"
+            }
+        }
+    }
+]
+```
+
+### Subscribers
+
+Define subscribers with message callbacks and QoS settings:
+
+```python
+subscribers = [
+    {
+        name = "scan"
+        type = "sensor_msgs/msg/LaserScan"
+        callback = "scan_callback"
+        qos = "sensor_data"
+        # Optional: Custom QoS overrides (same options as publishers)
+        qos_overrides = {
+            reliability = "best_effort"
+            history = { depth = 5, policy = "keep_last" }
+        }
+    }
+]
+```
+
+### Namespace and Remapping
+
+Nodes can be organized in namespaces and have topic remappings:
+
+```python
+node my_node {
+    executable = true
+    namespace = "sensors"  # Node namespace
+    
+    # Remap topics
+    remappings = [
+        {"from": "old_topic", "to": "new_topic"}
+    ]
+    
+    # Parameters can be namespaced
+    parameters = [
+        {
+            name = "sensor.rate"  # Will be 'sensors.sensor.rate'
+            type = "double"
+            default = 10.0
+        }
+    ]
+}
+```
 
 ## Standard Library
 

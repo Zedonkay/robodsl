@@ -87,42 +87,63 @@ class CodeGenerator:
         return generated_files
     
     def _generate_message_includes(self, node: NodeConfig) -> List[str]:
-        """Generate message includes with ROS2 conditional compilation."""
-        uses_ros2 = bool(node.publishers or node.subscribers or node.services or node.parameters)
-        includes = []
-        
-        if uses_ros2:
-            # In ROS2 mode, include the actual message headers
-            msg_includes = set()
-            for pub in node.publishers:
-                msg_includes.add(f'#include "{pub["msg_type"].replace(".", "/")}.hpp"')
-            for sub in node.subscribers:
-                msg_includes.add(f'#include "{sub["msg_type"].replace(".", "/")}.hpp"')
-            for srv in node.services:
-                msg_includes.add(f'#include "{srv["srv_type"].replace(".", "/")}.hpp"')
-            
-            if msg_includes:
-                includes.append('// ROS2 message includes')
-                includes.extend(sorted(msg_includes))
-        else:
-            # In non-ROS2 mode, provide stub message types
-            includes.append('// Message type stubs for non-ROS2 builds')
+        """Generate message includes wrapped in ENABLE_ROS2 guards or stub definitions."""
+        includes: List[str] = []
+
+        # Collect unique message/service types referenced by the node
+        msg_headers: Set[str] = set()
+        for pub in node.publishers:
+            msg_headers.add(pub["msg_type"].replace(".", "/"))
+        for sub in node.subscribers:
+            msg_headers.add(sub["msg_type"].replace(".", "/"))
+        for srv in node.services:
+            msg_headers.add(srv["srv_type"].replace(".", "/"))
+
+        if msg_headers:
+            # Wrap real includes in ENABLE_ROS2 so host-only builds don’t see them
+            includes.append('#if ENABLE_ROS2')
+            for header in sorted(msg_headers):
+                includes.append(f'#include "{header}.hpp"')
+            includes.append('#else')
+            includes.append('// Stub message/service types for non-ROS2 builds')
             includes.append('#include <memory>')
-            
-            # Add stubs for all message types
-            msg_stubs = set()
-            for pub in node.publishers:
-                ns, name = pub["msg_type"].split('.')
-                msg_stubs.add(f'namespace {ns} {{ namespace msg {{ struct {name} {{ using SharedPtr = std::shared_ptr<{name}>; using ConstSharedPtr = std::shared_ptr<const {name}>; }}; }}}}')
-            for sub in node.subscribers:
-                ns, name = sub["msg_type"].split('.')
-                msg_stubs.add(f'namespace {ns} {{ namespace msg {{ struct {name} {{ using SharedPtr = std::shared_ptr<{name}>; using ConstSharedPtr = std::shared_ptr<const {name}>; }}; }}}}')
-            for srv in node.services:
-                ns, name = srv["srv_type"].split('.')
-                msg_stubs.add(f'namespace {ns} {{ namespace srv {{ struct {name} {{ struct Request {{ using SharedPtr = std::shared_ptr<Request>; }}; struct Response {{ using SharedPtr = std::shared_ptr<Response>; }}; using Request = Request; using Response = Response; using SharedPtr = std::shared_ptr<{name}>; }}; }}}}')
-            
-            includes.extend(sorted(msg_stubs))
-        
+
+            # Generate simple struct stubs (SharedPtr aliases) so code compiles
+            stubs: Set[str] = set()
+            for header in msg_headers:
+                parts = header.split('/')  # e.g. std_msgs/msg/Float32
+                if len(parts) < 3:
+                    continue
+                ns, category, name = parts[0], parts[1], parts[2]
+                if category == 'msg':
+                    stubs.add(
+                        f'namespace {ns} {{\n'
+                        f'  namespace msg {{\n'
+                        f'    struct {name} {{\n'
+                        f'      using SharedPtr = std::shared_ptr<{name}>;\n'
+                        f'      using ConstSharedPtr = std::shared_ptr<const {name}>;\n'
+                        f'    }};\n'
+                        f'  }}\n'
+                        f'}}')
+                elif category == 'srv':
+                    stubs.add(
+                        f'namespace {ns} {{\n'
+                        f'  namespace srv {{\n'
+                        f'    struct {name} {{\n'
+                        f'      struct Request {{\n'
+                        f'        using SharedPtr = std::shared_ptr<Request>;\n'
+                        f'      }};\n'
+                        f'      struct Response {{\n'
+                        f'        using SharedPtr = std::shared_ptr<Response>;\n'
+                        f'      }};\n'
+                        f'      using Request = Request;\n'
+                        f'      using Response = Response;\n'
+                        f'    }};\n'
+                        f'  }}\n'
+                        f'}}')
+            includes.extend(sorted(stubs))
+            includes.append('#endif')
+            includes.append('')
         return includes
     
     def _generate_node_header(self, node: NodeConfig) -> Path:
@@ -152,9 +173,19 @@ class CodeGenerator:
         ]
         
         # Conditionally include ROS2 headers
+        has_actions = bool(node.actions)
+        has_timers = bool(node.timers)
+        use_lifecycle = node.lifecycle
+
         if uses_ros2:
             includes.insert(0, '#if ENABLE_ROS2')
             includes.insert(1, '#include "rclcpp/rclcpp.hpp"')
+            if use_lifecycle:
+                includes.insert(2, '#include "rclcpp_lifecycle/lifecycle_node.hpp"')
+            if has_actions:
+                includes.append('#include "rclcpp_action/rclcpp_action.hpp"')
+            if has_param_cb:
+                includes.append('#include "rcl_interfaces/msg/set_parameters_result.hpp"')
             includes.insert(2, '#else')
             includes.insert(3, '// ROS2 stubs for non-ROS2 builds')
             includes.insert(4, 'namespace rclcpp { class Node {}; }')
@@ -170,15 +201,26 @@ class CodeGenerator:
         ros_subscribers = self._generate_subscriber_declarations(node.subscribers)
         ros_services = self._generate_service_declarations(node.services)
         parameters = self._generate_parameter_declarations(node.parameters)
+        param_cb_decl = self._generate_parameter_callback_declarations(node.parameter_callbacks)
+        timers_decl = self._generate_timer_declarations(node.timers)
+        actions_decl = self._generate_action_declarations(node.actions)
         cuda_kernels = self._generate_cuda_kernel_declarations(node.name, self.config.cuda_kernels)
         
         # Generate the class declaration with conditional ROS2 support
         class_declaration = []
         
         if uses_ros2:
-            class_declaration.append(f'class {class_name} : public rclcpp::Node {{')
+            base_class = 'rclcpp::LifecycleNode' if use_lifecycle else 'rclcpp::Node'
+            class_declaration.append(f'class {class_name} : public {base_class} {{')
             class_declaration.append('public:')
-            class_declaration.append(f'    {class_name}() : Node("{node.name}") {{}}')
+                        # Build NodeOptions with namespace/remap if provided
+            ns_option = f'.namespace_("{node.namespace}")' if node.namespace else ''
+            remap_chain = ''
+            if node.remap:
+                for frm, to in node.remap.items():
+                    remap_chain += f'.append_remap_rule("{frm}:={to}")'
+            node_options_expr = f'rclcpp::NodeOptions(){ns_option}{remap_chain}'
+            class_declaration.append(f'    {class_name}() : {base_class}("{node.name}", {node_options_expr}) {{}}')
         else:
             class_declaration.append(f'class {class_name} {{')
             class_declaration.append('public:')
@@ -244,135 +286,7 @@ class CodeGenerator:
             f.write(header_content)
         
         return header_path
-    
-    def _generate_node_header(self, node: NodeConfig) -> Path:
-        """Generate a C++ header file for a ROS2 node.
-        
-        Args:
-            node: The node configuration
-            
-        Returns:
-            Path to the generated header file
-        """
-        # Convert node name to a valid C++ class name (e.g., 'my_node' -> 'MyNode')
-        class_name = ''.join(word.capitalize() for word in node.name.split('_'))
-        
-        # Generate include guard
-        include_guard = f"ROBODSL_{node.name.upper()}_NODE_HPP_"
-        
-        # Check if this node uses ROS2 features
-        uses_ros2 = bool(node.publishers or node.subscribers or node.services or node.parameters)
-        
-        # Generate base includes
-        includes = [
-            '#include <string>',
-            '#include <vector>',
-            '#include <map>',
-            '',  # For better formatting
-        ]
-        
-        # Conditionally include ROS2 headers
-        if uses_ros2:
-            includes.insert(0, '#if ENABLE_ROS2')
-            includes.insert(1, '#include "rclcpp/rclcpp.hpp"')
-            includes.insert(2, '#else')
-            includes.insert(3, '// ROS2 stubs for non-ROS2 builds')
-            includes.insert(4, 'namespace rclcpp { class Node {}; }')
-            includes.insert(5, '#endif')
-            includes.insert(6, '')  # Extra newline for formatting
-        
-        # Add message includes with conditional compilation
-        includes.extend(self._generate_message_includes(node))
-        includes.append('')  # Extra newline for formatting
-        
-        # Generate the class declaration parts
-        ros_publishers = self._generate_publisher_declarations(node.publishers)
-        ros_subscribers = self._generate_subscriber_declarations(node.subscribers)
-        ros_services = self._generate_service_declarations(node.services)
-        parameters = self._generate_parameter_declarations(node.parameters)
-        cuda_kernels = self._generate_cuda_kernel_declarations(node.name, self.config.cuda_kernels)
-        
-        # Generate the class declaration with conditional ROS2 support
-        class_declaration = []
-        
-        if uses_ros2:
-            class_declaration.append(f'class {class_name} : public rclcpp::Node {{')
-            class_declaration.append('public:')
-            class_declaration.append(f'    {class_name}() : Node("{node.name}") {{}}')
-        else:
-            class_declaration.append(f'class {class_name} {{')
-            class_declaration.append('public:')
-            class_declaration.append(f'    {class_name}() = default;')
-        
-        class_declaration.extend([
-            f'    virtual ~{class_name}() = default;',
-            '    ', 
-            '    // Common interface methods',
-            '    void initialize();',
-            '    void update();',
-            '    void cleanup();',
-            '',
-            'private:',
-            '    // ROS2 Publishers',
-            f'{ros_publishers}',
-            '    ', 
-            '    // ROS2 Subscribers',
-            f'{ros_subscribers}',
-            '    ', 
-            '    // ROS2 Services',
-            f'{ros_services}',
-            '    ', 
-            '    // Parameters',
-            f'{parameters}',
-            '',
-            '    // CUDA Kernels',
-            f'{cuda_kernels}',
-            '};'
-        ])
-        
-        class_declaration = '\n'.join(class_declaration)
-        
-        # Write the header file
-        header_content = [
-            f'// Generated by RoboDSL - DO NOT EDIT',
-            f'#ifndef {include_guard}',
-            f'#define {include_guard}',
-            ''
-        ]
-        
-        # Add includes
-        header_content.extend(includes)
-        header_content.append('')
-        
-        # Add class declaration
-        header_content.append(class_declaration)
-        
-        # Add footer
-        header_content.extend([
-            '',
-            f'#endif // {include_guard}',
-            ''
-        ])
-        
-        header_content = '\n'.join(header_content)
-        
-        # Create output directory if it doesn't exist
-        header_path = self.output_dir / 'include' / 'robodsl' / f"{node.name}_node.hpp"
-        header_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        with open(header_path, 'w') as f:
-            f.write(header_content)
-        
-        return header_path
-    
-    def _generate_node_header(self, node: NodeConfig) -> str:
-        """Generate a C++ header file for a ROS2 node.
-        
-        Args:
-            node: The node configuration
-            
-        Returns:
-            The generated header file content
+       
         """
         # Convert node name to a valid C++ class name (e.g., 'my_node' -> 'MyNode')
         class_name = ''.join(word.capitalize() for word in node.name.split('_'))
@@ -471,12 +385,14 @@ class CodeGenerator:
             header_content += "  // ROS2 stubs for non-ROS2 builds\n"
             header_content += "  std::shared_ptr<void> node_ = nullptr;  // Placeholder for ROS2 node\n"
             header_content += "  #endif  // ENABLE_ROS2\n\n"
+        # Timer and action member declarations (inside class)
+        header_content += timers_decl + "\n\n" + actions_decl + "\n" + param_cb_decl + "\n"
         
         header_content += f"}};  // class {node.name.capitalize()}Node\n\n"
         header_content += "}}  // namespace robodsl\n"
         
-        return header_content
-    
+
+    """
     # Add other methods from the original generator here...
     # (This is a simplified version focusing on the changes needed for message includes)
     
@@ -484,13 +400,14 @@ class CodeGenerator:
         """Generate C++ declarations for ROS2 publishers."""
         if not publishers:
             return "    // No publishers defined\n"
-            
+
         decls = []
         for pub in publishers:
             topic = pub['topic']
             msg_type = pub['msg_type'].replace('.', '::')
             var_name = f"{topic.lstrip('/').replace('/', '_')}_pub_"
-            decls.append(f"    rclcpp::Publisher<{msg_type}>::{type} {var_name};")
+            # Use SharedPtr for publisher handle
+            decls.append(f"    rclcpp::Publisher<{msg_type}>::SharedPtr {var_name};")
             
         return '\n'.join(decls)
     
@@ -535,7 +452,55 @@ class CodeGenerator:
             decls.append(f"    {cpp_type} {name}_;")
             
         return '\n'.join(decls)
-    
+
+    def _generate_parameter_callback_declarations(self, enabled: bool) -> str:
+        """Generate member + prototype declarations for parameter callbacks."""
+        if not enabled:
+            return ""
+        return (
+            "    // Parameter callback\n"
+            "    rclcpp::OnSetParametersCallbackHandle::SharedPtr param_cb_handle_;\n"
+            "    #if ENABLE_ROS2\n"
+            "    rcl_interfaces::msg::SetParametersResult on_parameter_event(const std::vector<rclcpp::Parameter> & params);\n"
+            "    #else\n"
+            "    void on_parameter_event(const std::vector<void*>& /*params*/) {}\n"
+            "    #endif  // ENABLE_ROS2\n"
+        )
+
+    def _generate_timer_declarations(self, timers: List[Dict[str, Any]]) -> str:
+        """Generate C++ member declarations for timers."""
+        if not timers:
+            return "    // No timers defined"
+        lines: List[str] = []
+        for tmr in timers:
+            var_name = f"timer_{tmr['name']}_"
+            lines.append(f"    rclcpp::TimerBase::SharedPtr {var_name};")
+        return '\n'.join(lines)
+
+    def _generate_action_declarations(self, actions: List[Dict[str, Any]]) -> str:
+        """Generate C++ member declarations and callback prototypes for actions."""
+        if not actions:
+            return "    // No actions defined"
+
+        lines: List[str] = []
+        for act in actions:
+            action_name = act['name']
+            action_type_alias = action_name.capitalize()
+            var_name = f"{action_name}_action_server_"
+            lines.append(f"    // Action: {action_name}")
+            lines.append(f"    rclcpp_action::Server<{action_type_alias}>::SharedPtr {var_name};")
+            lines.append("    #if ENABLE_ROS2")
+            lines.append(f"    rclcpp_action::GoalResponse handle_goal_{action_name}(const rclcpp_action::GoalUUID & uuid, std::shared_ptr<const {action_type_alias}::Goal> goal);")
+            lines.append(f"    rclcpp_action::CancelResponse handle_cancel_{action_name}(const std::shared_ptr<rclcpp_action::ServerGoalHandle<{action_type_alias}>> goal_handle);")
+            lines.append(f"    void handle_accepted_{action_name}(const std::shared_ptr<rclcpp_action::ServerGoalHandle<{action_type_alias}>> goal_handle);")
+            lines.append("    #else")
+            lines.append(f"    void handle_goal_{action_name}(...) {{}}")
+            lines.append(f"    void handle_cancel_{action_name}(...) {{}}")
+            lines.append(f"    void handle_accepted_{action_name}(...) {{}}")
+            lines.append("    #endif  // ENABLE_ROS2")
+            lines.append("")
+        return '\n'.join(lines)
+
     def _generate_cuda_kernel_declarations(self, node_name: str, kernels: List[CudaKernelConfig]) -> str:
         """Generate C++ declarations for CUDA kernels used by this node."""
         if not kernels:
@@ -671,7 +636,26 @@ def generate_launch_description():
         """
         # Check if this project uses ROS2 features
         uses_ros2 = any(
-            node.publishers or node.subscribers or node.services or node.parameters
+            node.publishers or node.subscribers or node.services or node.parameters or getattr(node, 'actions', [])
+            for node in self.config.nodes
+        )
+        
+        # Check if any node is a lifecycle node
+        has_lifecycle_nodes = any(
+            getattr(node, 'is_lifecycle_node', False)
+            for node in self.config.nodes
+        )
+        
+        # Check for nodes using custom QoS settings
+        has_qos_settings = any(
+            any('qos' in pub for pub in node.publishers) or 
+            any('qos' in sub for sub in node.subscribers)
+            for node in self.config.nodes
+        )
+        
+        # Check for nodes using namespaces
+        has_namespaces = any(
+            getattr(node, 'namespace', '') != ''
             for node in self.config.nodes
         )
         
@@ -679,10 +663,10 @@ def generate_launch_description():
         has_cuda_kernels = bool(self.config.cuda_kernels)
         
         # Generate CMake content
-        cmake_content = f"""# Generated by RoboDSL - DO NOT EDIT
+        cmake_content = """# Generated by RoboDSL - DO NOT EDIT
 
 cmake_minimum_required(VERSION 3.10)
-project({self.config.project_name} VERSION 0.1.0)
+project({project_name} VERSION 0.1.0)
 
 # Default to C++17
 set(CMAKE_CXX_STANDARD 17)
@@ -706,31 +690,58 @@ if(ENABLE_ROS2)
     find_package(rclcpp REQUIRED)
     find_package(rclcpp_components REQUIRED)
     find_package(std_msgs REQUIRED)
-    
-    # Find message/service dependencies
-    # TODO: Add any additional ROS2 message/service dependencies here
+    find_package(rclcpp_action REQUIRED)
+    find_package(rcl_interfaces REQUIRED)
+    find_package(rosidl_default_generators REQUIRED)
+    find_package(rosidl_default_runtime REQUIRED)
+
+    # Add lifecycle components if needed
+    if({has_lifecycle})
+        find_package(rclcpp_lifecycle REQUIRED)
+        find_package(lifecycle_msgs REQUIRED)
+    endif()
+
+    # Add QoS dependencies if needed
+    if({has_qos})
+        find_package(rmw_implementation_cmake REQUIRED)
+        find_package(rcl REQUIRED)
+        find_package(rmw REQUIRED)
+    endif()
     
     # Include directories
     include_directories(
         ${{CMAKE_CURRENT_SOURCE_DIR}}/include
         ${{rclcpp_INCLUDE_DIRS}}
         ${{rclcpp_components_INCLUDE_DIRS}}
+        ${{rosidl_default_generators_INCLUDE_DIRS}}
+        ${{rosidl_default_runtime_INCLUDE_DIRS}}
     )
-    
-    # Add compile definitions
-    add_compile_definitions(ENABLE_ROS2=1)
-else()
-    # Include directories for non-ROS2 build
-    include_directories(
-        ${{CMAKE_CURRENT_SOURCE_DIR}}/include
-    )
-    
-    # Add compile definitions
-    add_compile_definitions(ENABLE_ROS2=0)
-    
-    # Add stubs for ROS2 types if needed
-    # TODO: Add any necessary stubs for ROS2 types
+
+    # Handle custom message generation
+    if(EXISTS "${{CMAKE_CURRENT_SOURCE_DIR}}/msg" OR EXISTS "${{CMAKE_CURRENT_SOURCE_DIR}}/srv" OR EXISTS "${{CMAKE_CURRENT_SOURCE_DIR}}/action")
+        # Find all .msg, .srv, .action files
+        file(GLOB_RECURSE _msg_files "${{CMAKE_CURRENT_SOURCE_DIR}}/msg/*.msg")
+        file(GLOB_RECURSE _srv_files "${{CMAKE_CURRENT_SOURCE_DIR}}/srv/*.srv")
+        file(GLOB_RECURSE _action_files "${{CMAKE_CURRENT_SOURCE_DIR}}/action/*.action")
+        
+        if(_msg_files OR _srv_files OR _action_files)
+            rosidl_generate_interfaces(${{PROJECT_NAME}}
+                ${{_msg_files}}
+                ${{_srv_files}}
+                ${{_action_files}}
+                DEPENDENCIES builtin_interfaces std_msgs
+            )
+        endif()
+    endif()
 endif()
+
+# Add compile definitions
+add_compile_definitions(
+    ENABLE_ROS2=${{ENABLE_ROS2}}
+    $<$<BOOL:{has_lifecycle_int}>:HAS_LIFECYCLE_NODES=1>
+    $<$<BOOL:{has_qos_int}>:HAS_QOS_SETTINGS=1>
+    $<$<BOOL:{has_ns_int}>:HAS_NAMESPACES=1>
+)
 
 # Handle CUDA if enabled
 if(ENABLE_CUDA)
@@ -740,119 +751,359 @@ if(ENABLE_CUDA)
     set(CUDA_ARCHITECTURES "native")
     
     # CUDA compile options
-    set(CUDA_NVCC_FLAGS "${{CUDA_NVCC_FLAGS}} -std=c++17 --expt-relaxed-constexpr")
+    set(CMAKE_CUDA_STANDARD 17)
+    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+    set(CMAKE_CUDA_FLAGS "${{CMAKE_CUDA_FLAGS}} -std=c++17 --expt-relaxed-constexpr -Xcompiler -fPIC")
     
     # Find CUDA
     find_package(CUDA REQUIRED)
     
-    # Include CUDA directories
-    include_directories(
-        ${{CUDA_INCLUDE_DIRS}}
+    # CUDA library
+    add_library(cuda_utils SHARED
+        ${{CMAKE_CURRENT_SOURCE_DIR}}/src/cuda/cuda_utils.cu
     )
     
-    # Add CUDA compile definitions
-    add_compile_definitions(WITH_CUDA=1)
+    # Set CUDA properties
+    set_target_properties(cuda_utils PROPERTIES
+        CUDA_SEPARABLE_COMPILATION ON
+        POSITION_INDEPENDENT_CODE ON
+    )
     
-    # Find Thrust if needed
+    # Link against CUDA libraries
+    target_link_libraries(cuda_utils
+        CUDA::cudart
+        CUDA::cuda_driver
+    )
+    
+    # Install CUDA library
+    install(TARGETS cuda_utils
+        ARCHIVE DESTINATION lib
+        LIBRARY DESTINATION lib
+        RUNTIME DESTINATION bin
+    )
+    
+    # Add CUDA include directories
+    include_directories(
+        ${{CMAKE_CUDA_INCLUDE_DIRECTORIES}}
+        ${{CMAKE_CURRENT_SOURCE_DIR}}/include/cuda
+    )
+    
+    # Find Thrust if available
     if(EXISTS "${{CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}}/thrust")
         add_compile_definitions(WITH_THRUST=1)
     else()
         add_compile_definitions(WITH_THRUST=0)
     endif()
-else()
-    # Add stubs for CUDA if needed
-    add_compile_definitions(WITH_CUDA=0)
-    add_compile_definitions(WITH_THRUST=0)
     
-    # TODO: Add any necessary stubs for CUDA types/functions
+    add_compile_definitions(WITH_CUDA=1)
+else()
+    add_compile_definitions(
+        WITH_CUDA=0
+        WITH_THRUST=0
+    )
 endif()
 
-# Add library
-add_library(${{PROJECT_NAME}}_lib
-    # Add source files here
-    # src/example.cpp
+# Add main library
+add_library({project_name}_lib
+    # Add common source files here
+    # src/common_utils.cpp
 )
 
-target_link_libraries(${{PROJECT_NAME}}_lib
+# Set C++ standard properties
+target_compile_features({project_name}_lib PRIVATE cxx_std_17)
+set_target_properties({project_name}_lib PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF
+)
+
+# Link against common dependencies
+target_link_libraries({project_name}_lib
     ${{CMAKE_THREAD_LIBS_INIT}}
 )
 
+# Add CUDA library if enabled
+if(ENABLE_CUDA)
+    target_link_libraries({project_name}_lib
+        cuda_utils
+    )
+    
+    # Add CUDA include directories
+    target_include_directories({project_name}_lib PRIVATE
+        ${{CMAKE_CURRENT_SOURCE_DIR}}/include/cuda
+    )
+endif()
+""".format(
+            project_name=self.config.project_name,
+            has_lifecycle='ON' if has_lifecycle_nodes else 'OFF',
+            has_qos='ON' if has_qos_settings else 'OFF',
+            has_lifecycle_int=1 if has_lifecycle_nodes else 0,
+            has_qos_int=1 if has_qos_settings else 0,
+            has_ns_int=1 if has_namespaces else 0
+        )
+
+        # Add ROS2 dependencies if enabled
+        if uses_ros2:
+            cmake_content += """
 if(ENABLE_ROS2)
-    ament_target_dependencies(${{PROJECT_NAME}}_lib
+    ament_target_dependencies({project_name}_lib
         rclcpp
         rclcpp_components
         std_msgs
         # Add other ROS2 dependencies here
     )
+    
+    # Add lifecycle dependencies if needed
+    if({has_lifecycle})
+        ament_target_dependencies({project_name}_lib
+            rclcpp_lifecycle
+            lifecycle_msgs
+        )
+    endif()
+    
+    # Add QoS dependencies if needed
+    if({has_qos})
+        ament_target_dependencies({project_name}_lib
+            rcl
+            rmw_implementation
+        )
+    endif()
+    
+    # Add component registration
+    rclcpp_components_register_nodes({project_name}_lib "robodsl::Node")
 endif()
+""".format(
+                project_name=self.config.project_name,
+                has_lifecycle='ON' if has_lifecycle_nodes else 'OFF',
+                has_qos='ON' if has_qos_settings else 'OFF'
+            )
 
-# Add CUDA kernel library if needed
-if(ENABLE_CUDA AND ENABLE_CUDA_SUPPORT AND TARGET cuda_kernels)
-    add_dependencies(${{PROJECT_NAME}}_lib cuda_kernels)
-    target_link_libraries(${{PROJECT_NAME}}_lib cuda_kernels)
-endif()
-
-# Add executables for each node
-"""
-
-        # Add executable for each node
+        # Add node executables
         for node in self.config.nodes:
             node_name = node.name
-            exec_name = f"{node_name}_node"
+            node_namespace = getattr(node, 'namespace', '')
+            is_lifecycle = getattr(node, 'is_lifecycle_node', False)
             
             cmake_content += f"""
 # {node_name} node
-target_sources(${{PROJECT_NAME}}_lib PRIVATE
+add_executable({node_name}_node
     src/{node_name}_node.cpp
 )
 
-# Add include directory for this node
-target_include_directories(${{PROJECT_NAME}}_lib PRIVATE
+# Set node properties
+set_target_properties({node_name}_node PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF
+)
+
+# Add include directories
+target_include_directories({node_name}_node PRIVATE
+    ${{CMAKE_CURRENT_SOURCE_DIR}}/include
     ${{CMAKE_CURRENT_SOURCE_DIR}}/include/robodsl
 )
 
-# Create executable
-add_executable({exec_name} src/{node_name}_node.cpp)
-target_link_libraries({exec_name} ${{PROJECT_NAME}}_lib)
-
-# Install targets
-install(TARGETS {exec_name}
-    RUNTIME DESTINATION lib/${{PROJECT_NAME}}
-    LIBRARY DESTINATION lib/${{PROJECT_NAME}}
-    ARCHIVE DESTINATION lib/${{PROJECT_NAME}}
-)"""
-
-        # Add ROS2-specific install rules if needed
-        if uses_ros2:
-            cmake_content += """
-# Install Python modules for the package
-install(DIRECTORY
-    launch
-    DESTINATION share/${PROJECT_NAME}/
+# Link against main library
+target_link_libraries({node_name}_node
+    {self.config.project_name}_lib
 )
 
-# Export dependencies
+# Add ROS2 dependencies if enabled
 if(ENABLE_ROS2)
+    target_link_libraries({node_name}_node
+        rclcpp::rclcpp
+        rclcpp_components::component
+    )
+    
+    # Add lifecycle dependencies if needed
+    if({'ON' if is_lifecycle else 'OFF'})
+        target_link_libraries({node_name}_node
+            rclcpp_lifecycle::rclcpp_lifecycle
+            lifecycle_msgs::lifecycle_msgs__rosidl_generator_c
+        )
+    endif()
+    
+    # Add component registration
+    rclcpp_components_register_nodes({node_name}_node "robodsl::{node_name}::Node")
+    
+    # Add node namespace if specified
+    if("{node_namespace}")
+        target_compile_definitions({node_name}_node PRIVATE
+            NODE_NAMESPACE=\"{node_namespace}\"
+        )
+    endif()
+endif()
+
+# Install node
+get_property(is_multiarch GLOBAL PROPERTY TARGET_SUPPORTS_MULTI_CONFIG)
+if(is_multiarch)
+    set(node_dest lib/${{PROJECT_NAME}})
+else()
+    set(node_dest lib/${{PROJECT_NAME}}/$<CONFIG>)
+endif()
+
+install(TARGETS {node_name}_node
+    RUNTIME DESTINATION ${{node_dest}}
+    LIBRARY DESTINATION ${{node_dest}}
+    ARCHIVE DESTINATION ${{node_dest}}
+)
+"""
+
+        # Add installation rules for all targets
+        cmake_content += """
+# Add installation rules for all targets
+install(TARGETS {project_name}_lib
+    EXPORT export_{project_name}
+    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION lib
+    RUNTIME DESTINATION bin
+    INCLUDES DESTINATION include
+)
+
+# Install headers
+install(DIRECTORY include/
+    DESTINATION include
+    FILES_MATCHING
+    PATTERN "*.hpp"
+    PATTERN "*.h"
+    PATTERN "*.hxx"
+)
+
+# Install launch files if they exist
+if(EXISTS "${{CMAKE_CURRENT_SOURCE_DIR}}/launch")
+    install(DIRECTORY launch/
+        DESTINATION share/${{PROJECT_NAME}}/launch
+        PATTERN "*.launch.py"
+        PATTERN "*.launch.xml"
+        PATTERN "*.launch"
+    )
+endif()
+
+# Install config files
+if(EXISTS "${{CMAKE_CURRENT_SOURCE_DIR}}/config")
+    install(DIRECTORY config/
+        DESTINATION share/${{PROJECT_NAME}}/config
+    )
+endif()
+
+# Install Python modules if they exist
+if(EXISTS "${{CMAKE_CURRENT_SOURCE_DIR}}/${{PROJECT_NAME}}")
+    install(DIRECTORY ${{PROJECT_NAME}}/
+        DESTINATION lib/python${{PYTHON_VERSION_MAJOR}}.${{PYTHON_VERSION_MINOR}}/site-packages/${{PROJECT_NAME}}
+        PATTERN "*.py"
+        PATTERN "__pycache__" EXCLUDE
+    )
+endif()
+
+# Add ROS2-specific install rules if needed
+if(ENABLE_ROS2)
+    # Export include directories
+    ament_export_include_directories(include)
+    
+    # Export libraries
+    ament_export_libraries(
+        {project_name}_lib
+        $<$<BOOL:${{CUDA_FOUND}}>:cuda_utils>
+    )
+    
+    # Export targets
+    ament_export_targets(export_{project_name} HAS_LIBRARY_TARGET)
+    
+    # Export dependencies
     ament_export_dependencies(
+        # Core ROS2
+        ament_cmake
         rclcpp
         rclcpp_components
         std_msgs
+        builtin_interfaces
+        rosidl_default_runtime
         # Add other ROS2 dependencies here
     )
     
-    ament_export_include_directories(include)
-    ament_export_libraries(${PROJECT_NAME}_lib)
+    # Export build dependencies
+    ament_export_build_dependencies(
+        ament_cmake
+        rosidl_default_generators
+        $<$<BOOL:${{CUDA_FOUND}}>:cuda>
+    )
     
-    ament_package()
+    # Add lifecycle dependencies if needed
+    if({has_lifecycle})
+        ament_export_dependencies(
+            rclcpp_lifecycle
+            lifecycle_msgs
+        )
+    endif()
+    
+    # Add QoS dependencies if needed
+    if({has_qos})
+        ament_export_dependencies(
+            rmw_implementation
+            rcl
+            rmw
+        )
+    endif()
+    
+    # Install package.xml
+    install(FILES package.xml
+        DESTINATION share/${{PROJECT_NAME}}
+    )
+    
+    # Get node names for installation
+    set(NODE_NAMES {node_names})
+    
+    # Install launch files for each node
+    foreach(node_name ${{NODE_NAMES}})
+        if(EXISTS "${{CMAKE_CURRENT_SOURCE_DIR}}/launch/${{node_name}}.launch.py")
+            install(PROGRAMS
+                launch/${{node_name}}.launch.py
+                DESTINATION share/${{PROJECT_NAME}}/launch
+            )
+        endif()
+    endforeach()
+    
+    # Install node executables with proper destination
+    install(TARGETS ${{NODE_NAMES}}
+        RUNTIME DESTINATION lib/${{PROJECT_NAME}}
+        LIBRARY DESTINATION lib/${{PROJECT_NAME}}
+        ARCHIVE DESTINATION lib/${{PROJECT_NAME}}
+    )
+    
+    # Generate and install environment hooks
+    ament_environment_hooks("${{CMAKE_CURRENT_SOURCE_DIR}}/env-hooks/99-{project_name}.dsv.in")
+    
+    # Generate and install package.xml
+    ament_package(
+        CONFIG_EXTRAS "{project_name}-extras.cmake.in"
+    )
 endif()
-"""
-        else:
-            cmake_content += """
-# Install include files
-install(DIRECTORY
-    include/
-    DESTINATION include
+""".format(
+            project_name=self.config.project_name,
+            has_lifecycle='ON' if has_lifecycle_nodes else 'OFF',
+            has_qos='ON' if has_qos_settings else 'OFF',
+            node_names=' '.join([node.name + '_node' for node in self.config.nodes])
+        )
+
+# Add uninstall target
+add_custom_target(uninstall
+    COMMAND ${{CMAKE_COMMAND}} -P ${{CMAKE_CURRENT_BINARY_DIR}}/ament_cmake_uninstall.cmake
 )
+""".format(
+                project_name=self.config.project_name,
+                has_lifecycle='ON' if has_lifecycle_nodes else 'OFF',
+                has_qos='ON' if has_qos_settings else 'OFF'
+            )
+
+        # Create output directory if it doesn't exist
+        cmake_path = self.output_dir / 'CMakeLists.txt'
+        cmake_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Write the CMakeLists.txt file
+        with open(cmake_path, 'w') as f:
+            f.write(cmake_content)
+            
+        return cmake_path
 """
 
         # Create output directory if it doesn't exist
@@ -1030,6 +1281,11 @@ cudaError_t launch_{kernel.name}_kernel(
         # Check if this node uses ROS2 features
         uses_ros2 = bool(node.publishers or node.subscribers or node.services or node.parameters)
         
+        # Flags for advanced features
+        has_timers = bool(node.timers)
+        has_actions = bool(node.actions)
+        use_lifecycle = node.lifecycle
+
         # Initialize includes
         includes = [
             f'#include "robodsl/{node.name}_node.hpp"',
@@ -1058,7 +1314,8 @@ cudaError_t launch_{kernel.name}_kernel(
         
         # Initialize constructor
         if uses_ros2:
-            constructor = f'''{class_name}::{class_name}() : Node("{node.name}")
+            base_ctor = 'LifecycleNode' if use_lifecycle else 'Node'
+            constructor = f'''{class_name}::{class_name}() : {base_ctor}("{node.name}")
 {{
     // Initialize parameters
 '''
@@ -1079,7 +1336,34 @@ cudaError_t launch_{kernel.name}_kernel(
                 for name, type_info in node.parameters.items():
                     constructor += f'    // {name}_ = /* default value */;\n'
         
-        # Add publishers, subscribers, and services with ROS2 guards
+        # Register parameter callback
+        if uses_ros2 and has_param_cb:
+            constructor += '\n    // Register parameter change callback\n'
+            constructor += f'    param_cb_handle_ = this->add_on_set_parameters_callback(\n        std::bind(&{class_name}::on_parameter_event, this, std::placeholders::_1));\n'
+
+        # Create timers
+        if uses_ros2 and has_timers:
+            constructor += '\n    // Initialize timers\n'
+            for tmr in node.timers:
+                var_name = f"timer_{tmr['name']}_"
+                period = tmr['period_ms']
+                constructor += f'    {var_name} = this->create_wall_timer(std::chrono::milliseconds({period}), [this]() {{ /* TODO: {tmr["name"]} callback */ }});\n'
+
+        # Create action servers
+        if uses_ros2 and has_actions:
+            constructor += '\n    // Initialize action servers\n'
+            for act in node.actions:
+                act_type = act['name'].capitalize()
+                var_name = f"{act['name']}_action_server_"
+                constructor += (
+                    f'    {var_name} = rclcpp_action::create_server<{act_type}>('
+                    f'\n        this, "{act["name"]}",' 
+                    f'\n        std::bind(&{class_name}::handle_goal_{act["name"]}, this, std::placeholders::_1, std::placeholders::_2),' 
+                    f'\n        std::bind(&{class_name}::handle_cancel_{act["name"]}, this, std::placeholders::_1),' 
+                    f'\n        std::bind(&{class_name}::handle_accepted_{act["name"]}, this, std::placeholders::_1));\n'
+                )
+
+        # Add publishers, subscribers, services with ROS2 guards
         if uses_ros2:
             if node.publishers:
                 constructor += '\n    // Initialize publishers\n'
@@ -1088,8 +1372,25 @@ cudaError_t launch_{kernel.name}_kernel(
                     msg_type = pub['msg_type'].replace('.', '::')
                     var_name = f"{topic.lstrip('/').replace('/', '_')}_pub_"
                     
-                    decl = f'{var_name} = this->create_publisher<{msg_type}>("{topic}", 10);'
-                    constructor += f'    {decl}\n'
+                    qos_cfg = pub.get('qos', {})
+                    if qos_cfg:
+                        depth = qos_cfg.get('depth', '10')
+                        qos_var = f"qos_{var_name}"
+                        constructor += f'    {{\n'
+                        constructor += f'      rclcpp::QoS {qos_var}({depth});\n'
+                        reliability = qos_cfg.get('reliability')
+                        if reliability == 'best_effort':
+                            constructor += f'      {qos_var}.reliability(rclcpp::ReliabilityPolicy::BestEffort);\n'
+                        elif reliability == 'reliable':
+                            constructor += f'      {qos_var}.reliability(rclcpp::ReliabilityPolicy::Reliable);\n'
+                        durability = qos_cfg.get('durability')
+                        if durability == 'transient_local':
+                            constructor += f'      {qos_var}.durability(rclcpp::DurabilityPolicy::TransientLocal);\n'
+                        constructor += f'      {var_name} = this->create_publisher<{msg_type}>("{topic}", {qos_var});\n'
+                        constructor += f'    }}\n'
+                    else:
+                        decl = f'{var_name} = this->create_publisher<{msg_type}>("{topic}", 10);'
+                        constructor += f'    {decl}\n'
             
             if node.subscribers:
                 constructor += '\n    // Initialize subscribers\n'
@@ -1098,10 +1399,27 @@ cudaError_t launch_{kernel.name}_kernel(
                     msg_type = sub['msg_type'].replace('.', '::')
                     callback_name = f"{topic.lstrip('/').replace('/', '_')}_callback"
                     
-                    decl = f'this->create_subscription<{msg_type}>(' \
+                    qos_cfg = sub.get('qos', {})
+                    if qos_cfg:
+                        depth = qos_cfg.get('depth', '10')
+                        qos_var = f"qos_{callback_name}"
+                        constructor += f'    {{\n'
+                        constructor += f'      rclcpp::QoS {qos_var}({depth});\n'
+                        reliability = qos_cfg.get('reliability')
+                        if reliability == 'best_effort':
+                            constructor += f'      {qos_var}.reliability(rclcpp::ReliabilityPolicy::BestEffort);\n'
+                        elif reliability == 'reliable':
+                            constructor += f'      {qos_var}.reliability(rclcpp::ReliabilityPolicy::Reliable);\n'
+                        durability = qos_cfg.get('durability')
+                        if durability == 'transient_local':
+                            constructor += f'      {qos_var}.durability(rclcpp::DurabilityPolicy::TransientLocal);\n'
+                        constructor += f'      this->create_subscription<{msg_type}>("{topic}", {qos_var}, std::bind(&{class_name}::{callback_name}, this, std::placeholders::_1));\n'
+                        constructor += f'    }}\n'
+                    else:
+                        decl = f'this->create_subscription<{msg_type}>(' \
                           f'"{topic}", 10, ' \
                           f'std::bind(&{class_name}::{callback_name}, this, std::placeholders::_1));'
-                    constructor += f'    {decl}\n'
+                        constructor += f'    {decl}\n'
             
             if node.services:
                 constructor += '\n    // Initialize services\n'
@@ -1236,6 +1554,73 @@ void {class_name}::{callback_name}(
         # Add callbacks
         source_lines.extend(callbacks)
         
+        # Generate action callbacks
+        for act in node.actions:
+            action_name = act['name']
+            act_type = action_name.capitalize()
+            if uses_ros2:
+                callback_code = f'''#if ENABLE_ROS2
+rclcpp_action::GoalResponse {class_name}::handle_goal_{action_name}(const rclcpp_action::GoalUUID & /*uuid*/, std::shared_ptr<const {act_type}::Goal> /*goal*/)
+{{
+    RCLCPP_INFO(this->get_logger(), "Received goal request for action {action_name}");
+    return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
+}}
+
+rclcpp_action::CancelResponse {class_name}::handle_cancel_{action_name}(const std::shared_ptr<rclcpp_action::ServerGoalHandle<{act_type}>> /*goal_handle*/)
+{{
+    RCLCPP_INFO(this->get_logger(), "Received cancel request for action {action_name}");
+    return rclcpp_action::CancelResponse::ACCEPT;
+}}
+
+void {class_name}::handle_accepted_{action_name}(const std::shared_ptr<rclcpp_action::ServerGoalHandle<{act_type}>> goal_handle)
+{{
+    RCLCPP_INFO(this->get_logger(), "Goal accepted for action {action_name}");
+    // Example CUDA off-load in detached thread
+#if ENABLE_CUDA && defined(__CUDACC__)
+    std::thread([this, goal_handle]() {{
+        // TODO: copy goal to device, allocate buffers
+        dim3 grid(1); dim3 block(256);
+        // exampleKernel<<<grid, block>>>();
+        cudaDeviceSynchronize();
+
+        auto result = std::make_shared<{act_type}::Result>();
+        // TODO: fill result fields
+        goal_handle->succeed(result);
+    }}).detach();
+#else
+    (void)goal_handle;
+#endif
+    (void)goal_handle;
+    // TODO: start execution
+}}
+#else
+void {class_name}::handle_goal_{action_name}(... ) {{}}
+void {class_name}::handle_cancel_{action_name}(... ) {{}}
+void {class_name}::handle_accepted_{action_name}(... ) {{}}
+#endif'''
+                source_lines.append(callback_code)
+            else:
+                callbacks.append(f'// Action callbacks for {action_name} stubbed for non-ROS2 builds')
+
+        # Generate parameter callback definition
+        if node.parameter_callbacks:
+            if uses_ros2:
+                param_cb_code = f'''#if ENABLE_ROS2
+rcl_interfaces::msg::SetParametersResult {class_name}::on_parameter_event(const std::vector<rclcpp::Parameter> & params)
+{{
+    (void)params; // TODO: Inspect parameters and set result accordingly
+    rcl_interfaces::msg::SetParametersResult result;
+    result.successful = true;
+    result.reason = "Parameters accepted";
+    return result;
+}}
+#else
+void {class_name}::on_parameter_event(const std::vector<void*>& /*params*/) {{}}
+#endif'''
+                source_lines.append(param_cb_code)
+            else:
+                source_lines.append(f'// Parameter callback stubbed for non-ROS2 builds')
+
         # Close namespace and add ROS2 registration
         source_lines.extend([
             '}  // namespace robodsl',
@@ -1277,3 +1662,4 @@ void {class_name}::{callback_name}(
             'string[]': 'std::vector<std::string>',
         }
         return type_map.get(type_info, 'auto')  # Default to auto if type not recognized
+
