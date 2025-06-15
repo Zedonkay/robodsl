@@ -1,0 +1,18 @@
+# general_controller RoboDSL configuration
+
+node main_node {{
+    # Define your ROS2 node configuration here
+    # Example:
+    # publisher /camera/image_raw sensor_msgs/msg/Image
+    # subscriber /cmd_vel geometry_msgs/msg/Twist
+}}
+
+cuda_kernels {{
+    # Define your CUDA kernels here
+    # Example:
+    # kernel process_image {{
+    #     input: Image
+    #     output: Image
+    #     block_size: (16, 16, 1)
+    # }}
+}}

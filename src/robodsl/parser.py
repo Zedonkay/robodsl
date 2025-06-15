@@ -42,10 +42,18 @@ class CudaKernelConfig:
 
 @dataclass
 class RoboDSLConfig:
-    """Top-level configuration for a RoboDSL project."""
+    """Top-level configuration for a RoboDSL project.
+    
+    Attributes:
+        project_name: Name of the project
+        nodes: List of node configurations
+        cuda_kernels: List of CUDA kernel configurations
+        includes: Set of include paths used in the project
+    """
     project_name: str = "robodsl_project"  # Default project name
     nodes: List[NodeConfig] = field(default_factory=list)
     cuda_kernels: List[CudaKernelConfig] = field(default_factory=list)
+    includes: set[str] = field(default_factory=set)  # Track all includes across the project
 
 def parse_robodsl(content: str) -> RoboDSLConfig:
     """Parse a RoboDSL configuration file.
@@ -57,6 +65,16 @@ def parse_robodsl(content: str) -> RoboDSLConfig:
         RoboDSLConfig: The parsed configuration
     """
     config = RoboDSLConfig()
+    
+    # Track all includes in the file
+    includes = set()
+    
+    # Look for include statements
+    include_matches = re.findall(r'^\s*include\s+[<"]([^>"]+)[>"]', content, re.MULTILINE)
+    includes.update(include_matches)
+    
+    # Add to config
+    config.includes = includes
     
     # Remove comments
     content = re.sub(r'#.*', '', content)

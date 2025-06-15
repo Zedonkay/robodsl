@@ -397,7 +397,11 @@ def generate(input_file: Path, output_dir: Optional[Path], force: bool) -> None:
         
         click.echo(f"Generated {len(generated_files)} files in {output_dir}:")
         for file_path in generated_files:
-            click.echo(f"  - {file_path.relative_to(output_dir)}")
+            if isinstance(file_path, (str, Path)):
+                file_path = Path(file_path)
+                click.echo(f"  - {file_path.relative_to(output_dir) if file_path.is_absolute() else file_path}")
+            else:
+                click.echo(f"  - {file_path}")
             
     except Exception as e:
         click.echo(f"Error: {str(e)}", err=True)
