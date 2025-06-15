@@ -1,6 +1,6 @@
 # RoboDSL
 
-A domain-specific language and compiler for GPU-accelerated robotics applications with ROS2 and CUDA integration.
+A domain-specific language and compiler for building high-performance, GPU-accelerated robotics applications with ROS2 and CUDA integration.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/)
@@ -13,13 +13,30 @@ A domain-specific language and compiler for GPU-accelerated robotics application
 
 RoboDSL is a powerful framework that simplifies the development of GPU-accelerated robotics applications by providing a clean, declarative syntax for defining ROS2 nodes and CUDA kernels. It handles all the boilerplate code and build system configuration, allowing developers to focus on algorithm development and system integration.
 
-## Features
+## ✨ Key Features
 
-- **ROS2 Integration**: Full support for ROS2 nodes, lifecycle management, and communication patterns
-- **CUDA Acceleration**: Seamless GPU integration with automatic memory management
+### 🚀 High-Performance Computing
+- **GPU Acceleration**: Seamless CUDA integration with automatic memory management
+- **Multi-Threading**: Built-in support for parallel processing and thread safety
+- **Optimized Builds**: Advanced compilation flags and optimizations for maximum performance
+
+### 🤖 ROS2 Integration
+- **Lifecycle Nodes**: Full support for managed nodes with state management
+- **Quality of Service**: Fine-grained control over communication reliability and performance
+- **Namespacing**: Hierarchical organization of nodes and topics
+- **Parameter Server**: Dynamic configuration with type safety
+
+### 🛠 Developer Experience
 - **Declarative Syntax**: Define complex robotics applications with clean, readable code
 - **Build System**: Automatic CMake configuration for easy compilation and deployment
+- **Cross-Platform**: Consistent behavior across Linux, Windows, and macOS
 - **Extensible**: Custom node types, message types, and code generation templates
+
+### 📊 Advanced Features
+- **Conditional Compilation**: Feature flags for different hardware targets
+- **Component Model**: Build modular, reusable components
+- **Performance Profiling**: Built-in tools for performance analysis
+- **Error Handling**: Comprehensive error reporting and recovery
 
 ## Table of Contents
 
@@ -96,77 +113,57 @@ pip install robodsl
 
 For more detailed examples, see the [examples](examples/) directory.
 
-## Documentation
+## 📚 Documentation
 
 Comprehensive documentation is available in the [docs](docs/) directory:
 
-- [DSL Specification](docs/dsl_specification.md) - Complete reference of the RoboDSL language
-- [Developer Guide](docs/developer_guide.md) - Architecture, development workflow, and extension points
-- [Examples](examples/README.md) - Tutorials and example projects
-- [Contributing](docs/contributing.md) - How to contribute to the project
-- [Changelog](docs/changelog.md) - Release notes and version history
+### Core Concepts
+- [DSL Specification](docs/dsl_specification.md): Complete language reference with examples
+- [Lifecycle Nodes](docs/dsl_specification.md#lifecycle-nodes): Managing node states and transitions
+- [QoS Configuration](docs/dsl_specification.md#quality-of-service-qos-configuration): Fine-tuning communication reliability
+- [Namespaces & Remapping](docs/dsl_specification.md#namespace-and-remapping): Organizing complex systems
 
-## Examples
+### Advanced Features
+- [GPU Acceleration](docs/dsl_specification.md#gpu-accelerated-processing-example): CUDA integration and optimization
+- [Build Configuration](docs/dsl_specification.md#build-configuration): Cross-platform builds and optimization
+- [Parameter Handling](docs/dsl_specification.md#parameter-namespacing): Dynamic configuration
 
-Explore the [examples](examples/) directory for complete, runnable examples:
+### Development Resources
+- [Developer Guide](docs/developer_guide.md): Architecture and extension points
+- [Examples](examples/): Sample projects and tutorials
+- [API Reference](docs/api/): Detailed documentation of all classes and functions
+- [Best Practices](docs/best_practices.md): Guidelines for maintainable code
 
-- **Basic Examples**: Simple publisher/subscriber patterns
-- **Intermediate**: Lifecycle nodes, custom message types
-- **Advanced**: CUDA acceleration, action servers, component nodes
+## Project Structure
 
-Each example includes a README with build and run instructions.
-
-## Development
-
-To set up a development environment:
-
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/robodsl.git
-cd robodsl
-
-# Create and activate a virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install development dependencies
-pip install -e ".[dev]"
-
-# Install pre-commit hooks
-pre-commit install
+```
+robodsl/
+├── src/                      # Source code
+│   ├── robodsl/             # Core DSL implementation
+│   └── ...
+├── examples/                # Example projects
+│   ├── basic/              # Basic usage examples
+│   ├── intermediate/       # Intermediate examples
+│   └── advanced/           # Advanced use cases
+├── docs/                    # Documentation
+│   ├── dsl_specification.md # Complete language reference
+│   ├── developer_guide.md   # Developer documentation
+│   └── ...
+├── tests/                  # Test suite
+├── cmake/                  # CMake configuration
+└── ...
 ```
 
-Run the test suite:
+## 🤝 Contributing
 
-```bash
-pytest
-```
+We welcome contributions from the community! Here's how you can help:
 
-## Contributing
+1. **Report Bugs**: File an issue with detailed reproduction steps
+2. **Suggest Features**: Share your ideas for improvements
+3. **Submit Code**: Send a pull request (see our [Contributing Guidelines](CONTRIBUTING.md))
+4. **Improve Docs**: Help us make the documentation better
 
-We welcome contributions! Please see our [Contributing Guidelines](docs/contributing.md) for details on how to get started.
-
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Open a pull request
-
-Please ensure your code follows our style guidelines and includes appropriate tests.
-
-## License
-
-RoboDSL is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
-## Acknowledgements
-
-RoboDSL builds upon several amazing open source projects:
-
-- [ROS2](https://docs.ros.org/) - Robot Operating System 2
-- [CUDA](https://developer.nvidia.com/cuda-toolkit) - NVIDIA's parallel computing platform
-- [Thrust](https://github.com/NVIDIA/thrust) - Parallel algorithms library
-- [Jinja2](https://palletsprojects.com/p/jinja/) - Templating engine
-- [Click](https://click.palletsprojects.com/) - Command line interface creation
+### Development Setup
 
 We're grateful to the open source community for their contributions and support.
 
