@@ -1085,27 +1085,12 @@ endif()
             node_names=' '.join([node.name + '_node' for node in self.config.nodes])
         )
 
-# Add uninstall target
+        # Add uninstall target
+        cmake_content += """
 add_custom_target(uninstall
     COMMAND ${{CMAKE_COMMAND}} -P ${{CMAKE_CURRENT_BINARY_DIR}}/ament_cmake_uninstall.cmake
 )
-""".format(
-                project_name=self.config.project_name,
-                has_lifecycle='ON' if has_lifecycle_nodes else 'OFF',
-                has_qos='ON' if has_qos_settings else 'OFF'
-            )
-
-        # Create output directory if it doesn't exist
-        cmake_path = self.output_dir / 'CMakeLists.txt'
-        cmake_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        # Write the CMakeLists.txt file
-        with open(cmake_path, 'w') as f:
-            f.write(cmake_content)
-            
-        return cmake_path
 """
-
         # Create output directory if it doesn't exist
         cmake_path = self.output_dir / 'CMakeLists.txt'
         cmake_path.parent.mkdir(parents=True, exist_ok=True)

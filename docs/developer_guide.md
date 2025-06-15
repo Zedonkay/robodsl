@@ -132,30 +132,225 @@ RoboDSL follows a modular architecture designed for extensibility and maintainab
 
 ### Data Flow
 
-1. **Source Processing**
-   ```
-   .robodsl file → Lexer → Parser → AST → Validator → Intermediate Representation
-   ```
+RoboDSL processes your DSL code through several well-defined stages, each transforming the input into a more refined representation:
 
-2. **Code Generation**
-   ```
-   IR → Template Selection → Template Rendering → Code Generation → File Writing
-   ```
+```mermaid
+flowchart LR
+    A[DSL Source] -->|Lexing| B[Tokens]
+    B -->|Parsing| C[AST]
+    C -->|Validation| D[Semantic Model]
+    D -->|Code Generation| E[Source Files]
+    E -->|Compilation| F[Executable]
+    
+    style A fill:#f9f,stroke:#333
+    style F fill:#9f9,stroke:#333
+```
 
-3. **Build Process**
-   ```
-   Generated Code → CMake Configuration → Build System → Executable/Library
-   ```
+#### 1. Source Processing
+
+```mermaid
+flowchart LR
+    A[.robodsl File] -->|Read| B[Lexer]
+    B -->|Token Stream| C[Parser]
+    C -->|AST| D[Semantic Analyzer]
+    D -->|Validated AST| E[Intermediate Representation]
+    
+    style A fill:#f9f,stroke:#333
+    style E fill:#bbf,stroke:#333
+```
+
+- **Lexing**: Converts raw text into tokens
+- **Parsing**: Builds an Abstract Syntax Tree (AST)
+- **Validation**: Performs semantic checks and type inference
+- **IR Generation**: Creates an optimized intermediate representation
+
+#### 2. Code Generation
+
+```mermaid
+flowchart LR
+    A[IR] -->|Template Selection| B[Jinja2 Templates]
+    B -->|Rendering| C[Source Code]
+    C -->|Formatting| D[Generated Files]
+    
+    style A fill:#bbf,stroke:#333
+    style D fill:#9f9,stroke:#333
+```
+
+- **Template Selection**: Chooses appropriate templates based on node types
+- **Rendering**: Fills templates with IR data
+- **Formatting**: Applies consistent code style
+- **File Writing**: Outputs to the build directory
+
+#### 3. Build Process
+
+```mermaid
+flowchart LR
+    A[Generated Code] -->|CMake Configure| B[Build System]
+    B -->|Compile| C[Object Files]
+    C -->|Link| D[Executable/Library]
+    D -->|Package| E[ROS2 Package]
+    
+    style A fill:#9f9,stroke:#333
+    style E fill:#f9f,stroke:#333
+```
+
+- **CMake Configuration**: Sets up build rules and dependencies
+- **Compilation**: Converts source to object files
+- **Linking**: Combines objects into final binaries
+- **Packaging**: Creates installable ROS2 packages
 
 ### Build System Integration
 
-RoboDSL generates CMake files that integrate with the ROS2 build system:
+RoboDSL generates comprehensive CMake build files that seamlessly integrate with the ROS2 build system (ament_cmake). The build system is designed to be both powerful and flexible, supporting a wide range of build configurations.
 
-- Automatic dependency resolution
-- CUDA compilation flags
-- Installation rules
-- Testing infrastructure
-- Documentation generation
+#### Key Features
+
+```mermaid
+graph TD
+    A[RoboDSL] -->|Generates| B[CMakeLists.txt]
+    B --> C[ROS2 Build System]
+    C --> D[ament_cmake]
+    C --> E[ament_cmake_python]
+    C --> F[catkin_make]
+    
+    style A fill:#f9f,stroke:#333
+    style B fill:#9f9,stroke:#333
+```
+
+#### 1. Dependency Management
+
+RoboDSL automatically handles dependencies through CMake's `find_package` and `ament` utilities:
+
+```cmake
+# Core Dependencies
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(std_msgs REQUIRED)
+
+# Conditional Dependencies
+if(ENABLE_CUDA)
+    enable_language(CUDA)
+    find_package(CUDAToolkit REQUIRED)
+    set(CMAKE_CUDA_STANDARD 17)
+    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+endif()
+
+# ROS2 Components
+if(ENABLE_ROS2)
+    find_package(rclcpp_components REQUIRED)
+    find_package(lifecycle_msgs REQUIRED)
+endif()
+```
+
+#### 2. Build Configuration
+
+RoboDSL generates optimized build configurations with support for:
+
+- **Compiler Flags**:
+  ```cmake
+  add_compile_options(
+      $<$<CONFIG:Debug>:-g -O0 -Wall -Wextra>
+      $<$<CONFIG:Release>:-O3 -DNDEBUG>
+      $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>
+  )
+  ```
+
+- **Target Properties**:
+  ```cmake
+  set_target_properties(${PROJECT_NAME} PROPERTIES
+      CXX_STANDARD 17
+      CXX_STANDARD_REQUIRED ON
+      CUDA_ARCHITECTURES "75;80"  # Turing and Ampere
+  )
+  ```
+
+#### 3. Installation Rules
+
+RoboDSL generates proper installation rules for ROS2 packages:
+
+```cmake
+# Install executables
+install(TARGETS ${NODE_TARGETS}
+    RUNTIME DESTINATION lib/${PROJECT_NAME}
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
+)
+
+# Install launch files
+install(DIRECTORY launch/
+    DESTINATION share/${PROJECT_NAME}/launch
+)
+
+# Install parameter files
+install(DIRECTORY config/
+    DESTINATION share/${PROJECT_NAME}/config
+)
+
+# Install Python modules
+if(PYTHON_INSTALL_DIR)
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${PYTHON_INSTALL_DIR}/
+        DESTINATION ${PYTHON_INSTALL_DIR}/
+    )
+endif()
+```
+
+#### 4. Testing Infrastructure
+
+RoboDSL sets up a comprehensive testing framework:
+
+```cmake
+if(BUILD_TESTING)
+    find_package(ament_lint_auto REQUIRED)
+    ament_lint_auto_find_test_dependencies()
+
+    # Add GTest
+    find_package(ament_cmake_gtest REQUIRED)
+    
+    # Add unit tests
+    ament_add_gtest(${PROJECT_NAME}_test
+        test/test_basic.cpp
+    )
+    target_link_libraries(${PROJECT_NAME}_test
+        ${PROJECT_NAME}
+    )
+    
+    # Add performance tests if CUDA is enabled
+    if(ENABLE_CUDA)
+        add_executable(${PROJECT_NAME}_benchmark
+            benchmark/benchmark.cu
+        )
+        target_link_libraries(${PROJECT_NAME}_benchmark
+            benchmark::benchmark
+        )
+    endif()
+endif()
+```
+
+#### 5. Cross-Platform Support
+
+RoboDSL generates platform-agnostic build configurations:
+
+```cmake
+# Platform-specific settings
+if(WIN32)
+    add_compile_definitions(NOMINMAX)
+    add_compile_options(/bigobj)
+elseif(UNIX AND NOT APPLE)
+    add_compile_options(-fPIC)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+        add_compile_options(-march=native)
+    endif()
+endif()
+
+# Handle different CUDA architectures
+if(CMAKE_CUDA_COMPILER)
+    set(CMAKE_CUDA_ARCHITECTURES "75;80")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-relaxed-constexpr")
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -G -O0")
+    endif()
+endif()
+```
 
 ## Module Reference
 
@@ -283,62 +478,352 @@ pytest --cov=robodsl tests/
 
 ## Extending RoboDSL
 
+RoboDSL is designed with extensibility in mind, allowing developers to add new node types, custom generators, and template customizations. This section provides detailed guidance on extending the framework's capabilities.
+
 ### Adding New Node Types
 
-1. Create a new template directory in `src/robodsl/templates/nodes/`
-2. Add template files (e.g., `node.hpp.j2`, `node.cpp.j2`)
-3. Update the node registry in `src/robodsl/generator.py`
-4. Add validation rules in `src/robodsl/parser.py`
+1. **Create Node Templates**
+   - Create a new directory in `src/robodsl/templates/nodes/`
+   - Add template files following the pattern `node_type.node_type`:
+     - `node_type.hpp.j2`: Header file template
+     - `node_type.cpp.j2`: Implementation template
+     - `node_type.launch.py.j2`: Launch file template (optional)
+     - `node_type.params.yaml.j2`: Parameters template (optional)
+
+2. **Register the Node Type**
+   Update `src/robodsl/generator.py` to include your new node type:
+   ```python
+   NODE_TYPES = {
+       'custom': {
+           'description': 'Custom node type',
+           'templates': {
+               'header': 'nodes/custom/custom.hpp.j2',
+               'source': 'nodes/custom/custom.cpp.j2',
+           },
+           'dependencies': ['rclcpp', 'std_msgs'],
+           'cuda_support': True  # Set to True if using CUDA
+       }
+   }
+   ```
+
+3. **Add Validation Rules**
+   Extend the parser in `src/robodsl/parser.py` to validate your node's syntax:
+   ```python
+   def visit_CustomNode(self, node):
+       self._validate_required_fields(node, ['name', 'publisher', 'subscriber'])
+       # Additional validation logic
+   ```
 
 ### Custom Code Generators
 
+For advanced use cases, you can create custom code generators:
+
 ```python
 from robodsl.generator import CodeGenerator
+from robodsl.ast import NodeVisitor
 
 class CustomGenerator(CodeGenerator):
-    def generate(self, ast):
+    def __init__(self, template_dir=None):
+        super().__init__(template_dir)
+        self.visitor = CustomNodeVisitor()
+    
+    def generate(self, ast, output_dir):
         # Custom generation logic
-        pass
+        context = self.visitor.visit(ast)
+        self._render_templates(context, output_dir)
+
+class CustomNodeVisitor(NodeVisitor):
+    def visit_Node(self, node):
+        # Extract node information
+        return {
+            'node_name': node.name,
+            'dependencies': self._collect_dependencies(node)
+        }
 ```
 
 ### Template Customization
 
+RoboDSL uses Jinja2 for templating, providing several customization options:
+
 1. **Template Inheritance**
    ```jinja
-   {% extends "base_node.cpp.j2" %}
+   {# templates/nodes/custom/custom.hpp.j2 #}
+   {% extends "base_node.hpp.j2" %}
    
-   {% block node_implementation %}
-   // Custom implementation
+   {% block class_definition %}
+   class {{ node.name|to_pascal_case }} : public rclcpp::Node {
+   public:
+       {{ node.name|to_pascal_case }}(const rclcpp::NodeOptions& options);
+       // Custom methods
+   };
    {% endblock %}
    ```
 
 2. **Custom Filters**
+   Add custom filters in `src/robodsl/generator.py`:
    ```python
-   def to_upper(value):
-       return value.upper()
+   def setup_template_engine(self):
+       env = Environment(loader=FileSystemLoader(self.template_dirs))
+       
+       # Add custom filters
+       env.filters['to_snake_case'] = lambda s: s.replace(' ', '_').lower()
+       env.filters['to_camel_case'] = lambda s: ''.join(
+           word.capitalize() if i > 0 else word
+           for i, word in enumerate(s.replace('_', ' ').split())
+       )
+       
+       return env
+   ```
+
+3. **Template Context Processors**
+   Add custom context processors to inject additional data into templates:
+   ```python
+   def get_template_context(self, node):
+       context = super().get_template_context(node)
+       context['generation_time'] = datetime.now().isoformat()
+       context['ros_version'] = self._detect_ros_version()
+       return context
+   ```
+
+### Plugin System
+
+RoboDSL supports a plugin system for extending functionality:
+
+1. **Create a Plugin**
+   ```python
+   # my_plugin/__init__.py
+   from robodsl.plugins import Plugin
    
-   env.filters['upper'] = to_upper
+   class MyPlugin(Plugin):
+       def register(self):
+           # Register custom node types
+           self.register_node_type('custom', CustomGenerator)
+           
+           # Add custom template directories
+           self.add_template_dir('path/to/templates')
+   ```
+
+2. **Register the Plugin**
+   Create a `robodsl_plugins.py` in your project root:
+   ```python
+   def get_plugins():
+       from my_plugin import MyPlugin
+       return [MyPlugin()]
+   ```
+
+3. **Enable the Plugin**
+   Add to your project's configuration file:
+   ```yaml
+   # .robodsl/config.yaml
+   plugins:
+     - my_plugin
    ```
 
 ## Performance Optimization
 
-### Code Generation Performance
+RoboDSL provides several mechanisms to optimize both the code generation process and the generated code's runtime performance. This section covers best practices and techniques for achieving optimal performance.
 
-- Template pre-compilation
-- AST caching
-- Parallel code generation
+### Build-Time Optimization
+
+1. **Compiler Flags**
+   - Enable link-time optimization (LTO)
+   - Use profile-guided optimization (PGO)
+   - Set appropriate architecture flags
+
+   ```cmake
+   # In generated CMakeLists.txt
+   if(CMAKE_BUILD_TYPE STREQUAL "Release")
+       add_compile_options(
+           "$<$<CONFIG:RELEASE>:-O3 -march=native -flto -DNDEBUG>"
+       )
+       set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+   endif()
+   ```
+
+2. **Template Caching**
+   - Enable template caching to avoid recompiling unchanged templates
+   - Use in-memory template caching for repeated generations
+
+   ```python
+   # In generator.py
+   def __init__(self):
+       self.env = Environment(
+           loader=FileSystemLoader(template_dirs),
+           cache_size=1000,  # Cache up to 1000 templates
+           auto_reload=False  # Disable auto-reload in production
+       )
+   ```
 
 ### Runtime Performance
 
-- Zero-copy data transfer
-- Memory pooling
-- Kernel optimization
+1. **Zero-Copy Data Transfer**
+   - Use `std::shared_ptr` for message passing
+   - Leverage ROS2's intra-process communication
+   - Implement move semantics where appropriate
+
+   ```cpp
+   // In generated node implementation
+   void process_image(const sensor_msgs::msg::Image::SharedPtr msg) {
+       // Process image without copying
+       cv::Mat cv_image = cv_bridge::toCvShare(msg, "bgr8")->image;
+       // ...
+   }
+   ```
+
+2. **Memory Pooling**
+   - Pre-allocate memory for real-time critical paths
+   - Use object pools for frequently allocated/deallocated objects
+   - Implement custom allocators for ROS2 messages
+
+   ```cpp
+   // Custom allocator example
+   using ImageAllocator = rclcpp::message_memory_strategy::MessagePoolAllocator<sensor_msgs::msg::Image>;
+   auto image_pool = std::make_shared<rclcpp::message_memory_strategy::MessagePool<sensor_msgs::msg::Image>>(10);
+   ```
+
+3. **Threading Model**
+   - Configure ROS2 executor for optimal performance
+   - Use callback groups to isolate real-time callbacks
+   - Consider using the `rclcpp::executors::StaticSingleThreadedExecutor` for low-latency applications
+
+   ```cpp
+   // In generated node implementation
+   rclcpp::executor::ExecutorArgs args;
+   args.context = context;
+   auto executor = std::make_shared<rclcpp::executors::StaticSingleThreadedExecutor>(args);
+   executor->add_node(node);
+   executor->spin();
+   ```
+
+### CUDA-Specific Optimizations
+
+1. **Stream Management**
+   - Use multiple CUDA streams for concurrent kernel execution
+   - Overlap computation and data transfer
+   - Implement asynchronous memory operations
+
+   ```cpp
+   // In CUDA-accelerated node
+   cudaStream_t stream1, stream2;
+   cudaStreamCreate(&stream1);
+   cudaStreamCreate(&stream2);
+   
+   // Process different data in parallel
+   process_kernel1<<<blocks, threads, 0, stream1>>>(d_data1);
+   process_kernel2<<<blocks, threads, 0, stream2>>>(d_data2);
+   ```
+
+2. **Unified Memory**
+   - Use CUDA managed memory for simplified memory management
+   - Prefer `cudaMallocManaged` for data accessed by both CPU and GPU
+   - Use `cudaMemPrefetchAsync` to optimize data location
+
+   ```cpp
+   float* data;
+   cudaMallocManaged(&data, size * sizeof(float));
+   
+   // Prefetch to GPU
+   cudaMemPrefetchAsync(data, size * sizeof(float), device_id, stream);
+   ```
+
+3. **Kernel Optimization**
+   - Optimize block and grid dimensions
+   - Use shared memory for frequently accessed data
+   - Minimize thread divergence
+
+   ```cpp
+   __global__ void optimized_kernel(float* input, float* output, int width) {
+       __shared__ float tile[TILE_SIZE][TILE_SIZE];
+       // ...
+   }
+   ```
 
 ### Memory Management
 
-- RAII for resource management
-- Smart pointers
-- Memory pooling for real-time safety
+1. **RAII for Resource Management**
+   - Use smart pointers for automatic resource cleanup
+   - Implement custom deleters for CUDA resources
+   - Leverage move semantics for efficient resource transfer
+
+   ```cpp
+   struct CudaDeleter {
+       void operator()(void* ptr) const { cudaFree(ptr); }
+   };
+   
+   std::unique_ptr<float, CudaDeleter> d_data(static_cast<float*>(cuda_malloc(size)));
+   ```
+
+2. **Memory Pooling**
+   - Implement custom memory pools for ROS2 messages
+   - Reuse message objects when possible
+   - Monitor memory usage with custom allocators
+
+   ```cpp
+   // Custom message pool
+   class MessagePool {
+   public:
+       MessagePool(size_t initial_size) { /* ... */ }
+       std::shared_ptr<sensor_msgs::msg::Image> acquire() { /* ... */ }
+       void release(const std::shared_ptr<sensor_msgs::msg::Image>& msg) { /* ... */ }
+   };
+   ```
+
+3. **Memory Analysis**
+   - Use tools like Valgrind and AddressSanitizer
+   - Monitor memory usage with ROS2's memory tools
+   - Implement custom memory tracking for debugging
+
+   ```bash
+   # Run with memory checking
+   valgrind --tool=massif --stacks=yes ros2 run package node
+   ```
+
+### Profiling and Optimization
+
+1. **CPU Profiling**
+   - Use `perf` for low-overhead profiling
+   - Generate flame graphs for visualization
+   - Profile both wall time and CPU time
+
+   ```bash
+   perf record -F 99 -g --call-graph dwarf ros2 run package node
+   perf script | stackcollapse-perf.pl | flamegraph.pl > flamegraph.svg
+   ```
+
+2. **GPU Profiling**
+   - Use NVIDIA Nsight Systems for timeline analysis
+   - Profile CUDA kernels with `nvprof`
+   - Analyze memory access patterns
+
+   ```bash
+   nsys profile --stats=true ros2 run package node
+   ```
+
+3. **ROS2-Specific Tools**
+   - Use `ros2 topic hz` to monitor message rates
+   - Profile with `ros2 trace` for system-wide analysis
+   - Use `rqt` for runtime visualization
+
+   ```bash
+   ros2 trace --duration 10 -s tracing_session
+   ```
+
+### Best Practices
+
+1. **Minimize Dynamic Memory Allocation**
+   - Pre-allocate memory during initialization
+   - Use fixed-size containers when possible
+   - Avoid memory fragmentation
+
+2. **Optimize Message Passing**
+   - Use `std::unique_ptr` for exclusive ownership
+   - Implement zero-copy where possible
+   - Consider using ROS2's intra-process communication
+
+3. **Profile Before Optimizing**
+   - Identify actual bottlenecks before optimization
+   - Measure performance impact of changes
+   - Use A/B testing for optimization validation
 
 ## Troubleshooting
 
