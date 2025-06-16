@@ -1,4 +1,4 @@
-# RoboDSL
+# RoboDSL - WIP
 
 A domain-specific language and compiler for building high-performance, GPU-accelerated robotics applications with ROS2 and CUDA integration.
 
