@@ -1,0 +1,39 @@
+name: Build Debian Package
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [created]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+    
+    - name: Install build dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y devscripts build-essential debhelper dh-python python3-all python3-setuptools
+    
+    - name: Build package
+      run: |
+        dpkg-buildpackage -us -uc
+        mkdir -p dist
+        cp ../*.deb dist/
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: deb-package
+        path: dist/*.deb
+        if-no-files-found: error
+        retention-days: 5
