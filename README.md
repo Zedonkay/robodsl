@@ -1,4 +1,4 @@
-# RoboDSL
+# RoboDSL - WIP
 
 A domain-specific language and compiler for building high-performance, GPU-accelerated robotics applications with ROS2 and CUDA integration.
 
@@ -63,11 +63,13 @@ RoboDSL is a powerful framework that simplifies the development of GPU-accelerat
 
 ### Installation Methods
 
-#### From PyPI (Recommended)
+#### From PyPI (Recommended) - Upcoming 
 
 ```bash
 pip install robodsl
 ```
+
+#### Planned release using apt also upcoming
 
 #### From Source
 
