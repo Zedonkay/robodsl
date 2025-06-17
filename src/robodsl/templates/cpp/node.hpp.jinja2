@@ -98,10 +98,50 @@ public:
     {% endfor %}
 
     // CUDA kernels
+    {% if cuda_kernels %}
+    /**
+     * @brief Process data using CUDA acceleration
+     * @param input Input data to process
+     * @param parameters Processing parameters
+     * @return Processed output data
+     * @note This is a virtual method that can be overridden by derived classes
+     * to provide custom CUDA-accelerated processing. The default implementation
+     * will return an empty vector if not overridden.
+     */
+    virtual std::vector<{{ cuda_default_output_type|default('float') }}> processWithCuda(
+        const std::vector<{{ cuda_default_input_type|default('float') }}>& input,
+        const {{ cuda_default_param_type|default('CudaParams') }}& parameters);
+    
+    /**
+     * @brief Initialize CUDA resources
+     * @return true if initialization was successful, false otherwise
+     * @note Override this method to perform custom CUDA initialization.
+     * Call the base class implementation if you override this method.
+     */
+    virtual bool initializeCuda();
+    
+    /**
+     * @brief Clean up CUDA resources
+     * @note Override this method to perform custom CUDA cleanup.
+     * Call the base class implementation if you override this method.
+     */
+    virtual void cleanupCuda();
+    
+    // Individual CUDA kernel declarations
     {% for kernel in cuda_kernels %}
-    // {{ kernel.name }} kernel
-    {{ kernel.return_type }} {{ kernel.name }}({{ kernel.params }});
+    /**
+     * @brief {{ kernel.description|default("Process data using CUDA kernel: " + kernel.name) }}
+     * @param input Input data for the kernel
+     * @param parameters Kernel parameters
+     * @return Processed output data
+     * @note This method provides a C++ interface to the {{ kernel.name }} CUDA kernel.
+     * The actual CUDA kernel implementation should be provided in a .cu file.
+     */
+    virtual std::vector<{{ kernel.output_type|default('float') }}> {{ kernel.name }}(
+        const std::vector<{{ kernel.input_type|default('float') }}>& input,
+        const {{ kernel.param_type|default('CudaParams') }}& parameters);
     {% endfor %}
+    {% endif %}
 
 private:
     // ROS2 publishers

@@ -766,20 +766,89 @@ void {{ class_name }}::{{ srv.callback_name }}(
 
 {% endfor %}
 
+// CUDA methods
+{% if cuda_kernels %}
+bool {{ class_name }}::initializeCuda() {
+    RCLCPP_DEBUG(this->get_logger(), "Initializing CUDA resources");
+    try {
+        // Initialize CUDA device
+        cudaError_t status = cudaSetDevice(cuda_device_id_);
+        if (status != cudaSuccess) {
+            RCLCPP_ERROR(this->get_logger(), 
+                       "Failed to set CUDA device %d: %s", 
+                       cuda_device_id_, 
+                       cudaGetErrorString(status));
+            return false;
+        }
+        
+        // Get and log device properties
+        cudaDeviceProp props;
+        status = cudaGetDeviceProperties(&props, cuda_device_id_);
+        if (status == cudaSuccess) {
+            RCLCPP_INFO(this->get_logger(), 
+                      "Using CUDA device %d: %s (Compute %d.%d)",
+                      cuda_device_id_, 
+                      props.name, 
+                      props.major, 
+                      props.minor);
+        }
+        
+        return true;
+    } catch (const std::exception& e) {
+        RCLCPP_ERROR(this->get_logger(), 
+                   "Exception during CUDA initialization: %s", 
+                   e.what());
+        return false;
+    } catch (...) {
+        RCLCPP_ERROR(this->get_logger(), 
+                   "Unknown exception during CUDA initialization");
+        return false;
+    }
+}
+
+void {{ class_name }}::cleanupCuda() {
+    RCLCPP_DEBUG(this->get_logger(), "Cleaning up CUDA resources");
+    try {
+        // Synchronize and reset the device
+        cudaDeviceSynchronize();
+        cudaDeviceReset();
+    } catch (const std::exception& e) {
+        RCLCPP_ERROR(this->get_logger(), 
+                   "Exception during CUDA cleanup: %s", 
+                   e.what());
+    } catch (...) {
+        RCLCPP_ERROR(this->get_logger(), 
+                   "Unknown exception during CUDA cleanup");
+    }
+}
+
+std::vector<{{ cuda_default_output_type|default('float') }}> 
+{{ class_name }}::processWithCuda(
+    const std::vector<{{ cuda_default_input_type|default('float') }}>& input,
+    const {{ cuda_default_param_type|default('CudaParams') }}& parameters) 
+{
+    RCLCPP_DEBUG(this->get_logger(), "Default processWithCuda implementation called");
+    // Default implementation returns an empty vector
+    // Override this method in derived classes to provide actual CUDA processing
+    return {};
+}
+
 // CUDA kernel wrappers
 {% for kernel in cuda_kernels %}
-{{ kernel.return_type }} {{ class_name }}::{{ kernel.name }}({{ kernel.params }})
+std::vector<{{ kernel.output_type|default('float') }}> 
+{{ class_name }}::{{ kernel.name }}(
+    const std::vector<{{ kernel.input_type|default('float') }}>& input,
+    const {{ kernel.param_type|default('CudaParams') }}& parameters)
 {
-    // CUDA kernel wrapper implementation
-    // TODO: Implement CUDA kernel launch and memory management
-    RCLCPP_DEBUG(this->get_logger(), "CUDA kernel {{ kernel.name }} called");
+    RCLCPP_DEBUG(this->get_logger(), "CUDA kernel {{ kernel.name }} called with %zu elements", input.size());
     
-    {% if kernel.return_type != 'void' %}
-    return {}; // Return default-constructed value
-    {% endif %}
+    // Default implementation returns an empty vector
+    // Override this method in derived classes to provide actual CUDA kernel execution
+    return std::vector<{{ kernel.output_type|default('float') }}>();
 }
 
 {% endfor %}
+{% endif %}
 
 {% if namespace %}
 } // namespace {{ namespace }}

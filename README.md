@@ -1,6 +1,6 @@
-# RoboDSL - WIP
+# RoboDSL
 
-A domain-specific language and compiler for building high-performance, GPU-accelerated robotics applications with ROS2 and CUDA integration.
+A domain-specific language and compiler for building high-performance, GPU-accelerated robotics applications with ROS2 and CUDA integration. RoboDSL simplifies the development of complex robotics systems by providing a clean, declarative syntax for defining ROS2 nodes, services, and CUDA-accelerated computations.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/)
@@ -15,38 +15,103 @@ RoboDSL is a powerful framework that simplifies the development of GPU-accelerat
 
 ## Key Features
 
+### High-Level Abstractions
+- **Declarative Syntax**: Define complex robotics applications with clean, readable code
+- **Component-Based Architecture**: Build modular, reusable components
+- **Cross-Platform**: Consistent behavior across Linux, Windows (WSL2), and macOS
+- **Extensible**: Custom node types, message types, and code generation templates
+
 ### High-Performance Computing
 - **GPU Acceleration**: Seamless CUDA integration with automatic memory management
   - **CUDA Offloading**: Easily offload compute-intensive tasks to GPU in action handlers
-  - **Conditional Compilation**: Toggle features with `ENABLE_CUDA` and `ENABLE_ROS2` flags
+  - **Thrust Integration**: High-level parallel algorithms library support
+  - **Optimized Memory Transfers**: Efficient host-device memory strategies
 - **Multi-Threading**: Built-in support for parallel processing and thread safety
 - **Optimized Builds**: Advanced compilation flags and optimizations for maximum performance
+  - **Conditional Compilation**: Toggle features with `ENABLE_CUDA` and `ENABLE_ROS2` flags
+  - **Multiple Build Types**: Debug, Release, and RelWithDebInfo configurations
 
 ### ROS2 Integration
-- **Lifecycle Nodes**: Full support for managed nodes with state management
-  - State transitions (Unconfigured, Inactive, Active, Finalized)
-  - Resource management hooks
-  - Error recovery mechanisms
-- **Quality of Service**: Fine-grained control over communication reliability and performance
+
+#### Lifecycle Management
+- **Managed Nodes**: Full support for ROS2 managed nodes with state management
+  - Complete state machine implementation (Unconfigured, Inactive, Active, Finalized)
+  - Resource management hooks for each state transition
+  - Comprehensive error recovery mechanisms
+  - Automatic parameter handling with validation
+
+#### Communication
+- **Quality of Service (QoS)**
   - Per-publisher/subscriber QoS profiles
+  - Configurable reliability (reliable/best_effort)
+  - Adjustable durability (volatile/transient_local)
   - Deadline, lifespan, and liveliness policies
-- **Namespacing & Remapping**: Hierarchical organization and flexible topic routing
-  - Nested namespaces
-  - Runtime topic and service remapping
-  - Parameter namespacing
-- **Parameter Server**: Dynamic configuration with type safety
+  - History depth and queue size configuration
+
+#### System Organization
+- **Namespacing**
+  - Hierarchical namespaces for nodes and topics
+  - Nested namespacing support
+  - Automatic namespace resolution
+  
+- **Remapping**
+  - Runtime topic and service name remapping
+  - Parameter remapping
+  - Node name remapping
+  - Environment variable substitution
+
+#### Configuration
+- **Parameter Server**
+  - Type-safe parameter handling
+  - Parameter validation and constraints
+  - Dynamic parameter updates
+  - Parameter file support
+  - Namespaced parameters
 
 ### Developer Experience
-- **Declarative Syntax**: Define complex robotics applications with clean, readable code
-- **Build System**: Automatic CMake configuration for easy compilation and deployment
-- **Cross-Platform**: Consistent behavior across Linux, Windows, and macOS
-- **Extensible**: Custom node types, message types, and code generation templates
 
-### Advanced Features
-- **Conditional Compilation**: Feature flags for different hardware targets
-- **Component Model**: Build modular, reusable components
+#### Code Generation
+- **Automatic Boilerplate**: Generate complete ROS2 packages
+- **Custom Templates**: Extend and customize code generation
+- **Multi-language Support**: C++ and Python node generation
+- **Message/Service/Action Generation**: Automatic IDL compilation
+
+#### Build System
+- **CMake Integration**: Automatic CMake configuration
+- **Dependency Management**: Automatic handling of ROS2 and CUDA dependencies
+- **Cross-Platform Builds**: Consistent builds across platforms
+- **Custom Build Steps**: Pre-build and post-build hooks
+
+#### Debugging & Profiling
+- **Integrated Logging**: Built-in logging macros
 - **Performance Profiling**: Built-in tools for performance analysis
-- **Error Handling**: Comprehensive error reporting and recovery
+  - CPU/GPU timing utilities
+  - Memory usage tracking
+  - ROS2 performance measurements
+- **Debug Visualization**: Built-in visualization tools
+  - RViz integration
+  - Plotting utilities
+  - Custom visualization plugins
+
+### 🎯 Advanced Features
+
+#### CUDA Integration
+- **Kernel Definition**: Define CUDA kernels directly in DSL
+- **Automatic Memory Management**: Smart pointers for device memory
+- **Stream Management**: CUDA stream support
+- **Multi-GPU Support**: Explicit device selection
+
+#### System Integration
+- **Component Model**: Build modular, reusable components
+- **Plugin System**: Runtime-loadable components
+- **External Library Integration**: Easy integration with common robotics libraries
+- **Simulation Support**: Integration with Gazebo and other simulators
+
+#### Security
+- **Authentication**: ROS2 security features
+- **Access Control**: Fine-grained permission management
+- **Network Security**: Secure communication channels
+- **Parameter Encryption**: Secure parameter storage
 
 ## Table of Contents
 
@@ -127,53 +192,133 @@ For more detailed examples, see the [examples](examples/) directory.
 
 ## Documentation
 
-Comprehensive documentation is available in the [docs](docs/) directory:
+### Getting Started
+- [Installation Guide](docs/installation.md) - How to install and set up RoboDSL
+- [Quick Start](docs/quickstart.md) - Build your first RoboDSL application
+- [Tutorials](docs/tutorials/) - Step-by-step guides for common tasks
 
 ### Core Concepts
-- [DSL Specification](docs/dsl_specification.md): Complete language reference with examples
-- [Lifecycle Nodes](docs/dsl_specification.md#lifecycle-nodes): Managing node states and transitions
-- [QoS Configuration](docs/dsl_specification.md#quality-of-service-qos-configuration): Fine-tuning communication reliability
-- [Namespaces & Remapping](docs/dsl_specification.md#namespace-and-remapping): Organizing complex systems
+- [DSL Specification](docs/dsl_specification.md) - Complete language reference
+- [Node Types](docs/nodes.md) - Different node types and their use cases
+- [Lifecycle Management](docs/lifecycle.md) - Managing node states and transitions
+- [Communication Patterns](docs/communication.md) - Publishers, subscribers, services, and actions
 
-### Advanced Features
-- [GPU Acceleration](docs/dsl_specification.md#gpu-accelerated-processing-example): CUDA integration and optimization
-- [Build Configuration](docs/dsl_specification.md#build-configuration): Cross-platform builds and optimization
-- [Parameter Handling](docs/dsl_specification.md#parameter-namespacing): Dynamic configuration
+### Advanced Topics
+- [GPU Acceleration](docs/gpu_acceleration.md) - CUDA integration and optimization
+- [Performance Tuning](docs/performance.md) - Optimizing your RoboDSL applications
+- [Build System](docs/build_system.md) - Customizing the build process
+- [Deployment](docs/deployment.md) - Packaging and deploying applications
 
-### Development Resources
-- [Developer Guide](docs/developer_guide.md): Architecture and extension points
-- [Examples](examples/): Sample projects and tutorials
-- [API Reference](docs/api/): Detailed documentation of all classes and functions
-- [Best Practices](docs/best_practices.md): Guidelines for maintainable code
+### Reference
+- [Standard Library](docs/stdlib.md) - Built-in functions and utilities
+- [API Reference](docs/api/) - Detailed API documentation
+- [Configuration Reference](docs/configuration.md) - All configuration options
+- [FAQ](docs/faq.md) - Common questions and answers
+
+### Development
+- [Contributing Guide](CONTRIBUTING.md) - How to contribute to RoboDSL
+- [Developer Guide](docs/developer_guide.md) - Architecture and extension points
+- [Release Notes](CHANGELOG.md) - Version history and changes
+- [Roadmap](ROADMAP.md) - Upcoming features and improvements
 
 ## Project Structure
 
 ```
 robodsl/
-├── src/                      # Source code
-│   ├── robodsl/             # Core DSL implementation
+├── .github/                # GitHub Actions workflows and templates
+│   ├── workflows/          # CI/CD pipelines
+│   └── ISSUE_TEMPLATE/     # Issue templates
+│
+├── cmake/                 # CMake configuration
+│   ├── FindCUDA.cmake     # CUDA toolchain setup
+│   ├── RoboDSLConfig.cmake
 │   └── ...
-├── examples/                # Example projects
-│   ├── basic/              # Basic usage examples
-│   ├── intermediate/       # Intermediate examples
-│   └── advanced/           # Advanced use cases
-├── docs/                    # Documentation
-│   ├── dsl_specification.md # Complete language reference
-│   ├── developer_guide.md   # Developer documentation
+│
+├── docs/                  # Comprehensive documentation
+│   ├── api/               # API reference
+│   ├── examples/          # Example documentation
+│   ├── images/            # Documentation assets
+│   ├── advanced/          # Advanced topics
+│   ├── guides/            # Tutorials and how-tos
+│   ├── conf.py            # Sphinx configuration
 │   └── ...
-├── tests/                  # Test suite
-├── cmake/                  # CMake configuration
-└── ...
+│
+├── examples/              # Example projects
+│   ├── basic/            # Beginner examples
+│   │   ├── pubsub/       # Publisher/subscriber pattern
+│   │   ├── parameters/   # Parameter handling
+│   │   └── services/     # Service client/server
+│   │
+│   ├── intermediate/   # Intermediate examples
+│   │   ├── lifecycle/    # Lifecycle nodes
+│   │   ├── custom_msgs/  # Custom message types
+│   │   └── actions/      # Action servers/clients
+│   │
+│   └── advanced/      # Advanced use cases
+│       ├── cuda/         # CUDA acceleration
+│       ├── components/   # Reusable components
+│       └── multi_node/   # Complex systems
+│
+├── include/              # Public headers
+│   └── robodsl/
+│       ├── core/      # Core functionality
+│       ├── nodes/      # Node implementations
+│       └── utils/      # Utility functions
+│
+├── src/                  # Source code
+│   ├── robodsl/         # Core implementation
+│   │   ├── parser/      # Language parser
+│   │   ├── generator/   # Code generation
+│   │   ├── nodes/       # Node implementations
+│   │   └── utils/       # Utility functions
+│   └── ...
+│
+├── templates/            # Code generation templates
+│   ├── cpp/             # C++ templates
+│   └── python/          # Python templates
+│
+├── tests/               # Test suite
+│   ├── unit/           # Unit tests
+│   ├── integration/     # Integration tests
+│   └── performance/     # Performance benchmarks
+│
+├── .clang-format       # Code style configuration
+├── .gitignore           # Git ignore rules
+├── CMakeLists.txt       # Root CMake configuration
+├── pyproject.toml       # Python package configuration
+├── README.md            # This file
+├── CHANGELOG.md         # Version history
+└── ROADMAP.md           # Future development plans
 ```
 
 ## Contributing
 
 We welcome contributions from the community! Here's how you can help:
 
-1. **Report Bugs**: File an issue with detailed reproduction steps
-2. **Suggest Features**: Share your ideas for improvements
-3. **Submit Code**: Send a pull request (see our [Contributing Guidelines](CONTRIBUTING.md))
-4. **Improve Docs**: Help us make the documentation better
+### How to Contribute
+
+1. **Report Bugs**
+   - Search existing issues to avoid duplicates
+   - File a detailed bug report with reproduction steps
+   - Include version information and environment details
+
+2. **Suggest Features**
+   - Check the roadmap for planned features
+   - Open an issue to discuss your idea
+   - Be ready to help with implementation
+
+3. **Submit Code**
+   - Fork the repository
+   - Create a feature branch
+   - Write tests for your changes
+   - Submit a pull request
+   - Address code review feedback
+
+4. **Improve Documentation**
+   - Fix typos and clarify explanations
+   - Add missing documentation
+   - Improve examples
+   - Translate documentation
 
 ### Development Setup
 
@@ -442,18 +587,27 @@ Special thanks to all our contributors and the open source community for their s
 
 ## Examples
 
-The `examples/` directory contains practical examples demonstrating RoboDSL features:
+Explore our collection of examples to see RoboDSL in action:
 
-### Basic Examples
+### Beginner Examples
+- [Basic Publisher/Subscriber](examples/basic/pubsub) - Simple message passing
+- [Parameter Server](examples/basic/parameters) - Dynamic configuration
+- [Service Client/Server](examples/basic/services) - Request/response pattern
 
-- [Simple Publisher/Subscriber](examples/basic_pubsub/) - Basic ROS2 communication
-- [Parameter Server](examples/parameters/) - Working with runtime parameters
-- [Lifecycle Node](examples/lifecycle_node/) - Managing node states
+### Intermediate Examples
+- [Lifecycle Node](examples/intermediate/lifecycle) - Managed node states
+- [Custom Messages](examples/intermediate/custom_msgs) - Defining and using custom messages
+- [Action Server/Client](examples/intermediate/actions) - Long-running operations
 
 ### Advanced Examples
+- [CUDA-Accelerated Image Processing](examples/advanced/cuda_image_processing) - GPU-accelerated computer vision
+- [Multi-Node System](examples/advanced/multi_node) - Complex system composition
+- [Custom Components](examples/advanced/custom_components) - Building reusable components
 
-- [CUDA Vector Operations](examples/cuda_vector_ops/) - Basic GPU acceleration
-- [Image Processing Pipeline](examples/image_processing/) - Computer vision with CUDA
+### Real-world Applications
+- [Autonomous Navigation](examples/real_world/navigation) - SLAM and path planning
+- [Robot Arm Control](examples/real_world/robotics_arm) - Kinematics and control
+- [Sensor Fusion](examples/real_world/sensor_fusion) - Combining multiple sensor inputs
 - [Neural Network Inference](examples/nn_inference/) - Deep learning integration
 
 Each example includes:
