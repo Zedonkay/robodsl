@@ -123,48 +123,148 @@ Lifecycle nodes implement the ROS2 managed node pattern, providing a state machi
 - **Resource Management**: Explicit lifecycle hooks for resource allocation and cleanup
 - **Error Recovery**: Built-in error states and recovery mechanisms
 - **System Composition**: Better support for system bringup/teardown sequences
+- **Parameter Management**: Automatic parameter handling with validation
+- **Namespacing**: Support for nested namespaces
+- **Remapping**: Topic and service name remapping
 
-#### Basic Usage
+#### Complete Example
 ```python
 lifecycle_node my_lifecycle_node {
-    namespace = "robot"
+    # Node identification
+    namespace = "robot1"
+    
+    # Enable automatic parameter declaration and handling
+    allow_undeclared_parameters = false
+    automatically_declare_parameters_from_overrides = true
+    
+    # Topic and service remapping
+    remap = {
+        "cmd_vel": "cmd_vel_nav",
+        "/camera/image_raw": "/sensors/camera/front/image_raw"
+    }
     
     # Lifecycle configuration
-    autostart = true  # Default: false, if true, automatically transitions to Active
+    autostart = true  # Automatically transition to Active state
     
-    # Optional callbacks (all return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn)
+    # Lifecycle callbacks (all optional)
     on_configure = "on_configure"      # Called during transition to Inactive
     on_cleanup = "on_cleanup"          # Called during transition to Unconfigured
     on_activate = "on_activate"        # Called during transition to Active
     on_deactivate = "on_deactivate"    # Called during transition to Inactive
     on_shutdown = "on_shutdown"        # Called during transition to Finalized
     on_error = "on_error_callback"     # Called on error transitions
+    
+    # QoS configuration for lifecycle state transitions
+    state_qos = {
+        reliability = "reliable"
+        durability = "transient_local"
+        depth = 10
+    }
+    
+    # Parameters with descriptions and constraints
+    parameters = [
+        {
+            name = "max_speed"
+            type = "double"
+            default = 1.0
+            description = "Maximum speed in m/s"
+            range = { min: 0.1, max: 5.0, step: 0.1 }
+        },
+        {
+            name = "sensor_frame"
+            type = "string"
+            default = "base_laser"
+            description = "TF frame for sensor data"
+        }
+    ]
 }
 ```
 
 #### Lifecycle States
-1. **Unconfigured**: Initial state, no resources allocated
-2. **Inactive**: Configured but not active (resources allocated but not processing)
-3. **Active**: Fully operational state
-4. **Finalized**: Shutdown/error state
+1. **Unconfigured**: 
+   - Initial state, no resources allocated
+   - Node parameters are declared but not accessible
+   - Only configuration-related operations allowed
+
+2. **Inactive**: 
+   - Node is configured but not active
+   - Resources are allocated but not processing
+   - Parameters are accessible
+   - Publishers/Subscribers are inactive
+
+3. **Active**: 
+   - Node is fully operational
+   - Processing callbacks are active
+   - Publishers/Subscribers are active
+   - Timers are running
+
+4. **Finalized**: 
+   - Node is shutting down
+   - All resources are released
+   - No further state transitions possible
 
 #### Error Handling
 Lifecycle nodes provide robust error handling through the `on_error` callback:
 
 ```python
 def on_error_callback(state: LifecycleNodeState) -> CallbackReturn:
-    """Handle error state transitions."""
+    """
+    Handle error state transitions.
+    
+    Args:
+        state: The state that was active when the error occurred
+        
+    Returns:
+        CallbackReturn: SUCCESS if error was handled, FAILURE otherwise
+    """
+    error_msg = f"Error in state: {state.label()}"
+    
     if state.id() == State.PRIMARY_STATE_ACTIVATING:
         # Handle activation errors
+        get_logger().error(f"{error_msg} - Activation failed")
+        # Attempt recovery or return FAILURE to trigger shutdown
         return CallbackReturn.FAILURE
-    return CallbackReturn.SUCCESS
+        
+    elif state.id() == State.PRIMARY_STATE_ACTIVE:
+        # Handle runtime errors
+        get_logger().error(f"{error_msg} - Runtime error")
+        # Try to deactivate gracefully
+        return CallbackReturn.SUCCESS
+        
+    return CallbackReturn.FAILURE
 ```
 
 #### Best Practices
-- Always implement proper cleanup in `on_cleanup` and `on_shutdown`
-- Use `on_error` for robust error recovery
-- Minimize work in constructors; use `on_configure` for heavy initialization
-- Use `on_activate`/`on_deactivate` for runtime resource management
+1. **Resource Management**:
+   - Allocate resources in `on_configure`
+   - Acquire hardware in `on_activate`
+   - Release hardware in `on_deactivate`
+   - Clean up resources in `on_cleanup` and `on_shutdown`
+
+2. **Error Handling**:
+   - Always implement `on_error` for robust error recovery
+   - Log detailed error messages
+   - Return appropriate status codes
+   
+3. **State Transitions**:
+   - Keep transition logic simple and fast
+   - Avoid blocking operations in transition callbacks
+   - Use async operations when necessary
+   
+4. **Parameters**:
+   - Validate parameters in `on_configure`
+   - Use parameter constraints where possible
+   - Document all parameters with descriptions and units
+   
+5. **Threading**:
+   - Be aware of thread safety in callbacks
+   - Use thread-safe data structures
+   - Protect shared resources with mutexes
+   
+6. **Logging**:
+   - Use appropriate log levels (DEBUG, INFO, WARN, ERROR, FATAL)
+   - Include context in log messages
+   - Use rate-limited logging for high-frequency messages
 
 ### Component Nodes
 
@@ -184,6 +284,169 @@ component_node camera_node {
 ```
 
 ## Communication
+
+### Quality of Service (QoS)
+
+RoboDSL provides fine-grained control over Quality of Service settings for all ROS2 communication channels. QoS policies determine how messages are handled in terms of reliability, durability, and resource usage.
+
+#### QoS Policies
+
+1. **Reliability**:
+   - `reliable`: Ensures message delivery with retries (TCP-like)
+   - `best_effort`: No delivery guarantees (UDP-like)
+   - **Default**: `reliable`
+   - **Use Case**: Use `reliable` for commands, `best_effort` for high-frequency sensor data
+
+2. **Durability**:
+   - `volatile`: Messages not persisted for late-joining subscribers
+   - `transient_local`: Last message stored for late-joining subscribers
+   - **Default**: `volatile`
+   - **Use Case**: Use `transient_local` for parameter servers, `volatile` for real-time data
+
+3. **History**:
+   - `keep_last`: Store last N messages
+   - `keep_all`: Store all messages (use with caution)
+   - **Default**: `keep_last` with depth 10
+   - **Use Case**: `keep_last` for most cases, `keep_all` for critical data
+
+4. **Deadline**:
+   - Expected maximum time between messages
+   - **Format**: Duration string (e.g., "100ms", "1s")
+   - **Use Case**: Detect missing sensor updates
+
+5. **Lifespan**:
+   - Maximum time a message is considered valid
+   - **Format**: Duration string
+   - **Use Case**: Stale data detection
+
+6. **Liveliness**:
+   - `automatic`: Node is alive if process is running
+   - `manual_by_topic`: Node must signal liveliness per topic
+   - `manual_by_node`: Node must signal liveliness for all topics
+   - **Default**: `automatic`
+   - **Use Case**: Detect node failures
+
+#### QoS Profiles
+
+RoboDSL provides predefined QoS profiles for common use cases:
+
+```python
+# Sensor Data (best effort, small queue)
+sensor_data_qos = {
+    reliability = "best_effort"
+    durability = "volatile"
+    history = "keep_last"
+    depth = 5
+}
+
+# Commands (reliable, transient local for late joiners)
+command_qos = {
+    reliability = "reliable"
+    durability = "transient_local"
+    history = "keep_last"
+    depth = 10
+}
+
+# Parameters (reliable, persistent)
+parameter_qos = {
+    reliability = "reliable"
+    durability = "transient_local"
+    history = "keep_all"
+}
+
+# Services (reliable, volatile)
+service_qos = {
+    reliability = "reliable"
+    durability = "volatile"
+    history = "keep_last"
+    depth = 10
+}
+```
+
+#### QoS Configuration
+
+QoS settings can be configured at different levels:
+
+1. **Global Defaults**: Set in the node configuration
+2. **Per Communication Channel**: Override for specific publishers/subscribers
+3. **Runtime Overrides**: Modify QoS settings dynamically
+
+Example with multiple QoS configurations:
+
+```python
+node sensor_processor {
+    # Default QoS for all publishers/subscribers
+    default_qos = {
+        reliability = "best_effort"
+        durability = "volatile"
+        depth = 5
+    }
+    
+    publishers = [
+        {
+            name = "processed_data"
+            type = "sensor_msgs/msg/Image"
+            topic = "processed_image"
+            # Use default QoS
+        },
+        {
+            name = "alerts"
+            type = "std_msgs/msg/String"
+            topic = "alerts"
+            # Override QoS for critical alerts
+            qos = {
+                reliability = "reliable"
+                durability = "transient_local"
+                depth = 100
+            }
+        }
+    ]
+    
+    subscribers = [
+        {
+            name = "raw_data"
+            type = "sensor_msgs/msg/Image"
+            topic = "camera/image_raw"
+            # Use sensor-specific QoS
+            qos = sensor_data_qos
+        }
+    ]
+}
+```
+
+#### Best Practices
+
+1. **Matching QoS**: Ensure publishers and subscribers have compatible QoS settings
+2. **Resource Management**: Be mindful of memory usage with large queues and `keep_all` history
+3. **Performance**: Use `best_effort` for high-frequency data where occasional loss is acceptable
+4. **Reliability**: Use `reliable` for critical commands and configuration
+5. **Monitoring**: Monitor QoS compatibility warnings in the console
+6. **Testing**: Test with different network conditions and system loads
+
+#### Debugging QoS Issues
+
+Common issues and solutions:
+
+1. **No Communication**: Check if QoS profiles are compatible between publisher and subscriber
+2. **Missed Messages**: Increase queue depth or adjust reliability settings
+3. **High Latency**: Reduce queue depth or switch to `best_effort` for non-critical data
+4. **Memory Usage**: Monitor memory usage with large queues or `keep_all` history
+
+#### Example: Dynamic QoS Reconfiguration
+
+```python
+# In a node implementation
+def update_qos_settings(self):
+    # Get current QoS settings
+    qos = self.get_effective_qos("processed_data")
+    
+    # Modify settings
+    qos.depth = 20
+    qos.deadline = Duration(seconds=1)
+    
+    # Apply new settings
+    self.update_qos("processed_data", qos)
+```
 
 ### Publishers
 
@@ -555,6 +818,227 @@ parameters = [
 ```
 
 ## GPU Acceleration
+
+RoboDSL provides seamless integration with CUDA for GPU-accelerated computing. This section covers CUDA kernel definition, offloading patterns, and conditional compilation.
+
+### CUDA Offloading
+
+CUDA offloading allows you to execute computationally intensive tasks on the GPU. RoboDSL provides a clean syntax for defining and using CUDA kernels in your nodes.
+
+#### Basic Offloading Pattern
+
+```python
+# In your node definition
+cuda_kernel process_data {
+    # Define kernel inputs and outputs
+    inputs = [
+        { name: "input_data", type: "const float*" },
+        { name: "output_data", type: "float*" },
+        { name: "size", type: "int" }
+    ]
+    
+    # Configure kernel launch parameters
+    grid = { x: "(size + 255) / 256", y: 1, z: 1 }
+    block = { x: 256, y: 1, z: 1 }
+    
+    # Shared memory configuration (optional)
+    shared_mem = 4096  # bytes
+    
+    # Kernel code (CUDA C++)
+    code = """
+    __global__ void process_kernel(const float* input, float* output, int size) {
+        int idx = blockIdx.x * blockDim.x + threadIdx.x;
+        if (idx < size) {
+            // Your CUDA code here
+            output[idx] = input[idx] * 2.0f;
+        }
+    }
+    """
+}
+```
+
+#### Using CUDA in Action Handlers
+
+```python
+action process_pointcloud {
+    name = "process_pointcloud"
+    type = "robodsl_msgs/action/ProcessPointCloud"
+    
+    # Specify CUDA device (optional, default: 0)
+    cuda_device = 0
+    
+    # Pre-allocate GPU buffers
+    buffers = [
+        { name: "d_input", type: "float*", size: "point_count * 4 * sizeof(float)" },
+        { name: "d_output", type: "float*", size: "point_count * 4 * sizeof(float)" }
+    ]
+    
+    # Implementation with CUDA offloading
+    execute = """
+    void execute(const std::shared_ptr<GoalHandleProcessPointCloud> goal_handle) {
+        const auto goal = goal_handle->get_goal();
+        auto result = std::make_shared<ProcessPointCloud::Result>();
+        
+        try {
+            // Copy input to device
+            cudaMemcpy(d_input, goal->point_cloud.data.data(), 
+                      goal->point_cloud.data.size(), 
+                      cudaMemcpyHostToDevice);
+            
+            // Launch CUDA kernel
+            const int block_size = 256;
+            const int grid_size = (point_count + block_size - 1) / block_size;
+            
+            process_kernel<<<grid_size, block_size>>>(d_input, d_output, point_count);
+            
+            // Check for kernel errors
+            cudaError_t err = cudaGetLastError();
+            if (err != cudaSuccess) {
+                throw std::runtime_error("CUDA error: " + 
+                                      std::string(cudaGetErrorString(err)));
+            }
+            
+            // Copy result back
+            result->processed_cloud.data.resize(goal->point_cloud.data.size());
+            cudaMemcpy(result->processed_cloud.data.data(), d_output,
+                     result->processed_cloud.data.size(),
+                     cudaMemcpyDeviceToHost);
+            
+            goal_handle->succeed(result);
+            
+        } catch (const std::exception& e) {
+            RCLCPP_ERROR(get_logger(), "Error processing point cloud: %s", e.what());
+            goal_handle->abort(result);
+        }
+    }
+    """
+}
+```
+
+#### Best Practices for CUDA Offloading
+
+1. **Memory Management**:
+   - Use `cudaMalloc`/`cudaFree` in constructor/destructor
+   - Consider using RAII wrappers for automatic cleanup
+   - Pre-allocate buffers when possible
+
+2. **Error Handling**:
+   - Always check CUDA error codes
+   - Use `cudaGetLastError()` after kernel launches
+   - Implement proper exception handling
+
+3. **Performance**:
+   - Minimize host-device transfers
+   - Use pinned memory for faster transfers
+   - Optimize block/grid dimensions for your hardware
+
+### Conditional Compilation
+
+RoboDSL supports conditional compilation to enable/disable features at build time. This is particularly useful for:
+- Toggling between CPU/GPU implementations
+- Enabling debug features
+- Supporting different hardware configurations
+
+#### Feature Flags
+
+Define feature flags in your project:
+
+```python
+project "my_robot" {
+    # ...
+    
+    features = {
+        "ENABLE_CUDA": true,    # Enable CUDA support
+        "ENABLE_ROS2": true,    # Enable ROS2-specific code
+        "DEBUG_MODE": false,    # Debug features
+        "USE_SIMULATOR": false  # Simulator integration
+    }
+}
+```
+
+#### Conditional Code Blocks
+
+Use preprocessor directives in your code:
+
+```python
+cuda_kernel process_data {
+    # ...
+    code = """
+    #if ENABLE_CUDA && defined(__CUDACC__)
+    // CUDA kernel implementation
+    __global__ void process_kernel(const float* input, float* output, int size) {
+        // GPU implementation
+    }
+    #else
+    // CPU fallback implementation
+    void process_kernel_cpu(const float* input, float* output, int size) {
+        // CPU implementation
+    }
+    #endif
+    """
+}
+```
+
+#### Build Configuration
+
+Control feature flags in your build configuration:
+
+```python
+build {
+    # Platform-specific settings
+    platform = {
+        linux = {
+            # Enable CUDA on Linux
+            compile_definitions = [
+                "ENABLE_CUDA=1",
+                "ENABLE_ROS2=1"
+            ]
+        },
+        windows = {
+            # Disable CUDA on Windows
+            compile_definitions = [
+                "ENABLE_CUDA=0",
+                "ENABLE_ROS2=1"
+            ]
+        }
+    }
+    
+    # Debug/Release specific settings
+    debug = {
+        compile_definitions = ["DEBUG_MODE=1"]
+        optimization = "-O0 -g"
+    }
+    
+    release = {
+        compile_definitions = ["DEBUG_MODE=0"]
+        optimization = "-O3"
+    }
+}
+```
+
+#### Runtime Feature Detection
+
+Check features at runtime:
+
+```python
+node sensor_processor {
+    # ...
+    
+    initialize = """
+    void initialize() {
+    #if ENABLE_CUDA
+        // Initialize CUDA context
+        cudaSetDevice(0);
+        int device_count = 0;
+        cudaGetDeviceCount(&device_count);
+        if (device_count == 0) {
+            RCLCPP_WARN(get_logger(), "No CUDA-capable devices found");
+        }
+    #endif
+    }
+    """
+}
+```
 
 ### CUDA Kernels
 

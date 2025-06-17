@@ -17,13 +17,23 @@ RoboDSL is a powerful framework that simplifies the development of GPU-accelerat
 
 ### High-Performance Computing
 - **GPU Acceleration**: Seamless CUDA integration with automatic memory management
+  - **CUDA Offloading**: Easily offload compute-intensive tasks to GPU in action handlers
+  - **Conditional Compilation**: Toggle features with `ENABLE_CUDA` and `ENABLE_ROS2` flags
 - **Multi-Threading**: Built-in support for parallel processing and thread safety
 - **Optimized Builds**: Advanced compilation flags and optimizations for maximum performance
 
 ### ROS2 Integration
 - **Lifecycle Nodes**: Full support for managed nodes with state management
+  - State transitions (Unconfigured, Inactive, Active, Finalized)
+  - Resource management hooks
+  - Error recovery mechanisms
 - **Quality of Service**: Fine-grained control over communication reliability and performance
-- **Namespacing**: Hierarchical organization of nodes and topics
+  - Per-publisher/subscriber QoS profiles
+  - Deadline, lifespan, and liveliness policies
+- **Namespacing & Remapping**: Hierarchical organization and flexible topic routing
+  - Nested namespaces
+  - Runtime topic and service remapping
+  - Parameter namespacing
 - **Parameter Server**: Dynamic configuration with type safety
 
 ### Developer Experience

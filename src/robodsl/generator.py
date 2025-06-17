@@ -4,24 +4,35 @@ Code generation for RoboDSL.
 This module handles the generation of C++ and CUDA source files from the parsed DSL configuration.
 """
 
-import dataclasses
-import os
 import jinja2
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Set
-from dataclasses import dataclass, fields, asdict
 
 from .parser import RoboDSLConfig, NodeConfig, CudaKernelConfig
 
-# Set up Jinja2 environment with the templates directory
-template_dir = Path(__file__).parent / 'templates'
-if template_dir.exists():
+# Set up Jinja2 environment with template directories
+template_dirs = [
+    Path(__file__).parent / 'templates/cpp',
+    Path(__file__).parent / 'templates/py',
+    Path(__file__).parent / 'templates/cmake',
+    Path(__file__).parent / 'templates/launch',
+    Path(__file__).parent / 'templates',  # For backward compatibility
+]
+
+# Filter out non-existent directories
+template_loaders = [
+    jinja2.FileSystemLoader(str(d)) for d in template_dirs if d.exists()
+]
+
+if template_loaders:
     env = jinja2.Environment(
-        loader=jinja2.FileSystemLoader(template_dir),
+        loader=jinja2.ChoiceLoader(template_loaders),
         trim_blocks=True,
-        lstrip_blocks=True
+        lstrip_blocks=True,
+        keep_trailing_newline=True
     )
-    env.filters['indent'] = lambda text, n: '\n'.join(' ' * n + line if line.strip() else line for line in text.split('\n'))
+    env.filters['indent'] = lambda text, n: '\n'.join(' ' * n + line if line.strip() else line 
+                                                     for line in text.split('\n'))
 
 
 class CodeGenerator:
@@ -147,7 +158,7 @@ class CodeGenerator:
         return includes
     
     def _generate_node_header(self, node: NodeConfig) -> Path:
-        """Generate a C++ header file for a ROS2 node.
+        """Generate a C++ header file for a ROS2 node using a template.
         
         Args:
             node: The node configuration
@@ -158,244 +169,116 @@ class CodeGenerator:
         # Convert node name to a valid C++ class name (e.g., 'my_node' -> 'MyNode')
         class_name = ''.join(word.capitalize() for word in node.name.split('_'))
         
-        # Generate include guard
-        include_guard = f"ROBODSL_{node.name.upper()}_NODE_HPP_"
+        # Initialize context with common values
+        context = {
+            'include_guard': f'ROBODSL_{node.name.upper()}_NODE_HPP_',
+            'class_name': class_name,
+            'node_name': node.name,
+            'base_class': 'rclcpp_lifecycle::LifecycleNode' if getattr(node, 'lifecycle', False) else 'rclcpp::Node',
+            'is_lifecycle': getattr(node, 'lifecycle', False),
+            'namespace': node.get('namespace', ''),
+            'includes': [
+                '#include <memory>',
+                '#include <string>',
+                '#include <vector>',
+                '#include <rclcpp/rclcpp.hpp>',
+                '#include <rclcpp_lifecycle/lifecycle_node.hpp>',
+                '#include <rclcpp_lifecycle/lifecycle_publisher.hpp>',
+                '#include <std_msgs/msg/string.hpp>',
+            ],
+            'ros2_includes': [],
+            'cuda_includes': [],
+            'publishers': [],
+            'subscribers': [],
+            'services': [],
+            'timers': [],
+            'parameters': [],
+            'cuda_kernels': []
+        }
         
-        # Check if this node uses ROS2 features
-        uses_ros2 = bool(node.publishers or node.subscribers or node.services or node.parameters)
+        # Add ROS2 includes if needed
+        if (hasattr(node, 'services') and node.services) or (hasattr(node, 'parameters') and node.parameters):
+            context['ros2_includes'].extend([
+                '#include <rclcpp/service.hpp>',
+                '#include <rclcpp/parameter.hpp>'
+            ])
+            
+        # Add CUDA includes if needed
+        if hasattr(node, 'cuda_kernels') and node.cuda_kernels:
+            context['cuda_includes'].extend([
+                '#include <cuda_runtime.h>',
+                '#include <cstdint>'
+            ])
+            
+        # Add publishers if they exist
+        if hasattr(node, 'publishers') and node.publishers:
+            context['publishers'] = [{
+                'name': pub['topic'].lstrip('/').replace('/', '_'),
+                'msg_type': pub['msg_type'].replace('.', '::'),
+                'qos': pub.get('qos', {})
+            } for pub in node.publishers]
+            
+        # Add subscribers if they exist
+        if hasattr(node, 'subscribers') and node.subscribers:
+            context['subscribers'] = [{
+                'name': sub['topic'].lstrip('/').replace('/', '_'),
+                'msg_type': sub['msg_type'].replace('.', '::'),
+                'callback_name': f"{sub['topic'].lstrip('/').replace('/', '_')}_callback",
+                'qos': sub.get('qos', {})
+            } for sub in node.subscribers]
+            
+        # Add services if they exist
+        if hasattr(node, 'services') and node.services:
+            context['services'] = [{
+                'name': srv['service'].lstrip('/').replace('/', '_'),
+                'srv_type': srv['srv_type'].replace('.', '::'),
+                'callback_name': f"{srv['service'].lstrip('/').replace('/', '_')}_callback"
+            } for srv in node.services]
+            
+        # Add timers if they exist
+        if hasattr(node, 'timers') and node.timers:
+            context['timers'] = [{
+                'name': timer['name'],
+                'callback_name': timer['callback'],
+                'period': timer['period'],
+                'autostart': timer.get('autostart', True)
+            } for timer in node.timers]
+            
+        # Add parameters if they exist
+        if hasattr(node, 'parameters') and node.parameters:
+            context['parameters'] = [{
+                'name': param['name'],
+                'type': self._map_parameter_type(param['type']),
+                'default_value': param.get('default', 
+                    '0' if param['type'] in ['int', 'float', 'double'] else 'false')
+            } for param in node.parameters]
+            
+        # Add CUDA kernels if they exist
+        if hasattr(node, 'cuda_kernels') and node.cuda_kernels:
+            context['cuda_kernels'] = [{
+                'name': kernel['name'],
+                'return_type': 'void',
+                'params': ', '.join([f'{p["type"]} {p["name"]}' for p in kernel.get('parameters', [])]),
+                'members': [{'type': 'void*', 'name': f'{kernel["name"]}_dev_ptr'}]
+            } for kernel in node.cuda_kernels]
         
-        # Generate base includes
-        includes = [
-            '#include <string>',
-            '#include <vector>',
-            '#include <map>',
-            '',  # For better formatting
-        ]
+        # Add message includes
+        context['includes'].extend(self._generate_message_includes(node))
         
-        # Conditionally include ROS2 headers
-        has_actions = bool(node.actions)
-        has_timers = bool(node.timers)
-        use_lifecycle = node.lifecycle
-
-        if uses_ros2:
-            includes.insert(0, '#if ENABLE_ROS2')
-            includes.insert(1, '#include "rclcpp/rclcpp.hpp"')
-            if use_lifecycle:
-                includes.insert(2, '#include "rclcpp_lifecycle/lifecycle_node.hpp"')
-            if has_actions:
-                includes.append('#include "rclcpp_action/rclcpp_action.hpp"')
-            if has_param_cb:
-                includes.append('#include "rcl_interfaces/msg/set_parameters_result.hpp"')
-            includes.insert(2, '#else')
-            includes.insert(3, '// ROS2 stubs for non-ROS2 builds')
-            includes.insert(4, 'namespace rclcpp { class Node {}; }')
-            includes.insert(5, '#endif')
-            includes.insert(6, '')  # Extra newline for formatting
-        
-        # Add message includes with conditional compilation
-        includes.extend(self._generate_message_includes(node))
-        includes.append('')  # Extra newline for formatting
-        
-        # Generate the class declaration parts
-        ros_publishers = self._generate_publisher_declarations(node.publishers)
-        ros_subscribers = self._generate_subscriber_declarations(node.subscribers)
-        ros_services = self._generate_service_declarations(node.services)
-        parameters = self._generate_parameter_declarations(node.parameters)
-        param_cb_decl = self._generate_parameter_callback_declarations(node.parameter_callbacks)
-        timers_decl = self._generate_timer_declarations(node.timers)
-        actions_decl = self._generate_action_declarations(node.actions)
-        cuda_kernels = self._generate_cuda_kernel_declarations(node.name, self.config.cuda_kernels)
-        
-        # Generate the class declaration with conditional ROS2 support
-        class_declaration = []
-        
-        if uses_ros2:
-            base_class = 'rclcpp::LifecycleNode' if use_lifecycle else 'rclcpp::Node'
-            class_declaration.append(f'class {class_name} : public {base_class} {{')
-            class_declaration.append('public:')
-                        # Build NodeOptions with namespace/remap if provided
-            ns_option = f'.namespace_("{node.namespace}")' if node.namespace else ''
-            remap_chain = ''
-            if node.remap:
-                for frm, to in node.remap.items():
-                    remap_chain += f'.append_remap_rule("{frm}:={to}")'
-            node_options_expr = f'rclcpp::NodeOptions(){ns_option}{remap_chain}'
-            class_declaration.append(f'    {class_name}() : {base_class}("{node.name}", {node_options_expr}) {{}}')
-        else:
-            class_declaration.append(f'class {class_name} {{')
-            class_declaration.append('public:')
-            class_declaration.append(f'    {class_name}() = default;')
-        
-        class_declaration.extend([
-            f'    virtual ~{class_name}() = default;',
-            '    ', 
-            '    // Common interface methods',
-            '    void initialize();',
-            '    void update();',
-            '    void cleanup();',
-            '',
-            'private:',
-            '    // ROS2 Publishers',
-            f'{ros_publishers}',
-            '    ', 
-            '    // ROS2 Subscribers',
-            f'{ros_subscribers}',
-            '    ', 
-            '    // ROS2 Services',
-            f'{ros_services}',
-            '    ', 
-            '    // Parameters',
-            f'{parameters}',
-            '',
-            '    // CUDA Kernels',
-            f'{cuda_kernels}',
-            '};'
-        ])
-        
-        class_declaration = '\n'.join(class_declaration)
-        
-        # Write the header file
-        header_content = [
-            f'// Generated by RoboDSL - DO NOT EDIT',
-            f'#ifndef {include_guard}',
-            f'#define {include_guard}',
-            ''
-        ]
-        
-        # Add includes
-        header_content.extend(includes)
-        header_content.append('')
-        
-        # Add class declaration
-        header_content.append(class_declaration)
-        
-        # Add footer
-        header_content.extend([
-            '',
-            f'#endif // {include_guard}',
-            ''
-        ])
-        
-        header_content = '\n'.join(header_content)
+        # Render template
+        template = env.get_template('node.hpp.jinja2')
+        header_content = template.render(**context)
         
         # Create output directory if it doesn't exist
         header_path = self.output_dir / 'include' / 'robodsl' / f"{node.name}_node.hpp"
         header_path.parent.mkdir(parents=True, exist_ok=True)
         
-        with open(header_path, 'w') as f:
+        # Write the generated content to file
+        with open(header_path, 'w', encoding='utf-8') as f:
             f.write(header_content)
-        
+            
         return header_path
-       
-        """
-        # Convert node name to a valid C++ class name (e.g., 'my_node' -> 'MyNode')
-        class_name = ''.join(word.capitalize() for word in node.name.split('_'))
-        
-        # Generate include guard
-        include_guard = f"ROBODSL_{node.name.upper()}_NODE_HPP_"
-        
-        # Check if this node uses ROS2 features
-        uses_ros2 = bool(node.publishers or node.subscribers or node.services or node.parameters)
-        
-        # Generate base includes
-        header_content = "#pragma once\n\n"
-        
-        # System includes
-        header_content += "#include <memory>\n"
-        header_content += "#include <string>\n"
-        header_content += "#include <vector>\n"
-        header_content += "#include <functional>\n\n"
-        
-        # ROS2 includes if needed
-        if node.publishers or node.subscribers or node.services or node.parameters:
-            header_content += "#if ENABLE_ROS2\n"
-            header_content += "#include \"rclcpp/rclcpp.hpp\"\n"
-            header_content += "#include \"std_msgs/msg/float32_multi_array.hpp\"\n"
-            header_content += "#include \"std_msgs/msg/header.hpp\"\n"
-            header_content += "#else\n"
-            header_content += "// ROS2 stubs for non-ROS2 builds\n"
-            header_content += "#include <cstdint>\n"
-            header_content += "#include <string>\n"
-            header_content += "#include <vector>\n"
-            header_content += "#include <chrono>\n"
-            header_content += "#include <memory>\n"
-            header_content += "#include <map>\n"
-            header_content += "#include <functional>\n\n"
-            header_content += "// ROS2 stubs\n"
-            header_content += "namespace rclcpp {\n"
-            header_content += "class Node : public std::enable_shared_from_this<Node> {\n"
-            header_content += "public:\n"
-            header_content += "  using SharedPtr = std::shared_ptr<Node>;\n"
-            header_content += "  using WeakPtr = std::weak_ptr<Node>;\n"
-            header_content += "  using ConstSharedPtr = const std::shared_ptr<const Node>;\n"
-            header_content += "  using ConstWeakPtr = const std::weak_ptr<const Node>;\n"
-            header_content += "  using SharedPtrConst = std::shared_ptr<const Node>;\n"
-            header_content += "  using WeakPtrConst = std::weak_ptr<const Node>;\n\n"
-            header_content += "  virtual ~Node() = default;\n"
-            header_content += "  static SharedPtr make_shared(const std::string &name) { return std::make_shared<Node>(); }\n"
-            header_content += "  std::string get_name() const { return \"stub_node\"; }\n"
-            header_content += "};\n\n"
-            header_content += "class Parameter {\n"
-            header_content += "public:\n"
-            header_content += "  Parameter() = default;\n"
-            header_content += "  template<typename T>\n"
-            header_content += "  T get_value(const std::string &name, const T &default_value) const { return default_value; }\n"
-            header_content += "};\n"
-            header_content += "}  // namespace rclcpp\n\n"
-            header_content += "// std_msgs stubs\n"
-            header_content += "namespace std_msgs {\n"
-            header_content += "namespace msg {\n"
-            header_content += "struct Header {\n"
-            header_content += "  struct Stamp {\n"
-            header_content += "    int32_t sec = 0;\n"
-            header_content += "    uint32_t nanosec = 0;\n"
-            header_content += "  };\n"
-            header_content += "  Stamp stamp;\n"
-            header_content += "  std::string frame_id;\n"
-            header_content += "};\n\n"
-            header_content += "template<typename T>\n"
-            header_content += "class Float32MultiArray_ {\n"
-            header_content += "public:\n"
-            header_content += "  using SharedPtr = std::shared_ptr<Float32MultiArray_<T>>;\n"
-            header_content += "  using ConstSharedPtr = std::shared_ptr<const Float32MultiArray_<T>>;\n"
-            header_content += "  Header header;\n"
-            header_content += "  std::vector<float> data;\n"
-            header_content += "};\n"
-            header_content += "using Float32MultiArray = Float32MultiArray_<void>;\n"
-            header_content += "}  // namespace msg\n"
-            header_content += "}  // namespace std_msgs\n"
-            header_content += "#endif  // ENABLE_ROS2\n\n"
-        
-        # Add class definition
-        header_content += f"namespace robodsl {{\n\n"
-        header_content += f"class {node.name.capitalize()}Node {{\n"
-        # Add public section
-        header_content += "public:\n"
-        header_content += f"  explicit {node.name.capitalize()}Node();\n"
-        header_content += f"  ~{node.name.capitalize()}Node() = default;\n\n"
-        
-        # Add private methods and members
-        header_content += "private:\n"
-        
-        # Add ROS2 node if needed
-        if node.publishers or node.subscribers or node.services or node.parameters:
-            header_content += "  #if ENABLE_ROS2\n"
-            header_content += "  rclcpp::Node::SharedPtr node_ = nullptr;\n"
-            header_content += "  #else\n"
-            header_content += "  // ROS2 stubs for non-ROS2 builds\n"
-            header_content += "  std::shared_ptr<void> node_ = nullptr;  // Placeholder for ROS2 node\n"
-            header_content += "  #endif  // ENABLE_ROS2\n\n"
-        # Timer and action member declarations (inside class)
-        header_content += timers_decl + "\n\n" + actions_decl + "\n" + param_cb_decl + "\n"
-        
-        header_content += f"}};  // class {node.name.capitalize()}Node\n\n"
-        header_content += "}}  // namespace robodsl\n"
-        
 
-    """
-    # Add other methods from the original generator here...
-    # (This is a simplified version focusing on the changes needed for message includes)
-    
     def _generate_publisher_declarations(self, publishers: List[Dict[str, str]]) -> str:
         """Generate C++ declarations for ROS2 publishers."""
         if not publishers:
@@ -502,24 +385,65 @@ class CodeGenerator:
         return '\n'.join(lines)
 
     def _generate_cuda_kernel_declarations(self, node_name: str, kernels: List[CudaKernelConfig]) -> str:
-        """Generate C++ declarations for CUDA kernels used by this node."""
+        """Generate C++ declarations for CUDA kernels used by this node.
+        
+        Args:
+            node_name: Name of the node these kernels belong to
+            kernels: List of CUDA kernel configurations
+            
+        Returns:
+            Formatted C++ declarations as a string
+        """
         if not kernels:
             return "    // No CUDA kernels defined\n"
             
-        decls = ["    // CUDA Kernels"]
-        for kernel in kernels:
-            # Skip if kernel has a node attribute that doesn't match
-            if hasattr(kernel, 'node') and kernel.node != node_name:
-                continue
-                
-            # Add kernel declaration
-            decls.append(f"    // CUDA kernel: {kernel.name}")
-            decls.append(f"    // Add kernel declarations here")
-                
-        return '\n'.join(decls)
+        # Filter kernels for this node
+        node_kernels = [
+            k for k in kernels 
+            if not hasattr(k, 'node') or k.node == node_name
+        ]
         
+        if not node_kernels:
+            return "    // No CUDA kernels defined for this node\n"
+            
+        # Prepare context for template
+        context = {
+            'node': {
+                'name': node_name,
+                'namespace': self.config.project_name.lower(),
+                'cuda_kernels': []
+            }
+        }
+        
+        # Add kernel information to context
+        for kernel in node_kernels:
+            kernel_info = {
+                'name': kernel.name,
+                'description': getattr(kernel, 'description', ''),
+                'parameters': []
+            }
+            
+            # Add kernel parameters
+            for param in getattr(kernel, 'parameters', []):
+                param_info = {
+                    'name': getattr(param, 'name', ''),
+                    'type': getattr(param, 'type', 'void*'),
+                    'description': getattr(param, 'description', '')
+                }
+                kernel_info['parameters'].append(param_info)
+                
+            context['node']['cuda_kernels'].append(kernel_info)
+        
+        # Render the template
+        try:
+            template = self.env.get_template('cuda/kernel.hpp.jinja2')
+            return template.render(**context)
+            
+        except Exception as e:
+            print(f"Error generating CUDA kernel declarations: {str(e)}")
+            return "    // Error generating CUDA kernel declarations\n"
     def _generate_launch_file(self, node: NodeConfig) -> Optional[Path]:
-        """Generate a launch file for a ROS2 node.
+        """Generate a launch file for a ROS2 node using Jinja2 template.
         
         Args:
             node: The node configuration
@@ -527,238 +451,97 @@ class CodeGenerator:
         Returns:
             Path to the generated launch file, or None if not needed
         """
-        # Check if this node uses ROS2 features
-        uses_ros2 = bool(node.publishers or node.subscribers or node.services or node.parameters or node.actions)
-        
-        # Only generate launch file for ROS2 nodes
-        if not uses_ros2:
+        # Skip if this isn't a ROS2 node
+        if not (node.publishers or node.subscribers or node.services or node.parameters or node.actions):
             return None
             
-        # Get launch configuration if available
-        launch_config = getattr(self.config, 'launch', None)
-        
-        # Generate launch file content
-        package_name = self.config.project_name
-        exec_name = f"{node.name}_node"
-        node_name = node.name
-        
-        # Default node configuration
-        node_config = {
-            'package': package_name,
-            'executable': exec_name,
-            'name': node_name,
-            'output': 'screen',
-            'parameters': [{'use_sim_time': False}],
-            'remappings': [],
-            'namespace': ''
+        # Prepare context for the template
+        context = {
+            'package_name': self.config.project_name,
+            'node_name': node.name,
+            'is_lifecycle': getattr(node, 'is_lifecycle', False),
+            'parameters': [],
+            'remappings': {},
+            'env_vars': {},
+            'extra_nodes': []
         }
         
-        # Apply launch configuration if available
-        if launch_config and hasattr(launch_config, 'node'):
-            launch_node = launch_config.node[0] if isinstance(launch_config.node, list) else launch_config.node
-            
-            # Update node configuration from launch config
-            if hasattr(launch_node, 'package'):
-                node_config['package'] = launch_node.package
-            if hasattr(launch_node, 'executable'):
-                node_config['executable'] = launch_node.executable
-            if hasattr(launch_node, 'name'):
-                node_config['name'] = launch_node.name
-            if hasattr(launch_node, 'output'):
-                node_config['output'] = launch_node.output
-            if hasattr(launch_node, 'namespace'):
-                node_config['namespace'] = launch_node.namespace
-            
-            # Handle parameters
-            if hasattr(launch_node, 'parameters'):
-                if isinstance(launch_node.parameters, list):
-                    node_config['parameters'] = launch_node.parameters
-            
-            # Handle remappings
-            if hasattr(launch_node, 'remappings'):
-                if isinstance(launch_node.remappings, list):
-                    node_config['remappings'] = [
-                        f"{src}:={dst}" for src, dst in 
-                        (remap.split(':', 1) for remap in launch_node.remappings)
-                    ]
-            
-            # Handle environment variables
-            env_vars = {}
-            if hasattr(launch_node, 'env'):
-                if isinstance(launch_node.env, dict):
-                    env_vars.update(launch_node.env)
-            if env_vars:
-                node_config['env'] = env_vars
-        
-        # Add node parameters if they exist
-        if node.parameters:
-            params = {}
-            for param_name, param_info in node.parameters.items():
-                if isinstance(param_info, dict) and 'default' in param_info:
-                    params[param_name] = param_info['default']
-                else:
-                    params[param_name] = param_info
-            
-            if 'parameters' not in node_config or not isinstance(node_config['parameters'], list):
-                node_config['parameters'] = []
-            
-            # Add parameters as a dictionary
-            node_config['parameters'].append(params)
-        
-        # Generate launch file content
-        launch_content = """# Generated by RoboDSL - DO NOT EDIT
-"""
-        
-        # Add imports
-        launch_content += """from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription
-from launch.conditions import IfCondition, UnlessCondition
-from launch.substitutions import LaunchConfiguration, PythonExpression
-from launch_ros.actions import Node, LifecycleNode
-from ament_index_python.packages import get_package_share_directory
-import os
-
-"""
-        
-        # Generate launch description function
-        launch_content += "def generate_launch_description():\n"
-        
-        # Add launch arguments
-        launch_content += "    # Launch arguments\n"
-        launch_content += "    use_sim_time = LaunchConfiguration('use_sim_time', default='false')\n"
-        launch_content += "    use_rviz = LaunchConfiguration('use_rviz', default='false')\n\n"
-        
-        # Add node configuration
-        launch_content += "    # Node configuration\n"
-        
-        # Handle lifecycle nodes
-        is_lifecycle = getattr(node, 'lifecycle', False)
-        node_type = 'LifecycleNode' if is_lifecycle else 'Node'
-        
-        # Start node configuration
-        launch_content += f"    {node_name}_node = {node_type}(\n"
-        
-        # Add basic node configuration
-        launch_content += f"        package='{node_config['package']}',\n"
-        launch_content += f"        executable='{node_config['executable']}',\n"
-        launch_content += f"        name='{node_config['name']}',\n"
-        
         # Add namespace if specified
-        if node_config.get('namespace'):
-            launch_content += f"        namespace='{node_config['namespace']}',\n"
-        
-        # Add output configuration
-        launch_content += f"        output='{node_config['output']}',\n"
-        
-        # Add parameters
-        if node_config.get('parameters'):
-            params_str = "        parameters=[\n"
-            for param in node_config['parameters']:
-                if isinstance(param, dict):
-                    params_str += "            {\n"
-                    for k, v in param.items():
-                        # Handle different parameter types
-                        if isinstance(v, str):
-                            v_str = f"'{v}'"
-                        elif isinstance(v, bool):
-                            v_str = 'true' if v else 'false'
-                        else:
-                            v_str = str(v)
-                        params_str += f"                '{k}': {v_str},\n"
-                    params_str += "            },\n"
-                else:
-                    params_str += f"            '{param}',\n"
-            params_str += "        ],\n"
-            launch_content += params_str
-        
-        # Add remappings
-        if node_config.get('remappings'):
-            remaps_str = "        remappings=[\n"
-            for remap in node_config['remappings']:
-                src, dst = remap.split(':', 1)
-                remaps_str += f"            ('{src}', '{dst}'),\n"
-            remaps_str += "        ],\n"
-            launch_content += remaps_str
-        
-        # Add environment variables
-        if node_config.get('env'):
-            env_str = "        env=[\n"
-            for k, v in node_config['env'].items():
-                env_str += f"            {{'{k}': '{v}'}},\n"
-            env_str += "        ],\n"
-            launch_content += env_str
-        
-        # Close node configuration
-        launch_content += "    )\n\n"
-        
-        # Add additional nodes (like RViz) if specified in launch config
-        additional_nodes = []
-        if launch_config and hasattr(launch_config, 'node') and len(launch_config.node) > 1:
-            for i, extra_node in enumerate(launch_config.node[1:], 1):
-                node_var = f"extra_node_{i}"
-                additional_nodes.append(node_var)
-                
-                launch_content += f"    # Additional node: {getattr(extra_node, 'name', 'unnamed')}\n"
-                launch_content += f"    {node_var} = Node(\n"
-                
-                # Add basic node configuration
-                if hasattr(extra_node, 'package'):
-                    launch_content += f"        package='{extra_node.package}',\n"
-                if hasattr(extra_node, 'executable'):
-                    launch_content += f"        executable='{extra_node.executable}',\n"
-                if hasattr(extra_node, 'name'):
-                    launch_content += f"        name='{extra_node.name}',\n"
-                if hasattr(extra_node, 'namespace'):
-                    launch_content += f"        namespace='{extra_node.namespace}',\n"
-                if hasattr(extra_node, 'output'):
-                    launch_content += f"        output='{extra_node.output}',\n"
-                
-                # Handle parameters
-                if hasattr(extra_node, 'parameters') and extra_node.parameters:
-                    params_str = "        parameters=[\n"
-                    for param in extra_node.parameters:
-                        if isinstance(param, dict):
-                            params_str += "            {\n"
-                            for k, v in param.items():
-                                if isinstance(v, str):
-                                    v_str = f'"{v}"'
-                                elif isinstance(v, bool):
-                                    v_str = 'true' if v else 'false'
-                                else:
-                                    v_str = str(v)
-                                params_str += f"                '{k}': {v_str},\n"
-                            params_str += "            },\n"
-                        else:
-                            params_str += f"            '{param}',\n"
-                    params_str += "        ],\n"
-                    launch_content += params_str
-                
-                # Close the Node constructor
-                launch_content += "    )\n\n"
-        
-        # Create launch description and add nodes
-        launch_content += "    # Create the launch description and populate\n"
-        launch_content += "    ld = LaunchDescription()\n\n"
-        
-        # Add the main node
-        launch_content += f"    # Add the nodes to the launch description\n"
-        launch_content += f"    ld.add_action({node_name}_node)\n"
-        
-        # Add any additional nodes
-        for node_var in additional_nodes:
-            launch_content += f"    ld.add_action({node_var})\n"
-        
-        # Return the launch description
-        launch_content += "\n    return ld\n"
-        
-        # Write the launch file
-        launch_path = self.output_dir / 'launch' / f"{node.name}.launch.py"
-        launch_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        with open(launch_path, 'w') as f:
-            f.write(launch_content)
+        if hasattr(node, 'namespace') and node.namespace:
+            context['namespace'] = node.namespace
             
-        return launch_path
+        # Add parameters
+        if hasattr(node, 'parameters') and node.parameters:
+            for name, param in node.parameters.items():
+                param_dict = {name: param.default} if hasattr(param, 'default') else {name: param}
+                context['parameters'].append(param_dict)
+                
+        # Add remappings
+        if hasattr(node, 'remappings') and node.remappings:
+            if isinstance(node.remappings, dict):
+                context['remappings'] = dict(node.remappings)
+            elif isinstance(node.remappings, list):
+                for remap in node.remappings:
+                    if ':' in remap:
+                        src, dst = remap.split(':', 1)
+                        context['remappings'][src] = dst
+            
+        # Add environment variables
+        if hasattr(node, 'env') and node.env:
+            context['env_vars'] = dict(node.env)
+            
+        # Handle launch configuration if available
+        if hasattr(self.config, 'launch') and hasattr(self.config.launch, 'node'):
+            launch_nodes = self.config.launch.node
+            if isinstance(launch_nodes, list) and len(launch_nodes) > 1:
+                # Add additional nodes from launch config
+                for extra_node in launch_nodes[1:]:  # Skip the main node
+                    extra_node_dict = {
+                        'name': extra_node.name,
+                        'metadata': {'package': getattr(extra_node, 'package', None)},
+                        'namespace': getattr(extra_node, 'namespace', ''),
+                        'parameters': [],
+                        'remappings': {}
+                    }
+                    
+                    # Add parameters for extra node
+                    if hasattr(extra_node, 'parameters'):
+                        if isinstance(extra_node.parameters, dict):
+                            extra_node_dict['parameters'].append(extra_node.parameters)
+                        elif isinstance(extra_node.parameters, list):
+                            extra_node_dict['parameters'].extend(extra_node.parameters)
+                    
+                    # Add remappings for extra node
+                    if hasattr(extra_node, 'remappings'):
+                        if isinstance(extra_node.remappings, dict):
+                            extra_node_dict['remappings'].update(extra_node.remappings)
+                        elif isinstance(extra_node.remappings, list):
+                            for remap in extra_node.remappings:
+                                if ':' in remap:
+                                    src, dst = remap.split(':', 1)
+                                    extra_node_dict['remappings'][src] = dst
+                    
+                    context['extra_nodes'].append(extra_node_dict)
+        
+        # Render the template
+        try:
+            template = self.env.get_template('launch/node.launch.py.jinja2')
+            launch_content = template.render(**context)
+            
+            # Ensure output directory exists
+            launch_dir = self.output_dir / 'launch'
+            launch_dir.mkdir(parents=True, exist_ok=True)
+            launch_path = launch_dir / f"{node.name}.launch.py"
+            
+            # Write the launch file
+            with open(launch_path, 'w', encoding='utf-8') as f:
+                f.write(launch_content)
+                
+            return launch_path
+            
+        except Exception as e:
+            print(f"Error generating launch file for {node.name}: {str(e)}")
+            return None
 
     def _generate_cmake_content(self) -> List[str]:
         """Generate the main CMakeLists.txt content.
@@ -811,98 +594,124 @@ import os
         ]
 
     def _generate_cmakelists(self) -> Path:
-        """Generate the main CMakeLists.txt file.
+        """Generate the main CMakeLists.txt file using Jinja2 template.
         
         Returns:
             Path to the generated CMakeLists.txt file
         """
+        # Prepare context for the template
+        context = {
+            'project_name': self.config.project_name,
+            'version': '0.1.0',
+            'has_cuda': any(hasattr(node, 'cuda_kernels') and node.cuda_kernels 
+                          for node in self.config.nodes),
+            'has_lifecycle': any(hasattr(node, 'is_lifecycle') and node.is_lifecycle 
+                              for node in self.config.nodes),
+            'has_qos': any(hasattr(node, 'qos_profiles') and node.qos_profiles 
+                         for node in self.config.nodes),
+            'nodes': []
+        }
+        
+        # Add node-specific information
+        for node in self.config.nodes:
+            node_info = {
+                'name': node.name,
+                'type': 'lifecycle' if hasattr(node, 'is_lifecycle') and node.is_lifecycle else 'regular',
+                'has_cuda': hasattr(node, 'cuda_kernels') and bool(node.cuda_kernels),
+                'sources': [f'src/{node.name}_node.cpp']
+            }
+            context['nodes'].append(node_info)
+        
+        # Render the template
+        template = self.jinja_env.get_template('cmake/CMakeLists.txt.jinja2')
+        cmake_content = template.render(**context)
+        
+        # Ensure output directory exists
         cmake_path = self.output_dir / 'CMakeLists.txt'
-        
-        # Generate base CMake content
-        cmake_content = self._generate_cmake_content()
-        
-        # Add CUDA support if needed
-        cmake_content = self._add_cuda_support(cmake_content)
-        
-        # Add ROS2 dependencies if needed
-        cmake_content = self._add_ros2_dependencies(cmake_content)
-        
-        # Add node executables and component registration
-        cmake_content = self._add_node_executables(cmake_content)
-        
-        # Add installation rules for include directories
-        cmake_content.extend([
-            "",
-            "# Install include directories",
-            "install(",
-            "    DIRECTORY include/",
-            "    DESTINATION include",
-            "    FILES_MATCHING PATTERN \"*.hpp\"",
-            ")",
-            "",
-            "# Install launch files",
-            "install(",
-            "    DIRECTORY launch/",
-            "    DESTINATION share/${PROJECT_NAME}/launch",
-            "    PATTERN \"*.launch.py\"",
-            ")",
-            "",
-            "# Export dependencies",
-            "ament_export_dependencies(",
-            "    rclcpp",
-            "    rclcpp_components",
-            "    std_msgs",
-            ")",
-            "",
-            "# Finalize package",
-            "ament_package()"
-        ])
+        cmake_path.parent.mkdir(parents=True, exist_ok=True)
         
         # Write the CMakeLists.txt file
         with open(cmake_path, 'w') as f:
-            f.write('\n'.join(cmake_content) + '\n')
+            f.write(cmake_content)
             
         return cmake_path
 
     def _generate_package_xml(self) -> Path:
-        """Generate the package.xml file.
+        """Generate the package.xml file using Jinja2 template.
         
         Returns:
             Path to the generated package.xml file
         """
+        # Prepare context for the template
+        context = {
+            'project_name': self.config.project_name,
+            'description': 'Auto-generated ROS 2 package',
+            'maintainer_email': 'user@example.com',
+            'maintainer_name': 'User',
+            'license': 'Apache License 2.0',
+            'has_lifecycle': any(hasattr(node, 'is_lifecycle') and node.is_lifecycle 
+                              for node in self.config.nodes),
+            'message_dependencies': self._collect_message_dependencies()
+        }
+        
+        # Render the template
+        template = self.jinja_env.get_template('cmake/package.xml.jinja2')
+        package_content = template.render(**context)
+        
+        # Ensure output directory exists
         package_path = self.output_dir / 'package.xml'
+        package_path.parent.mkdir(parents=True, exist_ok=True)
         
-        # Start with basic package information
-        content = [
-            '<?xml version="1.0"?>',
-            '<?xml-model href="http://download.ros.org/schema/package_format3.xsd" \
-              schematypens="http://www.w3.org/2001/XMLSchema\" version="1.0"?>',
-            f'<package format="3">',
-            f'  <name>{self.config.project_name}</name>',
-            '  <version>0.1.0</version>',
-            '  <description>Auto-generated ROS 2 package</description>',
-            '  <maintainer email="user@example.com">User</maintainer>',
-            '  <license>Apache License 2.0</license>',
-            '',
-            '  <buildtool_depend>ament_cmake</buildtool_depend>',
-            '  <buildtool_depend>rclcpp_components</buildtool_depend>',
-            '',
-            '  <depend>rclcpp</depend>',
-            '  <depend>std_msgs</depend>',
-            '',
-            '  <test_depend>ament_lint_auto</test_depend>',
-            '  <test_depend>ament_lint_common</test_depend>',
-            '',
-            '  <export>',
-            '    <build_type>ament_cmake</build_type>',
-            '  </export>',
-            '</package>'
-        ]
-        
+        # Write the package.xml file
         with open(package_path, 'w') as f:
-            f.write('\n'.join(content) + '\n')
+            f.write(package_content)
             
         return package_path
+        
+    def _collect_message_dependencies(self) -> Set[str]:
+        """Collect all message dependencies from nodes.
+        
+        Returns:
+            Set of package names that provide message types used in the project
+        """
+        message_packages = set()
+        
+        # Add standard ROS 2 message packages
+        message_packages.update(['std_msgs'])
+        
+        # Check all nodes for message dependencies
+        for node in self.config.nodes:
+            # Check publishers
+            if hasattr(node, 'publishers'):
+                for pub in node.publishers:
+                    if 'type' in pub and '/' in pub['type']:
+                        pkg = pub['type'].split('/')[0]
+                        if pkg != 'std_msgs':  # Already added
+                            message_packages.add(pkg)
+            
+            # Check subscribers
+            if hasattr(node, 'subscribers'):
+                for sub in node.subscribers:
+                    if 'type' in sub and '/' in sub['type']:
+                        pkg = sub['type'].split('/')[0]
+                        if pkg != 'std_msgs':
+                            message_packages.add(pkg)
+            
+            # Check services
+            if hasattr(node, 'services'):
+                for srv in node.services:
+                    if 'type' in srv and '/' in srv['type']:
+                        pkg = srv['type'].split('/')[0]
+                        message_packages.add(pkg)
+            
+            # Check actions
+            if hasattr(node, 'actions'):
+                for action in node.actions:
+                    if 'type' in action and '/' in action['type']:
+                        pkg = action['type'].split('/')[0]
+                        message_packages.add(pkg)
+        
+        return sorted(message_packages)
 
     def _add_cuda_support(self, cmake_content: List[str]) -> List[str]:
         """Add CUDA support to the CMake configuration.
@@ -1318,7 +1127,7 @@ endif()
         return cmake_path
         
     def _generate_cuda_kernel(self, kernel: CudaKernelConfig) -> List[Path]:
-        """Generate CUDA kernel implementation files.
+        """Generate CUDA kernel implementation files using Jinja2 templates.
         
         Args:
             kernel: The CUDA kernel configuration
@@ -1328,154 +1137,71 @@ endif()
         """
         generated_files = []
         
-        # Create output directory for CUDA kernels
-        output_dir = self.output_dir / 'include' / 'robodsl' / 'cuda'
-        output_dir.mkdir(parents=True, exist_ok=True)
+        # Create output directories
+        include_dir = self.output_dir / 'include' / self.config.project_name.lower() / 'cuda'
+        src_dir = self.output_dir / 'src' / 'cuda'
         
-        # Generate header file
-        header_guard = f"ROBODSL_{kernel.name.upper()}_KERNEL_HPP"
+        include_dir.mkdir(parents=True, exist_ok=True)
+        src_dir.mkdir(parents=True, exist_ok=True)
         
-        # Generate includes
-        includes = [
-            '#include <cuda_runtime.h>',
-            '#include <cstdint>',
-            ''
-        ]
+        # Prepare context for templates
+        context = {
+            'node': {
+                'name': getattr(kernel, 'node', 'unnamed'),
+                'namespace': self.config.project_name.lower(),
+                'cuda_kernels': [{
+                    'name': kernel.name,
+                    'description': getattr(kernel, 'description', ''),
+                    'parameters': [{
+                        'name': p.name,
+                        'type': p.type,
+                        'description': getattr(p, 'description', ''),
+                        'is_const': getattr(p, 'is_const', False),
+                        'is_pointer': getattr(p, 'is_pointer', False),
+                        'size_expr': getattr(p, 'size_expr', '')
+                    } for p in getattr(kernel, 'parameters', [])]
+                }]
+            },
+            'kernel': {
+                'name': kernel.name,
+                'use_thrust': getattr(kernel, 'use_thrust', False),
+                'includes': getattr(kernel, 'includes', []),
+                'code': getattr(kernel, 'code', '// TODO: Implement kernel logic')
+            },
+            'inputs': [{
+                'name': p.name,
+                'type': p.type
+            } for p in getattr(kernel, 'inputs', [])],
+            'outputs': [{
+                'name': p.name,
+                'type': p.type
+            } for p in getattr(kernel, 'outputs', [])]
+        }
         
-        if kernel.use_thrust:
-            includes.extend([
-                '#include <thrust/device_vector.h>',
-                '#include <thrust/host_vector.h>',
-                '#include <thrust/functional.h>',
-                ''
-            ])
-        
-        # Add custom includes
-        for include in kernel.includes:
-            includes.append(f'#include "{include}"')
-        includes.append('')
-        
-        # Generate parameter declarations
-        param_decls = []
-        for param in kernel.parameters:
-            param_type = param.type
-            param_name = param.name
-            param_mod = ''
+        try:
+            # Generate header file
+            header_template = self.env.get_template('cuda/kernel.hpp.jinja2')
+            header_content = header_template.render(**context)
             
-            # Handle const and pointer qualifiers
-            if param.is_const:
-                param_mod += 'const '
+            header_path = include_dir / f"{kernel.name}_kernels.hpp"
+            with open(header_path, 'w', encoding='utf-8') as f:
+                f.write(header_content)
+            generated_files.append(header_path)
             
-            if param.is_pointer:
-                param_mod += '*' if not param_mod else ' *'
+            # Generate source file
+            source_template = self.env.get_template('cuda/kernel.cu.jinja2')
+            source_content = source_template.render(**context)
             
-            # Build parameter declaration
-            decl = f"{param_type} {param_mod}{param_name}"
+            source_path = src_dir / f"{kernel.name}_kernels.cu"
+            with open(source_path, 'w', encoding='utf-8') as f:
+                f.write(source_content)
+            generated_files.append(source_path)
             
-            # Add size expression for dynamic arrays
-            if param.size_expr and param.is_pointer:
-                decl += f"[{param.size_expr}]"
-                
-            param_decls.append(decl)
-        
-        # Generate function declaration
-        kernel_decl = f"__global__ void {kernel.name}_kernel("
-        kernel_decl += ', '.join(param_decls) + ')'
-        
-        # Generate header content
-        header_content = f"""// Generated by RoboDSL - DO NOT EDIT
-
-// CUDA Kernel: {kernel.name}
-
-#ifndef {header_guard}
-#define {header_guard}
-
-{"\n".join(includes)}
-
-namespace robodsl {{
-
-/**
- * @brief CUDA kernel for {kernel.name}
- * 
- * @param grid_size Grid size for kernel launch
- * @param block_size Block size for kernel launch
- * @param shared_mem_bytes Shared memory size in bytes
- * @param args Arguments to pass to the kernel
- * @return cudaError_t CUDA error code
- */
-cudaError_t launch_{kernel.name}_kernel(
-    dim3 grid_size,
-    dim3 block_size,
-    unsigned int shared_mem_bytes,
-    {', '.join([f"{p.type} {p.name}" for p in kernel.parameters])});
-
-}} // namespace robodsl
-
-#endif // {header_guard}
-"""
-        
-        # Write header file
-        header_path = output_dir / f"{kernel.name}_kernel.cuh"
-        with open(header_path, 'w') as f:
-            f.write(header_content)
-        generated_files.append(header_path)
-        
-        # Prepare kernel parameters with proper pointer types for outputs
-        kernel_params = []
-        for param in kernel.inputs:
-            kernel_params.append(f"{param['type']} {param['name']}")
-        for param in kernel.outputs:
-            kernel_params.append(f"{param['type']}* {param['name']}")
+            return generated_files
             
-        # Generate source file
-        source_content = f"""// Generated by RoboDSL - DO NOT EDIT
-
-#include "robodsl/cuda/{kernel.name}_kernel.cuh"
-
-namespace robodsl {{
-
-// Kernel implementation
-__global__ void {kernel.name}_kernel(
-    {', '.join(kernel_params)})
-{{
-    // TODO: Implement CUDA kernel
-    // Example: int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    
-{kernel.code}
-}}
-
-// Kernel launcher
-cudaError_t launch_{kernel.name}_kernel(
-    dim3 grid_size,
-    dim3 block_size,
-    unsigned int shared_mem_bytes,
-    {', '.join([f"{p['type']} {p['name']}" for p in kernel.inputs + kernel.outputs])})
-{{
-    // Launch the kernel
-    {kernel.name}_kernel<<<grid_size, block_size, shared_mem_bytes>>>(
-        {', '.join([p['name'] for p in kernel.inputs + kernel.outputs])});
-        
-    // Check for kernel launch errors
-    cudaError_t err = cudaGetLastError();
-    if (err != cudaSuccess) {{
-        return err;
-    }}
-    
-    // Synchronize to check for kernel execution errors
-    return cudaDeviceSynchronize();
-}}
-
-}} // namespace robodsl
-"""
-        
-        # Write source file
-        source_path = output_dir.parent.parent / 'src' / 'cuda' / f"{kernel.name}_kernel.cu"
-        source_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(source_path, 'w') as f:
-            f.write(source_content)
-        generated_files.append(source_path)
-        
-        return generated_files
+        except Exception as e:
+            print(f"Error generating CUDA kernel {kernel.name}: {str(e)}")
+            return []
         
     def _validate_qos_config(self, qos_cfg: Optional[QoSConfig], context: str = '') -> Optional[QoSConfig]:
         """Validate a QoS configuration object.
@@ -1581,7 +1307,7 @@ cudaError_t launch_{kernel.name}_kernel(
         return '\n    '.join(code)
 
     def _generate_node_source(self, node: NodeConfig) -> Path:
-        """Generate a C++ source file for a ROS2 node.
+        """Generate a C++ source file for a ROS2 node using a Jinja2 template.
         
         Args:
             node: The node configuration
@@ -1592,455 +1318,132 @@ cudaError_t launch_{kernel.name}_kernel(
         # Convert node name to a valid C++ class name (e.g., 'my_node' -> 'MyNode')
         class_name = ''.join(word.capitalize() for word in node.name.split('_'))
         
-        # Check if this node uses ROS2 features
-        uses_ros2 = bool(node.publishers or node.subscribers or node.services or node.parameters)
+        # Prepare the template context
+        context = {
+            'include_path': f'robodsl/{node.name}_node.hpp',
+            'namespace': '',  # Can be customized if needed
+            'class_name': class_name,
+            'base_class': 'rclcpp_lifecycle::LifecycleNode' if node.lifecycle else 'rclcpp::Node',
+            'node_name': node.name,
+            'is_lifecycle': node.lifecycle,
+            'parameters': [],
+            'publishers': [],
+            'subscribers': [],
+            'services': [],
+            'timers': [],
+            'cuda_kernels': []
+        }
         
-        # Flags for advanced features
-        has_timers = bool(node.timers)
-        has_actions = bool(node.actions)
-        use_lifecycle = node.lifecycle
-        has_qos_settings = any(
-            entity.qos is not None
-            for entity in node.publishers + node.subscribers + node.services + node.actions
-        )
-
-        # Initialize includes
-        includes = [
-            f'#include "robodsl/{node.name}_node.hpp"',
-            '#include <memory>',
-            '#include <iostream>',
-            ''
-        ]
+        # Add parameters to context
+        for name, type_info in node.parameters.items():
+            context['parameters'].append({
+                'name': name,
+                'type': self._map_parameter_type(type_info),
+                'default_value': '0'  # Default value can be customized
+            })
         
-        # Add message includes with ROS2 conditional compilation
-        if uses_ros2:
-            msg_includes = set()
-            for pub in node.publishers:
-                msg_includes.add(f'#include "{pub.msg_type.replace(".", "/")}.hpp"')
-            for sub in node.subscribers:
-                msg_includes.add(f'#include "{sub.msg_type.replace(".", "/")}.hpp"')
-            for srv in node.services:
-                msg_includes.add(f'#include "{srv.srv_type.replace(".", "/")}.hpp"')
-            
-            if msg_includes:
-                includes.append('#if ENABLE_ROS2')
-                includes.extend(sorted(msg_includes))
-                includes.append('#else')
-                includes.append('// ROS2 message includes stubbed out for non-ROS2 builds')
-                includes.append('#endif')
-                includes.append('')
+        # Add publishers to context
+        for pub in node.publishers:
+            pub_config = {
+                'name': pub.name,
+                'msg_type': pub.msg_type.replace('.', '::'),
+                'topic': pub.topic,
+                'qos': {}
+            }
+            if hasattr(pub, 'qos') and pub.qos:
+                pub_config['qos'] = {
+                    'depth': pub.qos.depth if hasattr(pub.qos, 'depth') else 10,
+                    'reliability': pub.qos.reliability if hasattr(pub.qos, 'reliability') else None,
+                    'durability': pub.qos.durability if hasattr(pub.qos, 'durability') else None
+                }
+            context['publishers'].append(pub_config)
         
-        # Initialize constructor
-        if uses_ros2:
-            base_ctor = 'LifecycleNode' if use_lifecycle else 'Node'
-            constructor = f'''{class_name}::{class_name}() : {base_ctor}("{node.name}")
-{{
-    // Initialize parameters
-'''
-        else:
-            constructor = f'''{class_name}::{class_name}()
-{{
-    // Initialize parameters
-'''
-        
-        # Add parameter declarations
-        if node.parameters:
-            if uses_ros2:
-                constructor += '    // Declare parameters\n'
-                for name, type_info in node.parameters.items():
-                    constructor += f'    this->declare_parameter("{name}", /* default value */);\n'
-            else:
-                constructor += '    // Parameters (stubbed out for non-ROS2 builds)\n'
-                for name, type_info in node.parameters.items():
-                    constructor += f'    // {name}_ = /* default value */;\n'
-        
-        # Register parameter callback
-        if uses_ros2 and has_param_cb:
-            constructor += '\n    // Register parameter change callback\n'
-            constructor += f'    param_cb_handle_ = this->add_on_set_parameters_callback(\n        std::bind(&{class_name}::on_parameter_event, this, std::placeholders::_1));\n'
-
-        # Create timers
-        if uses_ros2 and has_timers:
-            constructor += '\n    // Initialize timers\n'
-            for tmr in node.timers:
-                var_name = f"timer_{tmr['name']}_"
-                period = tmr['period_ms']
-                qos = self._validate_qos_config(tmr.get('qos'), f"timer {tmr['name']}")
-                if qos:
-                    qos_var = f"{var_name}_qos"
-                    constructor += '    {\n'
-                    constructor += f'      {self._generate_qos_config(qos, qos_var)}\n'
-                    constructor += f'      {var_name} = this->create_wall_timer(std::chrono::milliseconds({period}), {qos_var}, [this]() {{ /* TODO: {tmr["name"]} callback */ }});\n'
-                    constructor += '    }\n'
-                else:
-                    constructor += f'    {var_name} = this->create_wall_timer(std::chrono::milliseconds({period}), [this]() {{ /* TODO: {tmr["name"]} callback */ }});\n'
-
-        # Create action servers
-        if uses_ros2 and has_actions:
-            constructor += '\n    // Initialize action servers\n'
-            for act in node.actions:
-                action_type = act.action
-                action_name = act.name
-                execute_cb = act.execute_callback
-                goal_cb = act.goal_callback if hasattr(act, 'goal_callback') else 'handle_goal'
-                cancel_cb = act.cancel_callback if hasattr(act, 'cancel_callback') else 'handle_cancel'
-                qos = self._validate_qos_config(act.qos if hasattr(act, 'qos') else None, f"action {action_name}")
-                
-                # Add action message include
-                self._add_action_include(action_type)
-                
-                # Generate action server code with QoS if specified
-                if qos:
-                    qos_var = f"{self._to_snake_case(action_name)}_qos"
-                    qos_code = self._generate_qos_config(qos, qos_var)
-                    constructor += '    {\n'
-                    constructor += f'      {qos_code}\n'
-                    
-                    constructor += (
-                        f'      rcl_action_server_options_t {self._to_snake_case(action_name)}_server_options = '
-                        f'rcl_action_server_get_default_options();\n'
-                        f'      {self._to_snake_case(action_name)}_server_options.result_timeout.nanoseconds = RCL_MS_TO_NS(1000);\n'
-                        f'      {self._to_snake_case(action_name)}_server_options.goal_service_qos = {qos_var}.get_rmw_qos_profile();\n'
-                        f'      {self._to_snake_case(action_name)}_server_options.cancel_service_qos = {qos_var}.get_rmw_qos_profile();\n'
-                        f'      {self._to_snake_case(action_name)}_server_options.result_service_qos = {qos_var}.get_rmw_qos_profile();\n'
-                        f'      {self._to_snake_case(action_name)}_server_options.cancel_subscription_qos = {qos_var}.get_rmw_qos_profile();\n'
-                        f'      {self._to_snake_case(action_name)}_server_options.goal_event_qos = {qos_var}.get_rmw_qos_profile();\n'
-                        f'      {self._to_snake_case(action_name)}_server_options.result_timeout_qos = {qos_var}.get_rmw_qos_profile();\n'
-                        f'      {self._to_snake_case(action_name)}_ = '
-                        f'rclcpp_action::create_server<{action_type}>('
-                        f'this, "{action_name}", '
-                        f'std::bind(&{class_name}::{execute_cb}, this, std::placeholders::_1), '
-                        f'std::bind(&{class_name}::{goal_cb}, this, std::placeholders::_1), '
-                        f'std::bind(&{class_name}::{cancel_cb}, this, std::placeholders::_1), '
-                        f'{self._to_snake_case(action_name)}_server_options);\n'
-                    )
-                    constructor += '    }\n'
-                else:
-                    constructor += (
-                        f'    {self._to_snake_case(action_name)}_ = '
-                        f'rclcpp_action::create_server<{action_type}>('
-                        f'this, "{action_name}", '
-                        f'std::bind(&{class_name}::{execute_cb}, this, std::placeholders::_1), '
-                        f'std::bind(&{class_name}::{goal_cb}, this, std::placeholders::_1), '
-                        f'std::bind(&{class_name}::{cancel_cb}, this, std::placeholders::_1));\n'
-                    )
-
-        # Add publishers, subscribers, services with ROS2 guards
-        if uses_ros2:
-            if node.publishers:
-                constructor += '\n    // Initialize publishers\n'
-                for pub in node.publishers:
-                    msg_type = pub.message
-                    topic = pub.topic
-                    qos = self._validate_qos_config(pub.qos, f"publisher {topic}")
-                    
-                    # Add message include
-                    self._add_message_include(msg_type)
-                    
-                    # Generate QoS code if needed
-                    qos_var = f"{self._to_snake_case(topic)}_qos"
-                    qos_code = self._generate_qos_config(qos, qos_var) if qos else ''
-                    
-                    # Generate publisher code
-                    publisher_var = f"{self._to_snake_case(topic)}_pub_"
-                    publisher_code = f"{qos_var} if ({qos_var}.get_rmw_qos_profile().depth > 0) else 10" if qos else '10'
-                    
-                    constructor += f"    rclcpp::Publisher<{msg_type}>::{SharedPtr} {publisher_var};\n"
-                    
-                    if qos_code:
-                        constructor += qos_code
-                        
-                    constructor += (
-                        f"    {publisher_var} = this->create_publisher<{msg_type}>("
-                        f"\"{topic}\", {publisher_code});\n"
-                    )
-
-            if node.subscribers:
-                constructor += '\n    // Initialize subscribers\n'
-                for sub in node.subscribers:
-                    msg_type = sub.message
-                    topic = sub.topic
-                    callback = sub.callback
-                    qos = self._validate_qos_config(sub.qos, f"subscriber {topic}")
-                    
-                    # Add message include
-                    self._add_message_include(msg_type)
-                    
-                    # Generate QoS code if needed
-                    qos_var = f"{self._to_snake_case(topic)}_qos"
-                    qos_code = self._generate_qos_config(qos, qos_var) if qos else ''
-                    
-                    # Generate subscriber code
-                    if qos_code:
-                        constructor += qos_code
-                        
-                    constructor += (
-                        f"    auto {self._to_snake_case(topic)}_sub_ = "
-                        f"this->create_subscription<{msg_type}>("
-                        f"\"{topic}\", "
-                        f"{qos_var if qos else '10'}, "
-                        f"std::bind(&{class_name}::{callback}, this, std::placeholders::_1));\n"
-                    )
-
-            if node.services:
-                constructor += '\n    // Initialize services\n'
-                for svc in node.services:
-                    srv_type = svc.service
-                    service_name = svc.name
-                    callback = svc.callback
-                    qos = self._validate_qos_config(svc.qos, f"service {service_name}")
-                    
-                    # Add service message include
-                    self._add_service_include(srv_type)
-                    
-                    # Generate service code with QoS if specified
-                    if qos:
-                        qos_var = f"{self._to_snake_case(service_name)}_qos"
-                        qos_code = self._generate_qos_config(qos, qos_var)
-                        constructor += qos_code
-                        
-                        constructor += (
-                            f"    rclcpp::ServiceOptions {self._to_snake_case(service_name)}_opts;\n"
-                            f"    {self._to_snake_case(service_name)}_opts.qos({qos_var});\n"
-                            f"    {self._to_snake_case(service_name)}_opts.callback_group(cb_group_);\n"
-                            f"    auto {self._to_snake_case(service_name)}_ = "
-                            f"this->create_service<{srv_type}>("
-                            f"\"{service_name}\", "
-                            f"std::bind(&{class_name}::{callback}, this, std::placeholders::_1, std::placeholders::_2), "
-                            f"{self._to_snake_case(service_name)}_opts);\n"
-                        )
-                    else:
-                        constructor += (
-                            f"    auto {self._to_snake_case(service_name)}_ = "
-                            f"this->create_service<{srv_type}>("
-                            f"\"{service_name}\", "
-                            f"std::bind(&{class_name}::{callback}, this, std::placeholders::_1, std::placeholders::_2), "
-                            f"rmw_qos_profile_services_default, cb_group_.get());\n"
-                        )
-
-        constructor += '}'
-        
-        # Generate callback methods
-        callbacks = []
-        
-        # Add callbacks with proper ROS2 message types and guards
+        # Add subscribers to context
         for sub in node.subscribers:
-            topic = sub['topic']
-            callback_name = f"{topic.lstrip('/').replace('/', '_')}_callback"
-            msg_type = sub['msg_type'].replace('.', '::')
+            sub_config = {
+                'name': sub.name,
+                'msg_type': sub.msg_type.replace('.', '::'),
+                'topic': sub.topic,
+                'callback_name': f"{sub.name}_callback",
+                'qos': {}
+            }
+            if hasattr(sub, 'qos') and sub.qos:
+                sub_config['qos'] = {
+                    'depth': sub.qos.depth if hasattr(sub.qos, 'depth') else 10,
+                    'reliability': sub.qos.reliability if hasattr(sub.qos, 'reliability') else None,
+                    'durability': sub.qos.durability if hasattr(sub.qos, 'durability') else None
+                }
+            context['subscribers'].append(sub_config)
             
-            if uses_ros2:
-                callback = f'''#if ENABLE_ROS2
-void {class_name}::{callback_name}(const {msg_type}::SharedPtr msg) const
-{{
-    // Process incoming message
-    RCLCPP_DEBUG(this->get_logger(), "Received message on topic %s", "{topic}");
-    
-    // TODO: Implement message processing
-    (void)msg;  // Avoid unused parameter warning
-}}
-#else
-void {class_name}::{callback_name}(const void* /*msg*/) const
-{{
-    // Stub implementation for non-ROS2 builds
-    std::cout << "[{node.name}] Received message on topic: {topic}" << std::endl;
-    // TODO: Implement non-ROS2 message processing
-}}
-#endif'''
-                callbacks.append(callback)
-            else:
-                callbacks.append(f'// Callback for {topic} stubbed out for non-ROS2 builds')
-        
-        # Generate service callbacks
+        # Add services to context
         for srv in node.services:
-            service_name = srv['service']
-            srv_type = srv['srv_type'].replace('.', '::')
-            callback_name = f"{service_name.lstrip('/').replace('/', '_')}_callback"
+            context['services'].append({
+                'name': srv.name,
+                'srv_type': srv.srv_type.replace('.', '::'),
+                'service': srv.service,
+                'callback_name': f"{srv.name}_callback"
+            })
             
-            if uses_ros2:
-                callback = f'''#if ENABLE_ROS2
-void {class_name}::{callback_name}(
-    const std::shared_ptr<{srv_type}::Request> request,
-    std::shared_ptr<{srv_type}::Response> response) const
-{{
-    // Process service request
-    RCLCPP_DEBUG(this->get_logger(), "Received service call on %s", "{service_name}");
-    
-    // TODO: Implement service logic
-    (void)request;  // Avoid unused parameter warning
-    (void)response; // Avoid unused parameter warning
-}}
-#else
-void {class_name}::{callback_name}(
-    const void* /*request*/, void* /*response*/) const
-{{
-    // Stub implementation for non-ROS2 builds
-    std::cout << "[{node.name}] Received service call: {service_name}" << std::endl;
-    // TODO: Implement non-ROS2 service logic
-}}
-#endif'''
-                callbacks.append(callback)
-            else:
-                callbacks.append(f'// Service {service_name} stubbed out for non-ROS2 builds')
+        # Add timers to context
+        for tmr in node.timers:
+            context['timers'].append({
+                'name': tmr.name,
+                'period': tmr.period_ms / 1000.0,  # Convert ms to seconds
+                'callback_name': f"{tmr.name}_callback",
+                'autostart': getattr(tmr, 'autostart', True)
+            })
+            
+        # Add CUDA kernels to context if any
+        if hasattr(node, 'cuda_kernels'):
+            for kernel in node.cuda_kernels:
+                context['cuda_kernels'].append({
+                    'name': kernel.name,
+                    'return_type': kernel.return_type,
+                    'params': kernel.params,
+                    'members': [{'name': m.name, 'type': m.type} for m in kernel.members]
+                })
         
-        # Build the source content
-        source_lines = [
-            '// Generated by RoboDSL - DO NOT EDIT',
-            '',
-            f'#include "robodsl/{node.name}_node.hpp"',
-            '#include <memory>',
-            '#include <iostream>',
-            ''
-        ]
+        # Load and render the template
+        env = Environment(
+            loader=PackageLoader('robodsl', 'templates/cpp'),
+            autoescape=select_autoescape(['cpp', 'hpp', 'jinja2']),
+            trim_blocks=True,
+            lstrip_blocks=True,
+            keep_trailing_newline=True
+        )
         
-        # Add includes
-        source_lines.extend(includes)
+        # Add custom filters
+        env.filters['to_snake_case'] = self._to_snake_case
         
-        # Add namespace and class implementation
-        source_lines.extend([
-            'namespace robodsl {',
-            '',
-            f'{constructor}',
-            '',
-            f'{class_name}::~{class_name}()',
-            '{',
-            '    // Cleanup resources if needed',
-            '}',
-            '',
-            '// Implement interface methods',
-            f'void {class_name}::initialize()',
-            '{',
-            '    // TODO: Initialize the node',
-            '    #if !ENABLE_ROS2',
-            f'    std::cout << "[{node.name}] Initializing (non-ROS2 mode)" << std::endl;',
-            '    #endif',
-            '}',
-            '',
-            f'void {class_name}::update()',
-            '{',
-            '    // TODO: Update the node state',
-            '    #if !ENABLE_ROS2',
-            '    // Non-ROS2 update logic here',
-            '    #endif',
-            '}',
-            '',
-            f'void {class_name}::cleanup()',
-            '{',
-            '    // TODO: Cleanup resources',
-            '    #if !ENABLE_ROS2',
-            f'    std::cout << "[{node.name}] Cleaning up (non-ROS2 mode)" << std::endl;',
-            '    #endif',
-            '}',
-            ''
-        ])
-        
-        # Add callbacks
-        source_lines.extend(callbacks)
-        
-        # Generate action callbacks
-        for act in node.actions:
-            action_name = act['name']
-            act_type = action_name.capitalize()
-            if uses_ros2:
-                callback_code = f'''#if ENABLE_ROS2
-rclcpp_action::GoalResponse {class_name}::handle_goal_{action_name}(const rclcpp_action::GoalUUID & /*uuid*/, std::shared_ptr<const {act_type}::Goal> /*goal*/)
-{{
-    RCLCPP_INFO(this->get_logger(), "Received goal request for action {action_name}");
-    return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
-}}
-
-rclcpp_action::CancelResponse {class_name}::handle_cancel_{action_name}(const std::shared_ptr<rclcpp_action::ServerGoalHandle<{act_type}>> /*goal_handle*/)
-{{
-    RCLCPP_INFO(this->get_logger(), "Received cancel request for action {action_name}");
-    return rclcpp_action::CancelResponse::ACCEPT;
-}}
-
-void {class_name}::handle_accepted_{action_name}(const std::shared_ptr<rclcpp_action::ServerGoalHandle<{act_type}>> goal_handle)
-{{
-    RCLCPP_INFO(this->get_logger(), "Goal accepted for action {action_name}");
-    // Example CUDA off-load in detached thread
-#if ENABLE_CUDA && defined(__CUDACC__)
-    std::thread([this, goal_handle]() {{
-        // TODO: copy goal to device, allocate buffers
-        dim3 grid(1); dim3 block(256);
-        // exampleKernel<<<grid, block>>>();
-        cudaDeviceSynchronize();
-
-        auto result = std::make_shared<{act_type}::Result>();
-        // TODO: fill result fields
-        goal_handle->succeed(result);
-    }}).detach();
-#else
-    (void)goal_handle;
-#endif
-    (void)goal_handle;
-    // TODO: start execution
-}}
-#else
-void {class_name}::handle_goal_{action_name}(... ) {{}}
-void {class_name}::handle_cancel_{action_name}(... ) {{}}
-void {class_name}::handle_accepted_{action_name}(... ) {{}}
-#endif'''
-                source_lines.append(callback_code)
-            else:
-                callbacks.append(f'// Action callbacks for {action_name} stubbed for non-ROS2 builds')
-
-        # Generate parameter callback definition
-        if node.parameter_callbacks:
-            if uses_ros2:
-                param_cb_code = f'''#if ENABLE_ROS2
-rcl_interfaces::msg::SetParametersResult {class_name}::on_parameter_event(const std::vector<rclcpp::Parameter> & params)
-{{
-    (void)params; // TODO: Inspect parameters and set result accordingly
-    rcl_interfaces::msg::SetParametersResult result;
-    result.successful = true;
-    result.reason = "Parameters accepted";
-    return result;
-}}
-#else
-void {class_name}::on_parameter_event(const std::vector<void*>& /*params*/) {{}}
-#endif'''
-                source_lines.append(param_cb_code)
-            else:
-                source_lines.append(f'// Parameter callback stubbed for non-ROS2 builds')
-
-        # Close namespace and add ROS2 registration
-        source_lines.extend([
-            '}  // namespace robodsl',
-            ''
-        ])
-        
-        if uses_ros2:
-            source_lines.extend([
-                '#if ENABLE_ROS2',
-                f'RCLCPP_COMPONENTS_REGISTER_NODE(robodsl::{class_name})',
-                '#endif',
-                ''
-            ])
-        
-        source_content = '\n'.join(source_lines)
+        template = env.get_template('node.cpp.jinja2')
+        source_content = template.render(**context)
         
         # Create output directory if it doesn't exist
         source_path = self.output_dir / 'src' / f"{node.name}_node.cpp"
         source_path.parent.mkdir(parents=True, exist_ok=True)
         
-        # Write the source file
-        with open(source_path, 'w') as f:
+        # Write the generated content to file
+        with open(source_path, 'w', encoding='utf-8') as f:
             f.write(source_content)
-            
-        # Update the has_qos_settings flag for CMake generation
-        node.has_qos_settings = has_qos_settings
-            
+        
         return source_path
-    
+
     def _map_parameter_type(self, type_info: str) -> str:
-        """Map parameter type from DSL to C++ type."""
+        """Map parameter type from DSL to C++ type.
+        
+        Args:
+            type_info: Type information from DSL
+            
+        Returns:
+            Corresponding C++ type
+        """
         type_map = {
             'int': 'int',
-            'float': 'float',
-            'double': 'double',
+            'float': 'double',
             'bool': 'bool',
             'string': 'std::string',
+            'list': 'std::vector<double>',
+            'dict': 'std::map<std::string, std::string>',
             'int[]': 'std::vector<int>',
             'float[]': 'std::vector<float>',
             'double[]': 'std::vector<double>',

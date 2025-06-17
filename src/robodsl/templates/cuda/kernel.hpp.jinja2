@@ -1,0 +1,28 @@
+#ifndef {{ node.name|upper }}_CUDA_KERNELS_HPP
+#define {{ node.name|upper }}_CUDA_KERNELS_HPP
+
+#include <cuda_runtime.h>
+
+namespace {{ node.namespace }} {
+
+{% for kernel in node.cuda_kernels %}
+/**
+ * @brief {{ kernel.description|default("CUDA kernel for " + kernel.name) }}
+ * 
+{% for param in kernel.parameters %}
+ * @param {{ param.name }} {{ param.description|default("Parameter " + param.name) }}
+{% endfor %}
+ * @param block_size CUDA block size
+ * @param stream CUDA stream
+ */
+__global__ void {{ kernel.name }}(
+{% for param in kernel.parameters %}
+    {{ param.type }} {{ param.name }}{% if not loop.last %},{% endif %}
+{% endfor %}
+);
+
+{% endfor %}
+
+} // namespace {{ node.namespace }}
+
+#endif // {{ node.name|upper }}_CUDA_KERNELS_HPP

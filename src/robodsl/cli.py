@@ -4,9 +4,7 @@ import os
 import sys
 import click
 from pathlib import Path
-from typing import Optional, List, Dict, Any
-import shutil
-from datetime import datetime
+from typing import Optional, List, Dict
 
 def get_node_paths(project_path: Path, node_name: str) -> tuple[Path, str]:
     """Get the file path and node name, handling subnodes.
@@ -336,11 +334,20 @@ def init(project_name: str, template: str, output_dir: str) -> None:
         (project_path / 'config').mkdir()
         (project_path / 'robodsl').mkdir()
         
-        # Create a basic robodsl file
+        # Create a comprehensive robodsl file
         (project_path / f"{project_name}.robodsl").write_text(
-            f"# {project_name} RoboDSL configuration\n\n"
-            "node main_node {{\n    # Define your ROS2 node configuration here\n    # Example:\n    # publisher /camera/image_raw sensor_msgs/msg/Image\n    # subscriber /cmd_vel geometry_msgs/msg/Twist\n}}\n\n"
-            "cuda_kernels {{\n    # Define your CUDA kernels here\n    # Example:\n    # kernel process_image {{\n    #     input: Image\n    #     output: Image\n    #     block_size: (16, 16, 1)\n    # }}\n}}"
+            f"# {project_name} RoboDSL Configuration\n\n"
+            "# Project configuration\n"
+            f'project_name: {project_name}\n\n'
+            "# Global includes (will be added to all nodes)\n"
+            "#include <rclcpp/rclcpp.hpp>\n"
+            "#include <std_msgs/msg/string.hpp>\n"
+            "#include <sensor_msgs/msg/image.hpp>\n\n"
+            "# Main node configuration\n"
+            "node main_node {{\n    # Node namespace (optional)\n    namespace: /{0}\n\n    # Enable lifecycle (default: false)\n    # lifecycle: true\n\n    # Enable parameter callbacks (default: false)\n    # parameter_callbacks: true\n\n    # Topic remapping (optional)\n    # remap /source_topic /target_topic\n\n    # Parameters with different types\n    parameter int count: 0\n    parameter double rate: 10.0\n    parameter string name: \"{0}\"\n    parameter bool enabled: true\n\n    # Publisher with QoS settings\n    publisher /chatter std_msgs/msg/String {{\n        qos: {{\n            reliability: reliable\n            history: keep_last\n            depth: 10\n        }}\n        queue_size: 10\n    }}\n\n    # Subscriber with QoS settings\n    subscriber /chatter std_msgs/msg/String {{\n        qos: {{\n            reliability: best_effort\n            history: keep_last\n            depth: 10\n        }}\n        queue_size: 10\n    }}\n\n    # Timer example (1.0 second period)\n    timer my_timer 1.0 on_timer_callback\n}}\n\n"
+            "# CUDA Kernels section\n"
+            "cuda_kernels {{\n    # Example vector addition kernel\n    kernel vector_add {{\n        # Input parameters\n        input float* a\n        input float* b\n        output float* c\n        input int size\n        \n        # Kernel configuration\n        block_size = (256, 1, 1)\n        \n        # Include additional headers\n        include <cuda_runtime.h>\n        include <device_launch_parameters.h>\n        \n        # Kernel code\n        code ```\n        __global__ void vector_add(const float* a, const float* b, float* c, int size) {{\n            int i = blockIdx.x * blockDim.x + threadIdx.x;\n            if (i < size) {{\n                c[i] = a[i] + b[i];\n            }}\n        }}\n        ```\n    }}\n}}\n\n"
+            "# For more examples and documentation, see: examples/comprehensive_example.robodsl\n"
         )
         
         click.echo(f"Initialized RoboDSL project in {project_path}")

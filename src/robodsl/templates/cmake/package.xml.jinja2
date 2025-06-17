@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema" version="1.0"?>
+<package format="3">
+  <name>{{ project_name }}</name>
+  <version>0.1.0</version>
+  <description>{{ description }}</description>
+  <maintainer email="{{ maintainer_email }}">{{ maintainer_name }}</maintainer>
+  <license>{{ license }}</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>rclcpp_components</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>std_msgs</depend>
+  
+  {% if has_lifecycle %}
+  <depend>rclcpp_lifecycle</depend>
+  <depend>lifecycle_msgs</depend>
+  {% endif %}
+  
+  {% for pkg in message_dependencies %}
+  <depend>{{ pkg }}</depend>
+  {% endfor %}
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
