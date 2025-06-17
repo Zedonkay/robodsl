@@ -1,0 +1,247 @@
+I # Comprehensive RoboDSL Example
+# This file demonstrates all possible syntax options for RoboDSL
+
+# Project configuration
+project_name: comprehensive_robodsl_example
+
+# Global includes (will be added to all nodes)
+#include <rclcpp/rclcpp.hpp>
+#include <std_msgs/msg/string.hpp>
+#include <sensor_msgs/msg/image.hpp>
+
+# Define a node with all possible configurations
+node my_node {
+    # Node namespace
+    namespace: /robot_1
+    
+    # Enable lifecycle (default: false)
+    lifecycle: true
+    
+    # Enable parameter callbacks (default: false)
+    parameter_callbacks: true
+    
+    # Topic remapping
+    remap /source_topic /target_topic
+    remap /another/source /another/target
+    
+    # Parameters with different types
+    parameter int_param: 42
+    parameter double_param: 3.14159
+    parameter string_param: "hello world"
+    parameter bool_param: true
+    parameter list_param: [1, 2, 3, 4]
+    parameter dict_param: {key1: "value1", key2: 123}
+    
+    # Parameter with description and read-only flag
+    parameter float read_only_param: 1.23  # This is a read-only parameter
+    
+    # Publisher with QoS settings
+    publisher /chatter std_msgs/msg/String {
+        qos: {
+            reliability: reliable
+            durability: transient_local
+            history: keep_last
+            depth: 10
+            deadline: 1000  # ms
+            lifespan: 2000  # ms
+            liveliness: automatic
+            liveliness_lease_duration: 1000  # ms
+        }
+        queue_size: 10
+    }
+    
+    # Subscriber with QoS settings
+    subscriber /chatter std_msgs/msg/String {
+        qos: {
+            reliability: best_effort
+            history: keep_last
+            depth: 10
+        }
+        queue_size: 10
+    }
+    
+    # Service
+    service /add_two_ints example_interfaces/srv/AddTwoInts {
+        qos: {
+            reliability: reliable
+            history: keep_last
+            depth: 10
+        }
+    }
+    
+    # Action
+    action /fibonacci example_interfaces/action/Fibonacci {
+        qos: {
+            reliability: reliable
+            durability: transient_local
+            history: keep_last
+            depth: 10
+        }
+    }
+    
+    # Timer with callback
+    timer my_timer 1.0 on_timer_callback  # 1.0 second period
+    
+    # One-shot timer
+    timer oneshot_timer 2.0 on_oneshot_timer oneshot
+}
+
+# Another node with different configuration
+node minimal_node {
+    # Minimal node with just a publisher
+    publisher /minimal_topic std_msgs/msg/String
+}
+
+# Node with lifecycle configuration
+node lifecycle_node {
+    namespace: /lifecycle
+    lifecycle: true
+    
+    # Configure lifecycle behavior
+    lifecycle_config: {
+        autostart: true  # Automatically transition to active state
+        cleanup_on_shutdown: true  # Perform cleanup on shutdown
+    }
+    
+    # Add some publishers/subscribers
+    publisher /status std_msgs/msg/String
+    subscriber /command std_msgs/msg/String
+}
+
+# Node with parameter callbacks
+node param_node {
+    parameter_callbacks: true
+    
+    # These parameters will trigger callbacks when changed
+    parameter int counter: 0
+    parameter string name: "default"
+    parameter float rate: 10.0
+    
+    # Timer that uses the rate parameter
+    timer rate_timer ${1.0/rate} on_rate_timer
+}
+
+# Node with complex QoS settings
+node qos_node {
+    # Publisher with custom QoS
+    publisher /high_priority sensor_msgs/msg/Image {
+        qos: {
+            reliability: reliable
+            durability: transient_local
+            history: keep_last
+            depth: 5
+            deadline: 100  # 100ms
+            liveliness: manual_by_topic
+            liveliness_lease_duration: 1000  # 1s
+        }
+    }
+    
+    # Subscriber with different QoS settings
+    subscriber /high_priority sensor_msgs/msg/Image {
+        qos: {
+            reliability: best_effort
+            durability: volatile
+            history: keep_last
+            depth: 1
+        }
+    }
+}
+
+# Node with all timer options
+node timer_node {
+    # Regular timer (repeats every 1 second)
+    timer timer1 1.0 timer1_callback
+    
+    # One-shot timer (fires once after 2 seconds)
+    timer timer2 2.0 timer2_callback oneshot
+    
+    # Timer that doesn't autostart
+    timer timer3 0.5 timer3_callback no_autostart
+    
+    # Timer with sub-second period
+    timer fast_timer 0.1 fast_timer_callback
+}
+
+# Node demonstrating all parameter types
+node param_types_node {
+    # Scalar types
+    parameter bool enabled: true
+    parameter int count: 10
+    parameter double pi: 3.14159
+    parameter string name: "test"
+    
+    # Array types
+    parameter int[] numbers: [1, 2, 3, 4, 5]
+    parameter string[] names: ["alice", "bob", "charlie"]
+    
+    # Nested structures (as dictionaries)
+    parameter dict config: {
+        "enabled": true,
+        "rate": 10.0,
+        "mode": "auto"
+    }
+    
+    # Read-only parameter
+    parameter string read_only_param: "can't change me"
+}
+
+# CUDA Kernels section
+cuda_kernels {
+    # Simple vector addition kernel
+    kernel vector_add {
+        # Input parameters
+        input float* a
+        input float* b
+        output float* c
+        input int size
+        
+        # Kernel configuration
+        block_size = (256, 1, 1)
+        grid_size = (1024, 1, 1)  # Optional, can be auto-calculated
+        shared_memory = 0  # Bytes of shared memory
+        
+        # Include additional headers
+        include <cuda_runtime.h>
+        include <device_launch_parameters.h>
+        
+        # Define preprocessor macros
+        define BLOCK_SIZE 256
+        
+        # Kernel code
+        code ```
+        __global__ void vector_add(const float* a, const float* b, float* c, int size) {
+            int i = blockIdx.x * blockDim.x + threadIdx.x;
+            if (i < size) {
+                c[i] = a[i] + b[i];
+            }
+        }
+        ```
+    }
+    
+    # Another kernel with Thrust support
+    kernel thrust_example {
+        # Enable Thrust library
+        use_thrust
+        
+        # Parameters
+        input float* input
+        output float* output
+        input int size
+        
+        # Includes
+        include <thrust/sort.h>
+        include <thrust/execution_policy.h>
+        
+        code ```
+        __global__ void sort_kernel(float* input, float* output, int size) {
+            // Thrust sort example
+            thrust::sort(thrust::device, input, input + size);
+            
+            // Copy input to output (just an example)
+            for (int i = 0; i < size; i++) {
+                output[i] = input[i];
+            }
+        }
+        ```
+    }
+}
