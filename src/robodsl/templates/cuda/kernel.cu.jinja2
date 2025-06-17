@@ -1,0 +1,23 @@
+#include "{{ node.name }}/cuda/{{ node.name }}_kernels.hpp"
+
+namespace {{ node.namespace }} {
+
+{% for kernel in node.cuda_kernels %}
+__global__ void {{ kernel.name }}(
+{% for param in kernel.parameters %}
+    {{ param.type }} {{ param.name }}{% if not loop.last %},{% endif %}
+{% endfor %}
+) {
+    const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    const int stride = blockDim.x * gridDim.x;
+
+    // TODO: Implement kernel logic here
+    // Example: Process elements in parallel
+    // for (int i = idx; i < n; i += stride) {
+    //     // Your kernel code here
+    // }
+}
+
+{% endfor %}
+
+} // namespace {{ node.namespace }}
