@@ -1,5 +1,20 @@
 # RoboDSL Language Specification
 
+## Introduction
+
+RoboDSL (Robot Domain-Specific Language) is a high-level language designed for building robust, performant, and maintainable robot applications. It provides a clean, declarative syntax for defining ROS2 nodes, components, and their interactions, with built-in support for advanced features like lifecycle management, QoS configuration, and GPU acceleration.
+
+### Key Features
+
+- **ROS2 Lifecycle Node Support**: Built-in support for managed nodes with configurable lifecycle states and transitions
+- **Quality of Service (QoS) Configuration**: Fine-grained control over communication reliability, durability, and resource usage
+- **Namespace and Remapping**: Flexible namespace management and topic/service remapping
+- **CUDA Offloading**: Seamless integration of GPU-accelerated computations
+- **Conditional Compilation**: Feature flags for building different configurations from the same codebase
+- **Component-Based Architecture**: Modular design for better code organization and reuse
+- **Type Safety**: Strong typing for messages, services, and parameters
+- **Build System Integration**: Native CMake integration with support for cross-platform development
+
 ## Table of Contents
 1. [Introduction](#introduction)
 2. [Syntax Overview](#syntax-overview)
@@ -129,11 +144,62 @@ Lifecycle nodes implement the ROS2 managed node pattern, providing a state machi
 
 #### Complete Example
 ```python
+## Lifecycle Nodes
+
+Lifecycle nodes in RoboDSL provide a structured way to manage the state and resources of your ROS2 nodes. They follow the ROS2 managed node pattern, allowing for controlled state transitions and better system management.
+
+### Basic Lifecycle Node Definition
+
+```python
 lifecycle_node my_lifecycle_node {
     # Node identification
     namespace = "robot1"
     
     # Enable automatic parameter declaration and handling
+    automatically_declare_parameters_from_overrides = true
+    allow_undeclared_parameters = false
+    
+    # Remap topics/services
+    remap = {
+        "cmd_vel": "cmd_vel_nav",
+        "/camera/image_raw": "/sensors/camera/front/image_raw"
+    }
+    
+    # Autostart configuration (default: false)
+    autostart = true
+    
+    # State QoS configuration
+    state_qos = {
+        reliability = "reliable"
+        durability = "transient_local"
+        depth = 10
+    }
+    
+    # Parameters
+    parameters = [
+        {
+            name = "max_speed"
+            type = "double"
+            default = 1.0
+            description = "Maximum speed in m/s"
+            range = { min: 0.1, max: 5.0, step: 0.1 }
+        },
+        {
+            name = "sensor_frame"
+            type = "string"
+            default = "base_laser"
+            description = "TF frame for sensor data"
+        }
+    ]
+    
+    # Lifecycle callbacks (all optional)
+    on_configure = "on_configure_callback"
+    on_activate = "on_activate_callback"
+    on_deactivate = "on_deactivate_callback"
+    on_cleanup = "on_cleanup_callback"
+    on_shutdown = "on_shutdown_callback"
+    on_error = "on_error_callback"
+}
     allow_undeclared_parameters = false
     automatically_declare_parameters_from_overrides = true
     
@@ -215,7 +281,7 @@ def on_error_callback(state: LifecycleNodeState) -> CallbackReturn:
         state: The state that was active when the error occurred
         
     Returns:
-        CallbackReturn: SUCCESS if error was handled, FAILURE otherwise
+        CallbackReturn: `SUCCESS` if error was handled, `FAILURE` otherwise
     """
     error_msg = f"Error in state: {state.label()}"
     
@@ -287,9 +353,109 @@ component_node camera_node {
 
 ### Quality of Service (QoS)
 
-RoboDSL provides fine-grained control over Quality of Service settings for all ROS2 communication channels. QoS policies determine how messages are handled in terms of reliability, durability, and resource usage.
+RoboDSL provides fine-grained control over Quality of Service (QoS) settings for all ROS2 communication channels. QoS policies determine how messages are handled in terms of reliability, durability, and resource usage, allowing you to optimize communication for different types of data and network conditions.
 
 #### QoS Policies
+
+QoS policies can be configured at different levels:
+
+1. **Global Defaults**: Set in the node configuration
+2. **Per Communication Channel**: Override for specific publishers/subscribers/services
+3. **Runtime Overrides**: Modify QoS settings dynamically
+
+#### Policy Types
+
+1. **Reliability**:
+   - `reliable`: Ensures message delivery with retries (TCP-like)
+     - Use for: Commands, critical control messages
+     - Impact: Higher latency, guaranteed delivery
+   - `best_effort`: No delivery guarantees (UDP-like)
+     - Use for: High-frequency sensor data where occasional loss is acceptable
+     - Impact: Lower latency, potential message loss
+   - **Default**: `reliable`
+
+2. **Durability**:
+   - `volatile`: Messages not persisted for late-joining subscribers
+     - Use for: Real-time data where only the latest message matters
+   - `transient_local`: Last message stored for late-joining subscribers
+     - Use for: Parameter servers, configuration data
+   - **Default**: `volatile`
+
+3. **History**:
+   - `keep_last`: Store last N messages
+     - `depth`: Number of messages to keep in the queue
+     - Use for: Most use cases where only recent data is relevant
+   - `keep_all`: Store all messages (use with caution)
+     - Use for: Critical data where no loss is acceptable
+   - **Default**: `keep_last` with depth 10
+
+4. **Deadline**:
+   - Expected maximum time between messages
+   - Format: Duration string (e.g., "100ms", "1s")
+   - Use for: Real-time systems with strict timing requirements
+
+5. **Lifespan**:
+   - Maximum time a message is considered valid
+   - Format: Duration string
+   - Use for: Stale data detection and cleanup
+
+6. **Liveliness**:
+   - `automatic`: Node is alive if process is running
+   - `manual_by_topic`: Node must signal liveliness per topic
+   - `manual_by_node`: Node must signal liveliness for all topics
+   - **Default**: `automatic`
+   - Use for: Failure detection and system monitoring
+
+7. **Liveliness Lease Duration**:
+   - Time after which a node is considered not alive if no liveliness signal is received
+   - Format: Duration string
+   - Must be greater than the expected liveliness signal period
+
+#### Predefined QoS Profiles
+
+RoboDSL provides several predefined QoS profiles for common use cases:
+
+```python
+# Sensor Data (best effort, small queue)
+sensor_data_qos = {
+    reliability = "best_effort"
+    durability = "volatile"
+    history = { kind: "keep_last", depth: 5 }
+    deadline = "100ms"
+}
+
+# Commands (reliable, transient local for late joiners)
+command_qos = {
+    reliability = "reliable"
+    durability = "transient_local"
+    history = { kind: "keep_last", depth: 10 }
+    deadline = "1s"
+}
+
+# Parameters (reliable, persistent)
+parameter_qos = {
+    reliability = "reliable"
+    durability = "transient_local"
+    history = { kind: "keep_all" }
+    deadline = "10s"
+}
+
+# Services (reliable, volatile)
+service_qos = {
+    reliability = "reliable"
+    durability = "volatile"
+    history = { kind: "keep_last", depth: 10 }
+    deadline = "5s"
+}
+
+# Action Servers
+action_qos = {
+    goal_service = service_qos
+    result_service = service_qos
+    cancel_service = service_qos
+    feedback_topic = sensor_data_qos
+    status_topic = parameter_qos
+}
 
 1. **Reliability**:
    - `reliable`: Ensures message delivery with retries (TCP-like)
@@ -730,9 +896,15 @@ build_features = {
         "flags": ["-O3", "--use_fast_math"]
     }
 }
-
+```python
 # In your code
 def process_pointcloud_callback(goal_handle):
+    """
+    Process point cloud data with CUDA acceleration if available.
+    
+    Args:
+        goal_handle: The action goal handle containing request data
+    """
     try:
         # ...
         
@@ -747,1587 +919,60 @@ def process_pointcloud_callback(goal_handle):
     except Exception as e:
         goal_handle.abort()
         get_logger().error(f"Action failed: {str(e)}")
-        raise e
+        raise
 ```
             output_mapping = [
                 { kernel_param: "result_path", action_field: "result.path" },
                 { kernel_param: "feedback_progress", action_field: "feedback.progress" }
             ]
-        }
-    }
-]
-```
-
-#### CUDA-Accelerated Actions
-
-When using CUDA with actions, the action server will automatically handle:
-1. Data transfer between host and device
-2. Kernel execution
-3. Progress feedback
-4. Result processing
-
-Example CUDA kernel for action processing:
-
-```python
-cuda_kernel process_navigation {
-    inputs = [
-        { name: "target_pose", type: "geometry_msgs::msg::PoseStamped" },
-        { name: "current_pose", type: "geometry_msgs::msg::PoseStamped" },
-        { name: "map_data", type: "nav_msgs::msg::OccupancyGrid::ConstPtr" }
-    ]
-    outputs = [
-        { name: "result_path", type: "nav_msgs::msg::Path" },
-        { name: "feedback_progress", type: "float" }
-    ]
-    
-    code = """
-    __global__ void process_navigation(
-        const PoseStamped* target,
-        const PoseStamped* current,
-        const OccupancyGrid* map,
-        Path* result,
-        float* progress) {
-        
-        // CUDA-accelerated path planning
-        // ...
-    }
-    """
-}
-```
-
-### Parameters
-
-Parameters allow runtime configuration:
-
-```python
-parameters = [
-    {
-        name = "use_sim_time"
-        type = "bool"
-        default = false
-        description = "Use simulation time"
-        read_only = true
-    },
-    {
-        name = "sensor_config"
-        type = "string"
-        default = "default_config.yaml"
-        description = "Path to sensor configuration"
-    }
-]
-```
-
-## GPU Acceleration
-
-RoboDSL provides seamless integration with CUDA for GPU-accelerated computing. This section covers CUDA kernel definition, offloading patterns, and conditional compilation.
-
-### CUDA Offloading
-
-CUDA offloading allows you to execute computationally intensive tasks on the GPU. RoboDSL provides a clean syntax for defining and using CUDA kernels in your nodes.
-
-#### Basic Offloading Pattern
-
-```python
-# In your node definition
-cuda_kernel process_data {
-    # Define kernel inputs and outputs
-    inputs = [
-        { name: "input_data", type: "const float*" },
-        { name: "output_data", type: "float*" },
-        { name: "size", type: "int" }
-    ]
-    
-    # Configure kernel launch parameters
-    grid = { x: "(size + 255) / 256", y: 1, z: 1 }
-    block = { x: 256, y: 1, z: 1 }
-    
-    # Shared memory configuration (optional)
-    shared_mem = 4096  # bytes
-    
-    # Kernel code (CUDA C++)
-    code = """
-    __global__ void process_kernel(const float* input, float* output, int size) {
-        int idx = blockIdx.x * blockDim.x + threadIdx.x;
-        if (idx < size) {
-            // Your CUDA code here
-            output[idx] = input[idx] * 2.0f;
-        }
-    }
-    """
-}
-```
-
-#### Using CUDA in Action Handlers
-
-```python
-action process_pointcloud {
-    name = "process_pointcloud"
-    type = "robodsl_msgs/action/ProcessPointCloud"
-    
-    # Specify CUDA device (optional, default: 0)
-    cuda_device = 0
-    
-    # Pre-allocate GPU buffers
-    buffers = [
-        { name: "d_input", type: "float*", size: "point_count * 4 * sizeof(float)" },
-        { name: "d_output", type: "float*", size: "point_count * 4 * sizeof(float)" }
-    ]
-    
-    # Implementation with CUDA offloading
-    execute = """
-    void execute(const std::shared_ptr<GoalHandleProcessPointCloud> goal_handle) {
-        const auto goal = goal_handle->get_goal();
-        auto result = std::make_shared<ProcessPointCloud::Result>();
-        
-        try {
-            // Copy input to device
-            cudaMemcpy(d_input, goal->point_cloud.data.data(), 
-                      goal->point_cloud.data.size(), 
-                      cudaMemcpyHostToDevice);
-            
-            // Launch CUDA kernel
-            const int block_size = 256;
-            const int grid_size = (point_count + block_size - 1) / block_size;
-            
-            process_kernel<<<grid_size, block_size>>>(d_input, d_output, point_count);
-            
-            // Check for kernel errors
-            cudaError_t err = cudaGetLastError();
-            if (err != cudaSuccess) {
-                throw std::runtime_error("CUDA error: " + 
-                                      std::string(cudaGetErrorString(err)));
-            }
-            
-            // Copy result back
-            result->processed_cloud.data.resize(goal->point_cloud.data.size());
-            cudaMemcpy(result->processed_cloud.data.data(), d_output,
-                     result->processed_cloud.data.size(),
-                     cudaMemcpyDeviceToHost);
-            
-            goal_handle->succeed(result);
-            
-        } catch (const std::exception& e) {
-            RCLCPP_ERROR(get_logger(), "Error processing point cloud: %s", e.what());
-            goal_handle->abort(result);
-        }
-    }
-    """
-}
-```
-
-#### Best Practices for CUDA Offloading
-
-1. **Memory Management**:
-   - Use `cudaMalloc`/`cudaFree` in constructor/destructor
-   - Consider using RAII wrappers for automatic cleanup
-   - Pre-allocate buffers when possible
-
-2. **Error Handling**:
-   - Always check CUDA error codes
-   - Use `cudaGetLastError()` after kernel launches
-   - Implement proper exception handling
-
-3. **Performance**:
-   - Minimize host-device transfers
-   - Use pinned memory for faster transfers
-   - Optimize block/grid dimensions for your hardware
-
-### Conditional Compilation
-
-RoboDSL supports conditional compilation to enable/disable features at build time. This is particularly useful for:
-- Toggling between CPU/GPU implementations
-- Enabling debug features
-- Supporting different hardware configurations
-
-#### Feature Flags
-
-Define feature flags in your project:
-
-```python
-project "my_robot" {
-    # ...
-    
-    features = {
-        "ENABLE_CUDA": true,    # Enable CUDA support
-        "ENABLE_ROS2": true,    # Enable ROS2-specific code
-        "DEBUG_MODE": false,    # Debug features
-        "USE_SIMULATOR": false  # Simulator integration
-    }
-}
-```
-
-#### Conditional Code Blocks
-
-Use preprocessor directives in your code:
-
-```python
-cuda_kernel process_data {
-    # ...
-    code = """
-    #if ENABLE_CUDA && defined(__CUDACC__)
-    // CUDA kernel implementation
-    __global__ void process_kernel(const float* input, float* output, int size) {
-        // GPU implementation
-    }
-    #else
-    // CPU fallback implementation
-    void process_kernel_cpu(const float* input, float* output, int size) {
-        // CPU implementation
-    }
-    #endif
-    """
-}
-```
-
-#### Build Configuration
-
-Control feature flags in your build configuration:
-
-```python
-build {
-    # Platform-specific settings
-    platform = {
-        linux = {
-            # Enable CUDA on Linux
-            compile_definitions = [
-                "ENABLE_CUDA=1",
-                "ENABLE_ROS2=1"
-            ]
-        },
-        windows = {
-            # Disable CUDA on Windows
-            compile_definitions = [
-                "ENABLE_CUDA=0",
-                "ENABLE_ROS2=1"
-            ]
-        }
-    }
-    
-    # Debug/Release specific settings
-    debug = {
-        compile_definitions = ["DEBUG_MODE=1"]
-        optimization = "-O0 -g"
-    }
-    
-    release = {
-        compile_definitions = ["DEBUG_MODE=0"]
-        optimization = "-O3"
-    }
-}
-```
-
-#### Runtime Feature Detection
-
-Check features at runtime:
-
-```python
-node sensor_processor {
-    # ...
-    
-    initialize = """
-    void initialize() {
-    #if ENABLE_CUDA
-        // Initialize CUDA context
-        cudaSetDevice(0);
-        int device_count = 0;
-        cudaGetDeviceCount(&device_count);
-        if (device_count == 0) {
-            RCLCPP_WARN(get_logger(), "No CUDA-capable devices found");
-        }
-    #endif
-    }
-    """
-}
-```
-
-### CUDA Kernels
-
-Define CUDA kernels for GPU acceleration:
-
-```python
-cuda_kernel pointcloud_processor {
-    inputs = ["input_cloud"]
-    outputs = ["processed_cloud"]
-    block_size = 256
-    shared_mem = 4096  # bytes
-    
-    code = """
-    __global__ void process_pointcloud(
-        const float4* input,
-        float4* output,
-        int num_points,
-        float threshold) {
-        
-        int idx = blockIdx.x * blockDim.x + threadIdx.x;
-        if (idx >= num_points) return;
-        
-        float4 point = input[idx];
-        // Process point...
-        output[idx] = point;
-    }
-    """
-}
-```
-
-### Thrust Integration
-
-Use Thrust for high-level parallel algorithms:
-
-```python
-thrust_operation sort_points {
-    algorithm = "sort"
-    input = "point_cloud"
-    output = "sorted_cloud"
-    
-    code = """
-        auto policy = thrust::device;
-        thrust::sort(policy, input.begin(), input.end(), 
-                    [] __device__ (const auto& a, const auto& b) {
-                        return a.z < b.z;  # Sort by z-coordinate
-                    });
-    """
-}
-```
-
-## Build Configuration
-
-RoboDSL provides flexible build configuration with conditional compilation:
-
-```python
-build_options = {
-    # Build type
-    "CMAKE_BUILD_TYPE" = "Release"  # or "Debug", "RelWithDebInfo", "MinSizeRel"
-    
-    # Feature flags
-    "ENABLE_ROS2" = true      # Enable ROS2 integration
-    "ENABLE_CUDA" = true      # Enable CUDA support
-    "ENABLE_THRUST" = true    # Enable Thrust library
-    
-    # CUDA configuration
-    "CUDA_ARCH" = "sm_75"     # Compute capability (e.g., sm_75 for Turing)
-    "CUDA_STANDARD" = 17      # C++ standard for CUDA
-    "CUDA_SEPARABLE_COMPILATION" = true
-    
-    # Build options
-    "BUILD_TESTING" = true
-    "BUILD_DOCS" = false
-    "BUILD_EXAMPLES" = true
-    
-    # Installation paths
-    "CMAKE_INSTALL_PREFIX" = "install"
-    "CMAKE_INSTALL_LIBDIR" = "lib"
-    "CMAKE_INSTALL_INCLUDEDIR" = "include"
-}
-
-# Conditional compilation
-conditional_features = [
-    {
-        name = "WITH_GPU_ACCELERATION"
-        condition = "ENABLE_CUDA"
-        description = "Enable GPU acceleration features"
-    },
-    {
-        name = "WITH_ROS2_LIFECYCLE"
-        condition = "ENABLE_ROS2"
-        description = "Enable ROS2 lifecycle node support"
-    }
-]
-
-# Dependencies with version constraints
-dependencies = [
-    "rclcpp >= 2.0.0",
-    "std_msgs >= 4.0.0",
-    "sensor_msgs >= 4.0.0",
-    "nav_msgs >= 4.0.0",
-    "tf2_ros >= 0.25.0",
-    "rclcpp_lifecycle >= 2.0.0" if build_options["ENABLE_ROS2"] else "",
-    "CUDA::cudart" if build_options["ENABLE_CUDA"] else ""
-]
-
-# Optional: Custom CMake code to include in the build
-cmake_extra = """
-# Add custom CMake code here
-if(ENABLE_CUDA)
-    find_package(CUDAToolkit REQUIRED)
-    enable_language(CUDA)
-    set(CMAKE_CUDA_STANDARD 17)
-    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-    add_compile_definitions(WITH_CUDA_ACCELERATION)
-endif()
-"""
-
-## Node Definition
-
-### Node Types
-
-RoboDSL supports different node types:
-
-```python
-# Standard ROS2 node
-node my_node {
-    executable = true
-    namespace = "sensors"  # Optional namespace
-    # ...
-}
-
-# Component node (for composition)
-component my_component {
-    plugin = "my_pkg::MyComponent"
-    # ...
-}
-```
-
-### Lifecycle Nodes
-
-Lifecycle nodes provide state management and are essential for system robustness. They follow the managed node pattern from `rclcpp_lifecycle`.
-
-#### Lifecycle States
-- **Unconfigured**: Initial state, node is not active
-- **Inactive**: Configured but not processing
-- **Active**: Fully operational
-- **Finalized**: Shutdown complete
-
-#### Configuration
-
-```python
-lifecycle_node navigation {
-    # Standard node configuration
-    executable = true
-    namespace = "navigation"  # Optional namespace
-    
-    # Lifecycle callbacks (all optional)
-    on_configure = "configure_callback"  # Called during configuration
-    on_activate = "activate_callback"    # Called when activating
-    on_deactivate = "deactivate_callback" # Called when deactivating
-    on_cleanup = "cleanup_callback"      # Cleanup resources
-    on_shutdown = "shutdown_callback"    # Shutdown handler
-    on_error = "error_callback"          # Error handler
-    
-    # State transition timeouts (optional, in seconds)
-    transition_timeouts = {
-        "configure" = 10.0
-        "activate" = 5.0
-        "deactivate" = 5.0
-        "cleanup" = 10.0
-        "shutdown" = 10.0
-    }
-}
-```
-
-#### Best Practices
-1. Keep callbacks short and non-blocking
-2. Use the `on_configure` callback to allocate resources
-3. Perform heavy initialization before activation
-4. Handle errors gracefully and transition to appropriate states
-
-### Communication
-
-RoboDSL provides first-class support for all ROS2 communication patterns with configurable Quality of Service (QoS) settings.
-
-### Quality of Service (QoS) Configuration
-
-QoS policies control how messages are delivered and processed. RoboDSL supports both predefined profiles and custom configurations.
-
-#### Predefined QoS Profiles
-
-| Profile | Reliability | Durability | History | Depth | Use Case |
-|---------|-------------|------------|----------|-------|-----------|
-| `sensor_data` | Best Effort | Volatile | Keep Last | 1 | Sensor data (LIDAR, camera) |
-| `parameters` | Reliable | Volatile | Keep Last | 10 | Parameter updates |
-| `services` | Reliable | Volatile | Keep Last | 10 | Service calls |
-| `default` | Reliable | Volatile | Keep Last | 10 | General purpose |
-
-#### Custom QoS Configuration
-
-```python
-qos_profile "custom_profile" {
-    reliability = "reliable"  # or "best_effort"
-    durability = "volatile"   # or "transient_local"
-    history = "keep_last"     # or "keep_all"
-    depth = 10                # Queue size for keep_last
-    deadline = "100ms"        # Optional: Maximum expected time between messages
-    lifespan = "500ms"        # Optional: Maximum time a message is valid
-    liveliness = "automatic"  # or "manual_by_topic", "manual_by_node"
-    liveliness_lease = "1s"  # Lease duration for liveliness
-}
-```
-
-### Publishers
-
-Publishers can specify QoS settings per-topic:
-
-```python
-publishers = [
-    {
-        topic = "/cmd_vel"
-        type = "geometry_msgs/msg/Twist"
-        qos = "sensor_data"  # Using predefined profile
-        queue_size = 10
-    },
-    {
-        topic = "/important_data"
-        type = "std_msgs/msg/String"
-        qos = {              # Inline QoS configuration
-            reliability = "reliable"
-            durability = "transient_local"
-            history = "keep_last"
-            depth = 100
-        }
-    }
-]
-```
-
-### Subscribers
-
-Subscribers in RoboDSL allow nodes to receive and process messages from topics. They support flexible QoS configuration and efficient message handling.
-
-#### Basic Subscriber
-
-```python
-subscribers = [
-    {
-        name = "lidar_scan"
-        type = "sensor_msgs/msg/LaserScan"
-        callback = "lidar_scan_callback"
-        queue_size = 10  # Default: 10
-    }
-]
-```
-
-#### QoS Configuration
-
-Configure Quality of Service (QoS) settings for subscribers:
-
-```python
-subscribers = [
-    {
-        name = "camera_image"
-        type = "sensor_msgs/msg/Image"
-        callback = "image_callback"
-        
-        # Use a predefined QoS profile
-        qos = "sensor_data"  # "reliable", "best_effort", "services", or custom profile
-        
-        # Or specify QoS settings directly
-        qos = {
-            reliability = "best_effort"  # or "reliable"
-            durability = "volatile"      # or "transient_local"
-            history = {
-                policy = "keep_last"     # or "keep_all"
-                depth = 5               # Only for keep_last
-            }
-            # Optional advanced QoS settings
-            deadline = "100ms"          # Maximum expected time between messages
-            lifespan = "500ms"          # Maximum time a message is valid
-            liveliness = "automatic"    # or "manual_by_topic", "manual_by_node"
-            liveliness_lease = "1s"     # Lease duration for liveliness
-        }
-    }
-]
-```
-
-#### Message Callbacks
-
-Message callbacks can be defined in your node's class:
-
-```python
-def lidar_scan_callback(self, msg):
-    """
-    Process incoming LIDAR scan messages.
-    
-    Args:
-        msg (sensor_msgs.msg.LaserScan): The received LIDAR scan message
-    """
-    try:
-        # Process the scan data
-        ranges = np.array(msg.ranges)
-        angles = np.linspace(msg.angle_min, msg.angle_max, len(ranges))
-        
-        # Example: Find the closest point
-        valid_ranges = ranges[ranges > msg.range_min]
-        if len(valid_ranges) > 0:
-            min_distance = np.min(valid_ranges)
-            self.get_logger().info(f"Closest obstacle: {min_distance:.2f} meters")
-        
-        # Example: Publish processed data
-        if self.publisher_ is not None:
-            output_msg = ProcessedScan()
-            output_msg.header = msg.header
-            output_msg.min_distance = float(min_distance)
-            self.publisher_.publish(output_msg)
-            
-    except Exception as e:
-        self.get_logger().error(f"Error processing LIDAR scan: {str(e)}")
-        raise
-```
-
-#### Message Filtering
-
-RoboDSL supports message filtering for efficient processing:
-
-```python
-subscribers = [
-    {
-        name = "filtered_scan"
-        type = "sensor_msgs/msg/LaserScan"
-        callback = "filtered_scan_callback"
-        
-        # Message filtering options
-        filter = {
-            # Only process messages where the x position is positive
-            expression = "msg.header.frame_id == 'base_laser' and len(msg.ranges) > 0"
-            
-            # Throttle message rate (Hz)
-            throttle_rate = 10.0
-            
-            # Queue size for filtered messages
-            queue_size = 5
-        }
-    }
-]
-```
-
-#### Best Practices
-
-1. **QoS Matching**: Ensure publisher and subscriber QoS settings are compatible
-2. **Efficient Processing**:
-   - Use `const` message references in callbacks to avoid copies
-   - Move expensive processing to separate threads when needed
-   - Use message filters for time-synchronized processing of multiple topics
-3. **Error Handling**:
-   - Validate message data before processing
-   - Handle exceptions in callbacks to prevent node crashes
-4. **Performance Tuning**:
-   - Adjust queue sizes based on message rates
-   - Use appropriate history policies (keep_last vs keep_all)
-   - Consider using intra-process communication for high-frequency topics
-
-#### Example: Time-Synchronized Callbacks
-
-```python
-# Subscribe to multiple topics with time synchronization
-message_filters = [
-    {
-        name = "sensor_sync"
-        topics = ["camera/image_raw", "lidar/scan"]
-        callback = "sensor_fusion_callback"
-        
-        # Time synchronization settings
-        sync = {
-            # Maximum time difference between messages (seconds)
-            slop = 0.1
-            
-            # Queue size for message time synchronization
-            queue_size = 10
-        }
-    }
-]
-
-def sensor_fusion_callback(self, image_msg, scan_msg):
-    """Process synchronized camera and LIDAR data."""
-    # Process time-synchronized messages
-    # ...
-
-## Namespace and Remapping
-
-RoboDSL provides powerful namespace and remapping capabilities to help organize complex robotics applications and enable flexible deployment configurations. This section covers node namespacing, topic/service remapping, and parameter namespacing.
-
-### Node Namespaces
-
-Node namespaces help organize nodes into logical groups and prevent naming collisions:
-
-```python
-# Basic node with namespace
-node navigation_node {
-    namespace = "robot1"  # Full node name becomes /robot1/navigation_node
-    
-    # Nested namespaces using forward slashes
-    # namespace = "fleet/robot1"  # Results in /fleet/robot1/navigation_node
-    
-    # Relative namespaces (relative to parent namespace)
-    # namespace = "sensors"  # If parent is /robot1, becomes /robot1/sensors/navigation_node
-}
-
-# Multiple nodes in the same namespace
-with namespace = "robot1" {
-    node navigation_node { /* ... */ }
-    node perception_node { /* ... */ }
-    node control_node { /* ... */ }
-}
-```
-
-### Topic and Service Remapping
-
-Remap topics and services at runtime without code changes:
-
-```python
-node my_node {
-    # Topic remapping
-    remappings = [
-        # Simple string-based remapping
-        "cmd_vel:=base/cmd_vel",
-        
-        # Structured remapping with options
-        {
-            from = "/camera/image_raw"
-            to = "/sensors/camera/front/image_raw"
-            # Optional: Apply only to specific node interfaces
-            # when = { node = "camera_driver", interface = "publisher" }
-        },
-        
-        # Remap with regular expressions
-        {
-            from = "^/sensor(.*)"
-            to = "/robot1/sensor\\1"
-            regex = true
-        }
-    ]
-    
-    # Service remapping (same syntax as topic remapping)
-    service_remappings = [
-        "set_parameters:=robot1/set_parameters",
-        {
-            from = "get_map"
-            to = "map_server/get_map"
-        }
-    ]
-}
-```
-
-### Parameter Namespacing
-
-Organize parameters using namespaces and handle them effectively:
-
-```python
-node parameter_node {
-    # Flat parameter structure
-    parameters = {
-        "max_speed" = 1.0,
-        "min_speed" = 0.1,
-        "timeout" = 5.0
-    }
-    
-    # Hierarchical parameter structure using dots
-    parameters = {
-        # Access as /parameter_node/motion/max_speed
-        "motion.max_speed" = 1.0,
-        "motion.min_speed" = 0.1,
-        "safety.timeout" = 5.0
-        
-        # Nested structures using dictionaries
-        "controller" = {
-            "pid" = {
-                "p" = 0.5,
-                "i" = 0.1,
-                "d" = 0.01
-            },
-            "rate_hz" = 100.0
-        }
-    }
-    
-    # Load parameters from YAML file
-    # parameters = file("config/params.yaml")
-    
-    # Parameter overrides from command line
-    # ros2 run my_package my_node --ros-args -p motion.max_speed:=2.0
-}
-```
-
-### Best Practices
-
-1. **Consistent Naming Conventions**
-   - Use forward slashes (/) for namespaces (e.g., `robot1/sensors`)
-   - Use dots (.) for parameter hierarchies (e.g., `motion.max_speed`)
-   - Prefer relative names when possible for better reusability
-
-2. **Remapping Strategy**
-   - Keep default topic names simple and descriptive
-   - Use remapping for deployment-specific configurations
-   - Document all standard topic and service names
-
-3. **Parameter Organization**
-   - Group related parameters together
-   - Use descriptive names that include units (e.g., `max_speed_mps`)
-   - Document parameter types, ranges, and default values
-
-4. **Deployment Considerations**
-   - Use launch files to manage complex remapping scenarios
-   - Consider using parameter files for different robot configurations
-   - Test with various namespace and remapping combinations
-
-### Advanced: Dynamic Remapping
-
-For more complex scenarios, you can use dynamic remapping:
-
-```python
-# In your node's initialization
-def __init__(self):
-    # Get remappings from command line
-    self.declare_parameter('remappings', [])
-    remappings = self.get_parameter('remappings').value
-    
-    # Apply remappings dynamically
-    for remap in remappings:
-        from_, to = remap.split(':=', 1)
-        self.get_logger().info(f"Remapping {from_} to {to}")
-        # Apply remapping to specific publishers/subscribers
-        
-# Launch with: ros2 run my_package my_node --ros-args -p remappings:='["cmd_vel:=base/cmd_vel"]'
-```
-
-### Example: Multi-Robot System
-
-```python
-# Launch file for multiple robots
-robots = ["robot1", "robot2", "robot3"]
-
-for robot in robots:
-    with namespace(robot):
-        node("navigation_node") {
-            remappings = [
-                "cmd_vel:=base/cmd_vel",
-                "odom:=base/odom",
-                {
-                    from = "scan"
-                    to = "${robot}/base_scan"
-                }
-            ]
-            
-            parameters = {
-                "robot_id" = robot,
-                "motion.max_speed" = 1.0,
-                "safety.timeout" = 5.0
-            }
-        }
-```
-
-## GPU-Accelerated Processing Example
-
-This example demonstrates a complete implementation of a GPU-accelerated image processing pipeline using RoboDSL's CUDA support. The node receives images, processes them on the GPU, and publishes the results.
-
-### CUDA Kernel Definition
-
-First, define the CUDA kernel in a `.cuh` file:
-
-```cuda
-// kernels/image_processing.cuh
-#pragma once
-#include <cstdint>
-
-#ifdef __CUDACC__
-#define CUDA_CALLABLE __host__ __device__
-#else
-#define CUDA_CALLABLE
-#endif
-
-struct ImageParams {
-    int width;
-    int height;
-    int channels;
-    size_t step;
-};
-
-// Simple image processing kernel (edge detection)
-__global__ void edge_detection_kernel(
-    const uint8_t* input,
-    uint8_t* output,
-    const ImageParams params,
-    const int threshold
-);
-
-// Memory management utilities
-void allocate_gpu_memory(void** ptr, size_t size);
-void free_gpu_memory(void* ptr);
-void copy_to_gpu(const void* src, void* dst, size_t size);
-void copy_from_gpu(const void* src, void* dst, size_t size);
-```
-
-### RoboDSL Node Definition
-
-```python
-# image_processor.robodsl
-node image_processor {
-    # Node configuration
-    namespace = "perception"
-    executable = true
-    
-    # Dependencies
-    build {
-        features = {
-            cuda = true
-            opencv = true
-        }
-        
-        # CUDA-specific settings
-        cuda = {
-            architectures = ["sm_75", "sm_80"]  # Turing and Ampere
-            flags = ["-O3", "--use_fast_math"]
-        }
-        
-        # Additional include directories
-        include_directories = [
-            "${CMAKE_CURRENT_SOURCE_DIR}/include"
-        ]
-        
-        # Link against OpenCV and CUDA libraries
-        find_packages = [
-            "rclcpp",
-            "sensor_msgs",
-            "cv_bridge",
-            "OpenCV"
-        ]
-    }
-    
-    # Publishers and Subscribers
-    subscribers = [
-        {
-            name = "image_raw"
-            type = "sensor_msgs/msg/Image"
-            callback = "image_callback"
-            qos = "sensor_data"
-            # Enable approximate time synchronization if needed
-            # approximate_time = 0.1  # 100ms
-        }
-    ]
-    
-    publishers = [
-        {
-            name = "edges"
-            type = "sensor_msgs/msg/Image"
-            qos = "sensor_data"
-        }
-    ]
-    
-    # Parameters
-    parameters = {
-        # Edge detection threshold
-        "edge_threshold" = 30
-        
-        # Performance tuning
-        "gpu_block_size" = {
-            "x" = 16
-            "y" = 16
-        }
-        
-        # Enable/disable features
-        "enable_gpu" = true
-        "enable_debug_output" = false
-    }
-    
-    # CUDA kernel configuration
-    cuda_kernel edge_detection {
-        # Input parameters
-        inputs = [
-            { name: "input", type: "const uint8_t*" },
-            { name: "output", type: "uint8_t*" },
-            { name: "params", type: "const ImageParams*" },
-            { name: "threshold", type: "int" }
-        ]
-        
-        # Kernel configuration
-        block_dim = "{block_size.x, block_size.y, 1}"
-        grid_dim = "{(params.width + block_size.x - 1) / block_size.x, "
-                 ."(params.height + block_size.y - 1) / block_size.y, 1}"
-        
-        # Shared memory configuration (if needed)
-        # shared_mem = "sizeof(float) * (block_size.x + 2) * (block_size.y + 2)"
-    }
-    
-    # Node lifecycle callbacks
-    lifecycle {
-        on_configure = "on_configure"
-        on_activate = "on_activate"
-        on_deactivate = "on_deactivate"
-        on_cleanup = "on_cleanup"
-        on_shutdown = "on_shutdown"
-        on_error = "on_error"
-    }
-}
-
-# Implementation
-impl image_processor {
-    #include "kernels/image_processing.cuh"
-    #include <opencv2/opencv.hpp>
-    #include <cv_bridge/cv_bridge.h>
-    
-    // Member variables
-    std::shared_ptr<cv::Mat> debug_image_;
-    uint8_t* d_input_ = nullptr;
-    uint8_t* d_output_ = nullptr;
-    ImageParams d_params_;
-    
-    bool on_configure() {
-        // Initialize CUDA resources
-        try {
-            // Allocate GPU memory for input/output images
-            // (actual size will be determined when we receive the first image)
-            d_params_ = {0, 0, 1, 0};
-            
-            RCLCPP_INFO(get_logger(), "Node configured");
-            return true;
-        } catch (const std::exception& e) {
-            RCLCPP_ERROR(get_logger(), "Configuration failed: %s", e.what());
-            return false;
-        }
-    }
-    
-    bool on_activate() {
-        RCLCPP_INFO(get_logger(), "Node activated");
-        return true;
-    }
-    
-    bool on_deactivate() {
-        RCLCPP_INFO(get_logger(), "Node deactivated");
-        return true;
-    }
-    
-    bool on_cleanup() {
-        // Free GPU resources
-        if (d_input_) {
-            free_gpu_memory(d_input_);
-            d_input_ = nullptr;
-        }
-        if (d_output_) {
-            free_gpu_memory(d_output_);
-            d_output_ = nullptr;
-        }
-        
-        RCLCPP_INFO(get_logger(), "Node cleaned up");
-        return true;
-    }
-    
-    bool on_shutdown() {
-        // Cleanup is handled by on_cleanup
-        RCLCPP_INFO(get_logger(), "Node shutting down");
-        return true;
-    }
-    
-    void on_error() {
-        RCLCPP_ERROR(get_logger(), "Error occurred, cleaning up...");
-        on_cleanup();
-    }
-    
-    void image_callback(const sensor_msgs::msg::Image::SharedPtr msg) {
-        try {
-            // Convert ROS image to OpenCV
-            cv_bridge::CvImagePtr cv_ptr;
-            try {
-                cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
-            } catch (cv_bridge::Exception& e) {
-                RCLCPP_ERROR(get_logger(), "cv_bridge exception: %s", e.what());
-                return;
-            }
-            
-            // Get parameters
-            const bool use_gpu = get_parameter("enable_gpu").as_bool();
-            const int threshold = get_parameter("edge_threshold").as_int();
-            
-            // Process image
-            if (use_gpu) {
-                process_on_gpu(cv_ptr->image, threshold);
-            } else {
-                process_on_cpu(cv_ptr->image, threshold);
-            }
-            
-            // Publish result
-            auto result_msg = cv_bridge::CvImage(
-                msg->header,
-                sensor_msgs::image_encodings::MONO8,
-                cv_ptr->image
-            ).toImageMsg();
-            
-            publishers.edges.publish(*result_msg);
-            
-        } catch (const std::exception& e) {
-            RCLCPP_ERROR(get_logger(), "Error processing image: %s", e.what());
-        }
-    }
-    
-private:
-    void process_on_gpu(cv::Mat& image, int threshold) {
-        const int width = image.cols;
-        const int height = image.rows;
-        const size_t image_size = width * height * image.channels();
-        
-        // Reallocate GPU memory if image size changed
-        if (d_params_.width != width || d_params_.height != height) {
-            if (d_input_) free_gpu_memory(d_input_);
-            if (d_output_) free_gpu_memory(d_output_);
-            
-            allocate_gpu_memory((void**)&d_input_, image_size);
-            allocate_gpu_memory((void**)&d_output_, image_size);
-            
-            d_params_ = {
-                .width = width,
-                .height = height,
-                .channels = image.channels(),
-                .step = image.step
-            };
-        }
-        
-        // Copy input to GPU
-        copy_to_gpu(image.data, d_input_, image_size);
-        
-        // Launch CUDA kernel
-        const auto block_size = get_parameter("gpu_block_size").get<std::map<std::string, int>>();
-        const dim3 block_dim(block_size.at("x"), block_size.at("y"));
-        const dim3 grid_dim(
-            (width + block_dim.x - 1) / block_dim.x,
-            (height + block_dim.y - 1) / block_dim.y
-        );
-        
-        edge_detection_kernel<<<grid_dim, block_dim>>>(
-            d_input_, d_output_, d_params_, threshold
-        );
-        
-        // Check for kernel launch errors
-        cudaError_t err = cudaGetLastError();
-        if (err != cudaSuccess) {
-            throw std::runtime_error("CUDA kernel launch failed: " + 
-                                  std::string(cudaGetErrorString(err)));
-        }
-        
-        // Copy result back to CPU
-        copy_from_gpu(d_output_, image.data, image_size);
-        
-        // Synchronize to catch any kernel errors
-        err = cudaDeviceSynchronize();
-        if (err != cudaSuccess) {
-            throw std::runtime_error("CUDA error: " + 
-                                  std::string(cudaGetErrorString(err)));
-        }
-    }
-    
-    void process_on_cpu(cv::Mat& image, int threshold) {
-        // Convert to grayscale
-        cv::Mat gray;
-        cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
-        
-        // Apply edge detection
-        cv::Mat edges;
-        cv::Canny(gray, edges, threshold, threshold * 3);
-        
-        // Convert back to color for visualization
-        cv::cvtColor(edges, image, cv::COLOR_GRAY2BGR);
-    }
-};
-```
-
-### CMakeLists.txt Generation
-
-The RoboDSL compiler will generate the following CMake configuration:
-
-1. **CUDA Support**: Automatically detects CUDA and configures the build
-2. **Dependencies**: Links against CUDA, OpenCV, and ROS2 libraries
-3. **Install Rules**: Creates proper install targets for the node and its resources
-4. **Component Export**: Exports the node as a component for composition
-
-### Launch File Example
-
-```python
-# launch/image_processor.launch.py
-from launch import LaunchDescription
-from launch_ros.actions import Node
-
-def generate_launch_description():
-    return LaunchDescription([
-        Node(
-            package='image_processing',
-            executable='image_processor',
-            namespace='camera',
-            parameters=[{
-                'enable_gpu': True,
-                'edge_threshold': 30,
-                'gpu_block_size.x': 16,
-                'gpu_block_size.y': 16
-            }],
-            remappings=[
-                ('image_raw', '/camera/image_raw'),
-                ('edges', '/perception/edges')
-            ]
-        )
-    ])
-```
-
-### Performance Considerations
-
-1. **Memory Management**:
-   - Minimize host-device memory transfers
-   - Reuse device memory buffers when possible
-   - Use pinned memory for asynchronous transfers
-
-2. **Kernel Optimization**:
-   - Choose optimal block dimensions (usually 16x16 or 32x32)
-   - Use shared memory for data reuse
-   - Minimize thread divergence
-
-3. **CPU-GPU Overlap**:
-   - Use CUDA streams for concurrent execution
-   - Overlap memory transfers with computation
-
-4. **Fallback Implementation**:
-   - Always provide a CPU fallback for development and testing
-   - Use feature flags to enable/disable GPU features at runtime
-
-### Debugging Tips
-
-1. **CUDA Error Checking**:
-   ```c++
-   #define CHECK_CUDA_ERROR(call) {\
-       cudaError_t err = call;\
-       if (err != cudaSuccess) {\
-           throw std::runtime_error(\
-               std::string("CUDA error: ") + \
-               cudaGetErrorString(err) + \
-               " at " + __FILE__ + ":" + std::to_string(__LINE__));\
-       }\
-   }
-   
-   // Usage
-   CHECK_CUDA_ERROR(cudaMalloc(&d_ptr, size));
-   ```
-
-2. **Profiling**:
-   - Use `nvprof` or Nsight Systems for performance analysis
-   - Profile both kernel execution and memory transfers
-
-3. **Debug Builds**:
-   - Compile with `-G -g` for device debug symbols
-   - Use `cuda-gdb` or Nsight for debugging
-
-## Standard Library
-
-RoboDSL provides a standard library with common functionality:
-
-### Math Functions
-
-```python
-math.sqrt(x)
-math.sin(angle)
-math.cos(angle)
-math.atan2(y, x)
-math.min(a, b)
-math.max(a, b)
-math.clamp(value, min, max)
-```
-
-### ROS2 Utilities
-
-```python
-ros2.create_timer(period_sec, callback)
-ros2.get_parameter(name, default)
-ros2.log_info(message)
-ros2.log_warn(message)
-ros2.log_error(message)
-ros2.log_fatal(message)
-```
-
-## Build Configuration
-
-Configure the build system:
-
-```python
-build {
-    cpp_standard = 17
-    cuda_arch = "sm_75"
-    optimization_level = "O3"
-    
-    # Dependencies
-    find_packages = [
-        "rclcpp",
-        "std_msgs",
-        "sensor_msgs"
-    ]
-    
-    # Additional compiler flags
-    cxx_flags = [
-        "-Wall",
-        "-Wextra",
-        "-Wpedantic"
-    ]
-    
-    # Additional linker flags
-    link_flags = [
-        "-pthread"
-    ]
-}
-
-## Build Configuration
-
-RoboDSL provides a powerful build configuration system that supports conditional compilation, dependency management, and platform-specific settings. This section covers the available build options and how to use them effectively.
-
-### Core Build Options
-
-```python
-build {
-    # C++ standard (default: 17)
-    cpp_standard = 17  # 14, 17, 20, or 23
-    
-    # Build type (default: Release)
-    build_type = "Release"  # Debug, Release, RelWithDebInfo, MinSizeRel
-    
-    # Enable/disable features
-    features = {
-        ros2 = true    # Enable ROS2 integration (ENABLE_ROS2)
-        cuda = true    # Enable CUDA support (ENABLE_CUDA)
-        opencv = true  # Enable OpenCV support
-        debug = false  # Enable debug symbols and assertions
-        tests = true   # Build tests
-        examples = true # Build examples
-    }
-    
-    # CUDA-specific settings (only used when cuda = true)
-    cuda = {
-        # Target compute architectures (comma-separated)
-        architectures = ["sm_75", "sm_80"]  # Turing, Ampere
-        
-        # CUDA toolkit path (auto-detected if not specified)
-        # toolkit_path = "/usr/local/cuda"
-        
-        # Additional CUDA compilation flags
-        flags = ["-O3", "--use_fast_math"]
-    }
-    
-    # Compiler flags
-    compile_options = {
-        cpp = [
-            "-Wall",
-            "-Wextra",
-            "-Werror",
-            "-Wno-unused-parameter",
-            "-Wno-missing-field-initializers"
-        ],
-        cuda = [
-            "-Xcompiler", "-fPIC",
-            "--extended-lambda",
-            "--expt-relaxed-constexpr"
-        ]
-    }
-    
-    # Linker flags
-    link_options = [
-        "-Wl,--as-needed",
-        "-Wl,--no-undefined"
-    ]
-    
-    # Dependencies
-    find_packages = [
-        "rclcpp",
-        "std_msgs",
-        "sensor_msgs",
-        "nav_msgs",
-        "tf2_ros",
-        "cv_bridge",
-        "OpenCV"
-    ]
-    
-    # Additional include directories
-    include_directories = [
-        "${CMAKE_CURRENT_SOURCE_DIR}/include"
-    ]
-    
-    # Additional link directories
-    link_directories = [
-        "${CMAKE_CURRENT_BINARY_DIR}"
-    ]
-    
-    # Additional libraries to link against
-    link_libraries = [
-        "pthread",
-        "dl"
-    ]
-    
-    # Install configuration
-    install = {
-        # Install target (default: all)
-        components = ["runtime", "development", "python"]
-        
-        # Install prefix (default: /usr/local)
-        prefix = "${CMAKE_INSTALL_PREFIX}"
-        
-        # Additional install rules
-        rules = [
-            {
-                type = "directory"
-                destination = "share/${PROJECT_NAME}/launch"
-                files = ["launch/*.launch.py"]
-            },
-            {
-                type = "directory"
-                destination = "share/${PROJECT_NAME}/config"
-                files = ["config/*.yaml"]
-            }
-        ]
-    }
-}
-
-### Conditional Compilation
-
-Use the `ENABLE_ROS2` and `ENABLE_CUDA` flags to conditionally compile code:
-
-```python
-# In your .robodsl file
-build {
-    features = {
-        ros2 = true
-        cuda = true
-    }
-}
-
-# In your C++ code
-#ifdef ENABLE_ROS2
-// ROS2-specific code
-#include <rclcpp/rclcpp.hpp>
-#endif
-
-#ifdef ENABLE_CUDA
-// CUDA-specific code
-#include <cuda_runtime.h>
-#endif
-
-class MyNode {
-public:
-    void process() {
-        #ifdef ENABLE_CUDA
-        // CUDA-accelerated implementation
-        process_with_cuda();
-        #else
-        // CPU fallback implementation
-        process_on_cpu();
-        #endif
-    }
-}
-
-### Cross-Platform Support
-
-RoboDSL supports cross-platform development with platform-specific settings:
-
-```python
-build {
-    # Platform-specific settings
-    platform = {
-        linux = {
-            compile_options = ["-fPIC"]
-            link_libraries = ["rt"]
-        },
-        windows = {
-            compile_options = ["/W4", "/WX"]
-            link_libraries = ["ws2_32.lib"]
-        },
-        macos = {
-            compile_options = ["-stdlib=libc++"]
-            link_libraries = []
-        }
-    }
-    
-    # Architecture-specific settings
-    architecture = {
-        x86_64 = {
-            compile_options = ["-march=native"]
-        },
-        aarch64 = {
-            compile_options = ["-mcpu=native"]
-        }
-    }
-}
-
-### Build System Integration
-
-RoboDSL generates standard CMake files that can be integrated with existing build systems:
-
-```bash
-# Configure the build
-mkdir -p build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release -DENABLE_CUDA=ON
-
-# Build the project
-make -j$(nproc)
-
-# Install the project
-make install
-
-# Create a debian package
-cpack -G DEB
-
-### Best Practices
-
-1. **Feature Flags**:
-   - Use `ENABLE_ROS2` and `ENABLE_CUDA` to enable/disable features
-   - Provide fallback implementations when possible
-   - Document feature dependencies in your package.xml
-
-2. **Dependency Management**:
-   - List all required dependencies in `find_packages`
-   - Use version constraints when necessary
-   - Document optional dependencies
-
-3. **Cross-Platform Development**:
-   - Use platform-agnostic code when possible
-   - Test on all target platforms
-   - Handle platform-specific dependencies gracefully
-
-4. **Installation**:
-   - Follow the FHS for file locations
-   - Include necessary runtime dependencies
-   - Generate and install package configuration files
-
-## Examples
-
-### Complete Example
-
-```python
-project "my_robot" {
-    version = "0.1.0"
-    description = "A simple robot controller"
-}
-
-# Custom message type
-message Twist2D {
-    float64 linear_x
-    float64 angular_z
-}
-
+{{ ... }}
 # Main node
 node robot_controller {
     # Node configuration
     namespace = "robot"
     executable = true
+    ```python
+# Example of a simple node
+node my_node {
+    executable = true
+    namespace = "sensors"
     
-    # Dependencies
-    depends = ["rclcpp", "std_msgs"]
-    
-    # Publishers and subscribers
+    # Publishers
     publishers = [
         {
-            name = "cmd_vel"
-            type = "geometry_msgs/msg/Twist"
-            qos = "default"
-        }
-    ]
-    
-    subscribers = [
-        {
-            name = "odom"
-            type = "nav_msgs/msg/Odometry"
-            callback = "odom_callback"
+            name = "temperature"
+            type = "std_msgs/msg/Float32"
             qos = "sensor_data"
         }
     ]
     
-    # Parameters
-    parameters = {
-        "max_speed" = 1.0
-        "publish_rate" = 30.0
-    }
+    # Subscribers
+    subscribers = [
+        {
+            name = "command"
+            type = "std_msgs/msg/String"
+            callback = "command_callback"
+            qos = "default"
+        }
+    ]
     
-    # CUDA kernel for processing
-    cuda_kernel process_sensors {
+    # Parameters
+    parameters = [
+        {
+            name = "update_rate"
+            type = "double"
+            default = 1.0
+            description = "Update rate in Hz"
+        }
+    ]
+}
+```cuda_kernel process_sensors {
         inputs = [
             { name: "sensor_data", type: "const SensorData&" }
         ]
         outputs = [
             { name: "processed_data", type: "ProcessedData&" }
-        ]
+{{ ... }}
         
         block_size = [256, 1, 1]
         
@@ -2453,6 +1098,157 @@ cuda_kernel sort_points {
     """
 }
 ```
+
+## Troubleshooting and FAQ
+
+This section provides solutions to common issues and answers to frequently asked questions about RoboDSL.
+
+### Common Issues
+
+#### 1. CUDA Kernel Compilation Failures
+
+**Symptom**: Errors during CUDA kernel compilation with messages about unsupported architectures or syntax errors.
+
+**Solution**:
+- Ensure your GPU's compute capability is correctly specified in the build configuration:
+  ```python
+  build_options = {
+      "CUDA_ARCH": ["sm_75"],  # Adjust for your GPU architecture
+      # ...
+  }
+  ```
+- Verify CUDA toolkit version compatibility with your GPU
+- Check for syntax errors in kernel code, especially with device-specific keywords
+
+#### 2. ROS2 Lifecycle Node State Transition Failures
+
+**Symptom**: Nodes getting stuck during state transitions (e.g., configuring → inactive).
+
+**Solution**:
+- Implement proper error handling in all lifecycle callbacks
+- Ensure `on_configure()` and `on_activate()` complete within the timeout period
+- Check for unhandled exceptions in callbacks
+- Verify all required parameters are properly declared
+
+#### 3. QoS Incompatibility Warnings
+
+**Symptom**: Warnings about incompatible QoS settings between publishers and subscribers.
+
+**Solution**:
+- Ensure matching QoS profiles between publishers and subscribers
+- Use compatible reliability and durability settings:
+  ```python
+  # Example of compatible QoS settings
+  qos_profile "custom_qos" {
+      reliability = "reliable"
+      durability = "volatile"  # or "transient_local" for late-joining subscribers
+      history = "keep_last"
+      depth = 10
+  }
+  ```
+
+### Frequently Asked Questions
+
+#### Q1: How do I enable CUDA support in my project?
+
+**A**: Enable CUDA in your build configuration:
+```python
+build_options = {
+    "ENABLE_CUDA": true,
+    "CUDA_ARCH": ["sm_75"],  # Adjust for your GPU
+    # ...
+}
+```
+
+Then declare CUDA kernels in your RoboDSL files and use them in your nodes.
+
+#### Q2: What's the difference between `volatile` and `transient_local` durability?
+
+- **Volatile**: Messages are not stored for late-joining subscribers
+- **Transient Local**: Last message is stored for late-joining subscribers
+
+Use `transient_local` for parameters and important state updates, and `volatile` for high-frequency sensor data.
+
+#### Q3: How do I handle different configurations for simulation vs. real hardware?
+
+Use conditional compilation and parameters:
+
+```python
+# In your node definition
+parameters = [
+    {
+        name = "use_simulation"
+        type = "bool"
+        default = false
+        description = "Whether to use simulation mode"
+    },
+    # ...
+]
+
+# In your implementation
+initialize = """
+void initialize() {
+    bool use_sim = this->get_parameter("use_simulation").as_bool();
+    if (use_sim) {
+        // Simulation-specific initialization
+    } else {
+        // Hardware-specific initialization
+    }
+}
+"""
+```
+
+#### Q4: How can I improve the performance of my CUDA kernels?
+
+- Use shared memory for data reuse
+- Ensure memory coalescing for global memory access
+- Minimize thread divergence in warps
+- Use constant memory for read-only data
+- Profile with Nsight Systems to identify bottlenecks
+
+#### Q5: How do I debug issues in my RoboDSL nodes?
+
+1. Enable debug logging:
+   ```python
+   node my_node {
+       log_level = "debug"
+       # ...
+   }
+   ```
+
+2. Use the `rqt_console` tool to view ROS2 logs
+3. For CUDA issues, use `cuda-memcheck` and Nsight tools
+4. Enable core dumps for segmentation faults
+
+#### Q6: How do I handle version compatibility between RoboDSL and ROS2 distributions?
+
+Specify version constraints in your project configuration:
+
+```python
+dependencies = [
+    "rclcpp >= 2.4.0",
+    "std_msgs >= 4.2.0",
+    # ...
+]
+
+# In your build configuration
+build_options = {
+    "ROS2_DISTRO": "humble",  # Or your target distribution
+    # ...
+}
+```
+
+### Getting Help
+
+If you encounter issues not covered here:
+1. Check the [GitHub Issues](https://github.com/yourorg/robodsl/issues) for similar problems
+2. Search the [ROS Answers](https://answers.ros.org/) forum
+3. For bugs, open a new issue with:
+   - RoboDSL version
+   - ROS2 distribution and version
+   - Steps to reproduce
+   - Error messages and logs
+   - Relevant code snippets
 
 ## Conclusion
 

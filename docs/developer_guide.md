@@ -129,6 +129,24 @@ RoboDSL follows a modular architecture designed for extensibility and maintainab
    - Template inheritance and composition
    - Custom filters and extensions
    - Support for multiple template directories
+   - Conditional template rendering based on features
+   - Automatic template discovery and loading
+
+5. **ROS2 Integration Layer**
+   - Lifecycle node management
+   - QoS profile configuration
+   - Namespace and remapping support
+   - Parameter handling with runtime updates
+   - Component lifecycle management
+   - Service and action server/client generation
+
+6. **CUDA Acceleration**
+   - Kernel template generation
+   - Memory management utilities
+   - CPU-GPU data transfer optimization
+   - Thrust algorithm integration
+   - Multi-GPU support
+   - Fallback CPU implementations
 
 ### Data Flow
 
@@ -144,6 +162,317 @@ flowchart LR
     
     style A fill:#f9f,stroke:#333
     style F fill:#9f9,stroke:#333
+```
+
+## ROS2 Lifecycle Nodes
+
+RoboDSL provides first-class support for ROS2 Lifecycle nodes, enabling better state management and system reliability. Lifecycle nodes follow a well-defined state machine with the following states:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Unconfigured
+    Unconfigured --> Inactive: configure()
+    Inactive --> Active: activate()
+    Active --> Inactive: deactivate()
+    Inactive --> Unconfigured: cleanup()
+    Unconfigured --> Finalized: shutdown()
+    Inactive --> Finalized: shutdown()
+    Active --> Finalized: shutdown()
+    Finalized --> [*]
+```
+
+### Key Features
+
+1. **State Management**
+   - Automatic state transition handling
+   - State change callbacks
+   - Error handling and recovery
+   - State transition timeouts
+
+2. **Resource Management**
+   - Lazy initialization of resources
+   - Clean resource cleanup on shutdown
+   - State-specific resource allocation
+
+3. **Error Handling**
+   - State transition error reporting
+   - Automatic deactivation on errors
+   - Recovery procedures
+
+Example lifecycle node definition:
+
+```python
+node sensor_driver {
+    lifecycle = true
+    
+    on_configure = """
+    RCLCPP_INFO(this->get_logger(), "Configuring...");
+    // Initialize resources
+    return CallbackReturnT::SUCCESS;
+    """
+    
+    on_activate = """
+    RCLCPP_INFO(this->get_logger(), "Activating...");
+    // Start timers, subscribers, etc.
+    return CallbackReturnT::SUCCESS;
+    """
+    
+    // Other lifecycle callbacks...
+}
+```
+
+## QoS Configuration
+
+Quality of Service (QoS) settings in RoboDSL provide fine-grained control over communication reliability, durability, and resource usage. The QoS configuration is specified using a declarative syntax and supports both predefined profiles and custom settings.
+
+### Predefined QoS Profiles
+
+```python
+qos_profile "sensor_data" {
+    reliability = "best_effort"
+    durability = "volatile"
+    history = "keep_last"
+    depth = 10
+    deadline = "100ms"
+    lifespan = "1s"
+    liveliness = "automatic"
+    liveliness_lease_duration = "1s"
+}
+
+qos_profile "command" {
+    reliability = "reliable"
+    durability = "transient_local"
+    history = "keep_all"
+}
+```
+
+### QoS Policies
+
+1. **Reliability**
+   - `reliable`: Ensures message delivery with retries (TCP-like)
+   - `best_effort`: No delivery guarantees (UDP-like)
+   - **Default**: `reliable`
+   - **Use Case**: Use `reliable` for commands, `best_effort` for high-frequency sensor data
+
+2. **Durability**
+   - `volatile`: Messages not stored for late-joining subscribers
+   - `transient_local`: Last message stored for late-joining subscribers
+   - **Default**: `volatile`
+   - **Use Case**: Use `transient_local` for parameters, `volatile` for real-time data
+
+3. **History**
+   - `keep_last`: Store last N messages (specified by depth)
+   - `keep_all`: Store all messages (be careful with memory)
+   - **Default**: `keep_last` with depth=10
+   - **Use Case**: Use `keep_all` for critical data, `keep_last` for high-frequency topics
+
+4. **Deadline**
+   - Expected maximum time between messages
+   - Format: `"<number>ms"` or `"<number>s"`
+   - **Use Case**: Detect missing sensor updates
+
+5. **Lifespan**
+   - Maximum time a message is considered valid
+   - Format: `"<number>ms"` or `"<number>s"`
+   - **Use Case**: Stale data detection
+
+6. **Liveliness**
+   - `automatic`: Node is alive if connected
+   - `manual_by_topic`: Node must assert liveliness
+   - **Use Case**: Detect node failures
+
+### Applying QoS Profiles
+
+```python
+node control_node {
+    publishers = [
+        {
+            name = "cmd_vel"
+            type = "geometry_msgs/msg/Twist"
+            qos = "command"  # Using predefined profile
+        }
+    ]
+    
+    subscribers = [
+        {
+            name = "sensor_data"
+            type = "sensor_msgs/msg/Imu"
+            qos = {
+                reliability = "best_effort"
+                history = "keep_last"
+                depth = 5
+            }  # Inline QoS settings
+        }
+    ]
+}
+```
+
+## Namespace and Remapping
+
+RoboDSL provides flexible namespace management and topic/service remapping to support complex deployment scenarios.
+
+### Node Namespacing
+
+```python
+# Absolute namespace
+node sensor_node {
+    namespace = "/sensors"
+    # Node name: /sensors/sensor_node
+}
+
+# Nested namespaces
+with namespace = "/robot1" {
+    node navigation_node {
+        # Node name: /robot1/navigation_node
+    }
+    
+    with namespace = "sensors" {
+        node lidar_node {
+            # Node name: /robot1/sensors/lidar_node
+        }
+    }
+}
+```
+
+### Topic and Service Remapping
+
+```python
+node my_node {
+    # Simple string-based remapping
+    remappings = [
+        "cmd_vel:=base/cmd_vel",
+        "odom:=/sensors/odom"
+    ]
+    
+    # Structured remapping with additional options
+    remappings = [
+        {
+            from = "/camera/image_raw"
+            to = "/sensors/camera/front/image_raw"
+            qos_override = "sensor_data"
+        },
+        # More remappings...
+    ]
+}
+```
+
+## CUDA Offloading
+
+RoboDSL simplifies GPU acceleration by providing built-in support for CUDA kernel definition and execution.
+
+### Defining CUDA Kernels
+
+```python
+cuda_kernel process_image {
+    inputs = [
+        { name: "input", type: "const cv::cuda::GpuMat&" },
+        { name: "params", type: "const ImageParams&" }
+    ]
+    outputs = [
+        { name: "output", type: "cv::cuda::GpuMat&" }
+    ]
+    
+    includes = [
+        "opencv2/core/cuda.hpp",
+        "opencv2/cudaimgproc.hpp"
+    ]
+    
+    block_size = [32, 32, 1]
+    
+    code = """
+    __global__ void process_image_kernel(
+        const cv::cuda::PtrStepSz<uchar3> src,
+        cv::cuda::PtrStepSz<uchar3> dst,
+        const ImageParams* params) {
+        
+        int x = blockIdx.x * blockDim.x + threadIdx.x;
+        int y = blockIdx.y * blockDim.y + threadIdx.y;
+        
+        if (x >= src.cols || y >= src.rows) return;
+        
+        // Process pixel at (x,y)
+        uchar3 pixel = src(y, x);
+        // ... processing ...
+        dst(y, x) = pixel;
+    }
+    """
+}
+```
+
+### Using CUDA Kernels in Nodes
+
+```python
+node image_processor {
+    # ... other node configuration ...
+    
+    cuda_kernels = ["process_image"]
+    
+    initialize = """
+    // Allocate GPU memory
+    d_input_.create(cv::Size(640, 480), CV_8UC3);
+    d_output_.create(cv::Size(640, 480), CV_8UC3);
+    """
+    
+    process_image_callback = """
+    // Upload to GPU
+    d_input_.upload(input_image);
+    
+    // Process on GPU
+    process_image(d_input_, params_, d_output_);
+    
+    // Download result
+    d_output_.download(output_image);
+    """
+}
+```
+
+## Conditional Compilation
+
+RoboDSL supports conditional compilation to handle different build configurations and platform-specific code.
+
+### Feature Flags
+
+```python
+build_options = {
+    "ENABLE_ROS2": true,  # Enable ROS2 integration
+    "ENABLE_CUDA": true,  # Enable CUDA support
+    "SIMULATION": false   # Simulation mode
+}
+
+# In your RoboDSL files
+node my_node {
+    # ...
+    
+    # Conditional code blocks
+    code = """
+    #if ENABLE_CUDA
+        // CUDA-specific code
+        processOnGpu();
+    #else
+        // Fallback CPU implementation
+        processOnCpu();
+    #endif
+    
+    #if SIMULATION
+        // Simulation-specific code
+        useSimulatedSensors();
+    #endif
+    """
+}
+```
+
+### Platform-Specific Code
+
+```python
+code = """
+#if defined(__linux__)
+    // Linux-specific code
+#elif defined(_WIN32)
+    // Windows-specific code
+#elif defined(__APPLE__)
+    // macOS-specific code
+#endif
+"""
 ```
 
 #### 1. Source Processing
