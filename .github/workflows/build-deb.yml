@@ -65,9 +65,11 @@ jobs:
         # Clean up Python environment variables that might cause conflicts
         unset PYTHONPATH
         
-        # Build the package using the system Python for debhelper
-        # but target Python 3.10 for the actual package
-        dpkg-buildpackage -us -uc -D -DDEB_PYTHON_INSTALL_LAYOUT=deb_system
+        # Set the Python version for debhelper
+        export DEB_PYTHON3_VERSION=3.10
+        
+        # Build the package with debug output
+        dpkg-buildpackage -us -uc
         
         # Create dist directory and copy artifacts
         mkdir -p dist
