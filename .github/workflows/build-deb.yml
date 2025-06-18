@@ -2,38 +2,69 @@ name: Build Debian Package
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
-  release:
-    types: [created]
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    
     steps:
-    - uses: actions/checkout@v3
+    - name: Checkout code
+      uses: actions/checkout@v4
     
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
-        python-version: '3.x'
+        python-version: '3.10'
+        cache: 'pip'
     
     - name: Install build dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y devscripts build-essential debhelper dh-python python3-all python3-setuptools
+        sudo apt-get install -y --no-install-recommends \
+          build-essential \
+          debhelper \
+          devscripts \
+          dh-python \
+          python3-all \
+          python3-setuptools
     
     - name: Build package
       run: |
         dpkg-buildpackage -us -uc
         mkdir -p dist
-        cp ../*.deb dist/
+        cp ../*.deb ../*.changes ../*.buildinfo dist/ 2>/dev/null || true
     
     - name: Upload artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
-        name: deb-package
-        path: dist/*.deb
+        name: debian-artifacts
+        path: |
+          dist/*.deb
+          dist/*.changes
+          dist/*.buildinfo
         if-no-files-found: error
+        retention-days: 5
+    
+    - name: Set up APT repository
+      if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+      run: |
+        mkdir -p apt-repo
+        cp dist/*.deb apt-repo/
+        cd apt-repo
+        dpkg-scanpackages . /dev/null > Packages
+        gzip -k -f Packages
+        apt-ftparchive release . > Release
+        gpg --batch --yes --default-key "packages@robodsl.org" -abs -o Release.gpg Release
+        gpg --batch --yes --default-key "packages@robodsl.org" --clearsign -o InRelease Release
+    
+    - name: Upload APT repository
+      if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+      uses: actions/upload-artifact@v4
+      with:
+        name: apt-repo
+        path: apt-repo
         retention-days: 5
