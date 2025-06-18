@@ -8,15 +8,7 @@ PYTHON = python3.10
 
 # Set Python version for pybuild
 override_dh_auto_configure:
-	dh_auto_configure -- -DPYTHON_EXECUTABLE:FILEPATH=/usr/bin/$(PYTHON) \
-		-DPYTHON_LIBRARY:FILEPATH=/usr/lib/$(PYTHON)/config-3.10-x86_64-linux-gnu/lib$(PYTHON).so \
-		-DPYTHON_INCLUDE_DIR:PATH=/usr/include/$(PYTHON) \
-		-DPython_EXECUTABLE=/usr/bin/$(PYTHON) \
-		-DPython_LIBRARY=/usr/lib/$(PYTHON)/config-3.10-x86_64-linux-gnu/lib$(PYTHON).so \
-		-DPython_INCLUDE_DIR=/usr/include/$(PYTHON) \
-		-DPython3_EXECUTABLE=/usr/bin/$(PYTHON) \
-		-DPython3_LIBRARY=/usr/lib/$(PYTHON)/config-3.10-x86_64-linux-gnu/lib$(PYTHON).so \
-		-DPython3_INCLUDE_DIR=/usr/include/$(PYTHON)
+	dh_auto_configure -- --interpreter=$(PYTHON)
 
 # Build using setup.py
 override_dh_auto_build:
