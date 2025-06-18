@@ -23,6 +23,9 @@ jobs:
     
     - name: Install build dependencies
       run: |
+        # Save the original Python environment
+        echo "ORIGINAL_PYTHONPATH=$PYTHONPATH" >> $GITHUB_ENV
+        
         # Install basic build tools
         sudo apt-get update
         sudo apt-get install -y --no-install-recommends \
@@ -50,25 +53,21 @@ jobs:
         # Install pip for Python 3.10
         curl -sS https://bootstrap.pypa.io/get-pip.py | python3.10
         
-        # Install build dependencies in Python 3.10 venv
-        python3.10 -m venv ~/venv
-        source ~/venv/bin/activate
-        pip install --upgrade pip setuptools wheel
+        # Clean up any conflicting Python environment variables
+        unset PYTHONPATH
         
-        # Set environment variables for the build
+        # Set Python 3.10 as the default for this build
         echo "PYTHON=python3.10" >> $GITHUB_ENV
-        echo "PYTHONPATH=$(python3.10 -c 'import sys; print(":".join(sys.path))')" >> $GITHUB_ENV
+        echo "DEB_PYTHON_DEFAULT=3.10" >> $GITHUB_ENV
     
     - name: Build package
       run: |
-        # Activate Python 3.10 virtual environment
-        source ~/venv/bin/activate
+        # Clean up Python environment variables that might cause conflicts
+        unset PYTHONPATH
         
-        # Set Python version for debhelper
-        export DEB_PYTHON_DEFAULT=3.10
-        
-        # Build the package
-        dpkg-buildpackage -us -uc
+        # Build the package using the system Python for debhelper
+        # but target Python 3.10 for the actual package
+        dpkg-buildpackage -us -uc -D -DDEB_PYTHON_INSTALL_LAYOUT=deb_system
         
         # Create dist directory and copy artifacts
         mkdir -p dist
