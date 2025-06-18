@@ -30,7 +30,10 @@ jobs:
           devscripts \
           dh-python \
           python3-all \
-          python3-setuptools
+          python3-setuptools \
+          python3-sphinx \
+          python3-sphinx-rtd-theme \
+          python3-sphinxcontrib.apidoc
     
     - name: Build package
       run: |
