@@ -1,8 +1,8 @@
-# 📚 RoboDSL Examples
+# RoboDSL Examples
 
 Welcome to the RoboDSL examples directory! This collection demonstrates how to leverage RoboDSL's powerful features through practical, runnable examples. Each example is designed to showcase specific capabilities while following best practices for ROS2 and CUDA development.
 
-## 🎯 Getting Started
+## Getting Started
 
 ### Prerequisites
 - RoboDSL installed (see main [README](../README.md) for installation instructions)
@@ -16,9 +16,9 @@ Welcome to the RoboDSL examples directory! This collection demonstrates how to l
 3. Experiment with the code to understand how it works
 4. Use as a reference for your own projects
 
-## 🏆 Featured Examples
+## Featured Examples
 
-### 🚀 Comprehensive Example
+### Comprehensive Example
 
 **File**: [comprehensive_example.robodsl](comprehensive_example.robodsl)
 
@@ -32,7 +32,7 @@ A complete showcase of RoboDSL features in a single, well-documented example. Pe
 - Namespace and remapping examples
 - Error handling and recovery
 
-### 🤖 MPPI Robot Controller
+### MPPI Robot Controller
 
 **Directory**: [mppi_robot/](mppi_robot/)
 
@@ -66,11 +66,11 @@ An advanced implementation of a Model Predictive Path Integral (MPPI) controller
   - Python node implementation
   - Launch file configuration
 
-## 🛠 Feature Showcase
+## Feature Showcase
 
 Explore specific RoboDSL features through these focused examples:
 
-### ♻️ Lifecycle Node Example
+### Lifecycle Node Example
 
 RoboDSL's lifecycle nodes provide a structured way to manage your node's resources and state. This example shows a complete implementation with all lifecycle callbacks.
 
@@ -113,7 +113,7 @@ lifecycle_node sensor_processor {
 }
 ```
 
-### ⚡ QoS Configuration Example
+### QoS Configuration Example
 
 Quality of Service (QoS) settings are crucial for reliable ROS2 communication. This example demonstrates how to configure QoS profiles for different communication patterns.
 
@@ -163,7 +163,7 @@ node control_node {
 }
 ```
 
-### 🚀 CUDA Offloading Example
+### CUDA Offloading Example
 
 Leverage GPU acceleration for compute-intensive tasks with RoboDSL's seamless CUDA integration.
 
@@ -205,7 +205,7 @@ cuda_kernel process_image {
 }
 ```
 
-### 🔀 Conditional Compilation Example
+### Conditional Compilation Example
 
 Write portable code that adapts to different hardware and build configurations using RoboDSL's conditional compilation features.
 
@@ -259,7 +259,7 @@ cuda_kernel fast_math {
 }
 ```
 
-## 🚀 Running Examples
+## Running Examples
 
 ### Building All Examples
 
@@ -324,11 +324,11 @@ colcon build --packages-select robodsl_examples --cmake-args -DCMAKE_BUILD_TYPE=
   rviz2
   ```
 
-## 🏆 Best Practices
+## Best Practices
 
 Follow these guidelines to write maintainable and efficient RoboDSL code:
 
-### ♻️ Lifecycle Node Guidelines
+### Lifecycle Node Guidelines
 
 1. **State Management**
    - Always implement all lifecycle callbacks, even if empty
@@ -356,7 +356,7 @@ Follow these guidelines to write maintainable and efficient RoboDSL code:
    - Be mindful of memory usage with large history depths
    - Test with realistic network conditions
 
-### 🚀 CUDA Development
+### CUDA Development
 
 1. **Memory Management**
    - Use RAII patterns for device memory
@@ -370,7 +370,7 @@ Follow these guidelines to write maintainable and efficient RoboDSL code:
    - Minimize thread divergence
    - Profile with Nsight Systems/Compute
 
-### 🏗 Project Organization
+### Project Organization
 
 1. **Code Structure**
    - Group related functionality in separate files
@@ -384,18 +384,18 @@ Follow these guidelines to write maintainable and efficient RoboDSL code:
    - Use static analysis tools
    - Set up CI/CD pipelines
 
-## 📚 Additional Resources
+## Additional Resources
 
 - [RoboDSL Documentation](../README.md)
 - [ROS2 Documentation](https://docs.ros.org/)
 - [CUDA Toolkit Documentation](https://docs.nvidia.com/cuda/)
 - [ROS2 Best Practices](https://docs.ros.org/en/rolling/Concepts/Basic/About-Quality-of-Service-Settings.html)
 
-## 🤝 Contributing
+## Contributing
 
 We welcome contributions to our examples! Please see the [Contributing Guide](../CONTRIBUTING.md) for details on how to submit improvements.
 
-## 📄 License
+## License
 
 This project is licensed under the [MIT License](../LICENSE).
 

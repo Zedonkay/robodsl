@@ -124,7 +124,7 @@ RoboDSL follows a modular architecture designed for extensibility and maintainab
    - Supports multiple output formats (C++, CUDA, CMake, etc.)
    - Implements code optimization passes
 
-4. **Template System**
+4. **Template System** (`src/robodsl/templates/`)
    - Jinja2-based template engine
    - Template inheritance and composition
    - Custom filters and extensions
@@ -132,7 +132,7 @@ RoboDSL follows a modular architecture designed for extensibility and maintainab
    - Conditional template rendering based on features
    - Automatic template discovery and loading
 
-5. **ROS2 Integration Layer**
+5. **ROS2 Integration Layer** 
    - Lifecycle node management
    - QoS profile configuration
    - Namespace and remapping support
@@ -751,7 +751,7 @@ class TemplateManager:
 2. **Installation**
    ```bash
    # Clone the repository
-   git clone https://github.com/yourusername/robodsl.git
+   git clone https://github.com/Zedonkay/robodsl.git
    cd robodsl
    
    # Create and activate a virtual environment
@@ -1228,123 +1228,6 @@ RoboDSL provides several mechanisms to optimize both the code generation process
 ## Architecture
 
 RoboDSL follows a modular architecture designed for extensibility and maintainability. The system is composed of several core components that work together to provide a seamless development experience for GPU-accelerated robotics applications.
-
-### Core Components
-
-1. **CLI Interface** (`src/robodsl/cli.py`)
-   - Built on top of Python's Click library
-   - Provides a user-friendly command-line interface
-   - Handles command parsing and validation
-   - Manages the execution flow of code generation
-   - Implements command grouping for better organization
-   - Supports both interactive and non-interactive modes
-   - Provides helpful error messages and usage instructions
-
-2. **Parser Module** (`src/robodsl/parser.py`)
-   - Implements the RoboDSL language parser
-   - Uses a lexer/parser architecture to process input files
-   - Validates syntax and semantic rules
-   - Generates an Abstract Syntax Tree (AST)
-   - Provides detailed error reporting with line numbers
-   - Supports custom syntax extensions
-
-3. **Generator Module** (`src/robodsl/generator.py`)
-   - Converts AST into executable code
-   - Manages template rendering with Jinja2
-   - Handles file system operations
-   - Ensures consistent code style and formatting
-   - Supports multiple output formats (C++, CUDA, CMake, etc.)
-   - Implements code optimization passes
-
-4. **Template System** (`src/robodsl/templates/`)
-   - Jinja2-based templates for code generation
-   - Organized by component type and target language
-   - Supports template inheritance and includes
-   - Implements custom filters and extensions
-   - Handles whitespace control
-
-### Data Flow
-
-1. **Input Processing**
-   ```
-   User Command → CLI → Project Setup → File Generation
-   ```
-
-2. **Node Addition**
-   ```
-   User Command → CLI → Parser → AST → Generator → File Creation
-   ```
-
-3. **Build Process**
-   ```
-   User Command → CLI → Build System Generation → Build Execution
-   ```
-
-## Module Reference
-
-### CLI Module (`cli.py`)
-
-The CLI module provides the command-line interface for RoboDSL, handling user interactions and orchestrating the code generation process.
-
-#### Key Functions
-
-1. **`init(project_name, template, output_dir)`**
-   - Creates a new RoboDSL project
-   - Sets up the directory structure
-   - Initializes configuration files
-
-2. **`add_node(node_name, publisher, subscriber, language, project_dir)`**
-   - Adds a new node to an existing project
-   - Handles file generation for the specified language
-   - Updates build configurations
-
-3. **`build(project_dir)`**
-   - Generates build files
-   - Executes the build process
-   - Handles build artifacts
-
-### Parser Module (`parser.py`)
-
-The parser module processes the RoboDSL syntax and generates an abstract syntax tree (AST).
-
-#### Key Components
-
-1. **Lexer**
-   - Tokenizes input files
-   - Handles syntax highlighting
-   - Reports lexical errors
-
-2. **Parser**
-   - Validates syntax
-   - Builds AST
-   - Enforces semantic rules
-
-3. **AST**
-   - Represents the program structure
-   - Enables code generation
-   - Supports transformations
-
-### Generator Module (`generator.py`)
-
-The generator module transforms the AST into target code.
-
-#### Key Features
-
-1. **Template Rendering**
-   - Uses Jinja2 for templating
-   - Supports multiple output formats
-   - Handles indentation and formatting
-
-2. **File Management**
-   - Creates directories as needed
-   - Handles file overwrites
-   - Manages file permissions
-
-3. **Code Generation**
-   - C++ node generation
-   - Python node generation
-   - Build system files
-   - Launch configurations
 
 ## Code Organization
 

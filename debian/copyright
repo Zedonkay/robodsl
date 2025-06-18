@@ -1,6 +1,6 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: robodsl
-Source: https://github.com/yourusername/robodsl
+Source: https://github.com/Zedonkay/robodsl
 
 Files: *
 Copyright: 2025 Ishayu Shikhare <ishikhar@andrew.cmu.edu>
