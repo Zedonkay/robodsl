@@ -2,13 +2,81 @@
 
 A domain-specific language and compiler for building high-performance, GPU-accelerated robotics applications with ROS2 and CUDA integration. RoboDSL simplifies the development of complex robotics systems by providing a clean, declarative syntax for defining ROS2 nodes, services, and CUDA-accelerated computations.
 
+## Debian Package Installation
+
+### Prerequisites
+
+- Debian/Ubuntu Linux system (or Docker for other platforms)
+- Python 3.8 or higher
+- dpkg (for building packages)
+- git (for cloning the repository)
+
+### Building from Source
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/yourusername/robodsl.git
+   cd robodsl
+   ```
+
+2. **Install build dependencies**:
+   ```bash
+   sudo apt-get update
+   sudo apt-get install -y build-essential fakeroot debhelper dh-python python3-all python3-setuptools
+   ```
+
+3. **Build the Debian package**:
+   ```bash
+   ./build-deb-direct.sh
+   ```
+   This will create a `.deb` file in the current directory.
+
+### Installing the Package
+
+1. **Install the package using dpkg**:
+   ```bash
+   sudo dpkg -i robodsl_0.1.0_all.deb
+   ```
+
+2. **Install any missing dependencies**:
+   ```bash
+   sudo apt-get install -f
+   ```
+
+### Verifying the Installation
+
+After installation, you can verify that the `robodsl` command is available:
+
+```bash
+robodsl --version
+```
+
+### Building with Docker (Alternative Method)
+
+If you're on a non-Debian system or want to build in an isolated environment, you can use Docker:
+
+```bash
+# Build the package in a Docker container
+./build-with-minimal-docker.sh
+
+# The package will be available in the debian-pkgs/ directory
+```
+
+### Development Installation
+
+For development, you can install the package in development mode:
+
+```bash
+pip install -e .
+```
+
+This will create a symbolic link to your source code, allowing you to make changes without reinstalling the package.
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/)
 [![ROS2 Version](https://img.shields.io/badge/ROS2-Humble%20%7C%20Foxy%20%7C%20Galactic-blueviolet)](https://docs.ros.org/)
 [![CUDA](https://img.shields.io/badge/CUDA-11.0%2B-green.svg)](https://developer.nvidia.com/cuda-toolkit)
 [![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg)](docs/)
-[![Build Status](https://github.com/yourusername/robodsl/actions/workflows/ci.yml/badge.svg)](https://github.com/yourusername/robodsl/actions)
-[![Code Coverage](https://codecov.io/gh/yourusername/robodsl/branch/main/graph/badge.svg)](https://codecov.io/gh/yourusername/robodsl)
 [![Code Style: Black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 RoboDSL is a powerful framework that simplifies the development of GPU-accelerated robotics applications by providing a clean, declarative syntax for defining ROS2 nodes and CUDA kernels. It handles all the boilerplate code and build system configuration, allowing developers to focus on algorithm development and system integration.
