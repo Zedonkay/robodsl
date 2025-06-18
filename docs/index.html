@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoboDSL Documentation</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>RoboDSL</h1>
+            <p>Domain-Specific Language for GPU-Accelerated Robotics</p>
+        </header>
+        
+        <nav id="sidebar">
+            <div class="search-box">
+                <input type="text" id="search" placeholder="Search...">
+                <button><i class="fas fa-search"></i></button>
+            </div>
+            <ul class="menu">
+                <li><a href="#getting-started"><i class="fas fa-rocket"></i> Getting Started</a></li>
+                <li><a href="#installation"><i class="fas fa-download"></i> Installation</a></li>
+                <li><a href="#tutorials"><i class="fas fa-graduation-cap"></i> Tutorials</a></li>
+                <li class="has-submenu">
+                    <a href="#features"><i class="fas fa-star"></i> Features <i class="fas fa-chevron-down"></i></a>
+                    <ul class="submenu">
+                        <li><a href="#ros2-lifecycle">ROS2 Lifecycle</a></li>
+                        <li><a href="#qos-configuration">QoS Configuration</a></li>
+                        <li><a href="#cuda-offloading">CUDA Offloading</a></li>
+                    </ul>
+                </li>
+                <li><a href="#api-reference"><i class="fas fa-book"></i> API Reference</a></li>
+                <li><a href="#examples"><i class="fas fa-code"></i> Examples</a></li>
+            </ul>
+        </nav>
+
+        <main id="content">
+            <section id="welcome">
+                <h1>Welcome to RoboDSL</h1>
+                <p>RoboDSL is a domain-specific language for building GPU-accelerated robotics applications with ROS2 and CUDA integration.</p>
+                
+                <div class="card-container">
+                    <a href="#getting-started" class="card">
+                        <i class="fas fa-rocket"></i>
+                        <h3>Get Started</h3>
+                        <p>Learn how to install and use RoboDSL</p>
+                    </a>
+                    
+                    <a href="#tutorials" class="card">
+                        <i class="fas fa-graduation-cap"></i>
+                        <h3>Tutorials</h3>
+                        <p>Step-by-step guides and examples</p>
+                    </a>
+                    
+                    <a href="#api-reference" class="card">
+                        <i class="fas fa-book"></i>
+                        <h3>API Reference</h3>
+                        <p>Complete API documentation</p>
+                    </a>
+                </div>
+            </section>
+
+            <section id="getting-started">
+                <h2>Getting Started</h2>
+                <p>Install RoboDSL with a single command:</p>
+                <pre><code>curl -sSL https://raw.githubusercontent.com/Zedonkay/robodsl/main/install.sh | bash
+sudo apt update
+sudo apt install robodsl</code></pre>
+            </section>
+
+            <section id="features">
+                <h2>Features</h2>
+                
+                <article id="ros2-lifecycle">
+                    <h3>ROS2 Lifecycle Support</h3>
+                    <p>RoboDSL provides built-in support for ROS2 lifecycle nodes, making it easy to manage the state of your robotics applications.</p>
+                </article>
+
+                <article id="qos-configuration">
+                    <h3>QoS Configuration</h3>
+                    <p>Easily configure Quality of Service settings for publishers and subscribers to match your application's requirements.</p>
+                </article>
+
+                <article id="cuda-offloading">
+                    <h3>CUDA Offloading</h3>
+                    <p>Offload computationally intensive tasks to NVIDIA GPUs using CUDA for improved performance.</p>
+                </article>
+            </section>
+        </main>
+
+        <footer>
+            <p>&copy; 2025 RoboDSL Project. All rights reserved.</p>
+        </footer>
+    </div>
+
+    <script src="js/main.js"></script>
+</body>
+</html>
