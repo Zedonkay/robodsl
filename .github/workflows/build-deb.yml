@@ -1,4 +1,4 @@
-name: Build Debian Package
+name: Build cuif Debian Package
 
 on:
   push:
@@ -7,12 +7,17 @@ on:
     branches: [ main ]
 
 jobs:
-  build-deb:
+  build:
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
 
     - name: Install build dependencies
       run: |
@@ -22,18 +27,25 @@ jobs:
           debhelper \
           dh-python \
           build-essential \
+          cmake \
+          python3.10 \
+          python3.10-dev \
+          python3.10-venv \
           python3-all \
           python3-setuptools \
           python3-sphinx \
           python3-sphinx-rtd-theme \
           python3-sphinxcontrib.apidoc
 
-    - name: Build the Debian package
+        # Set python3 to python3.10 to ensure consistency
+        sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1
+
+    - name: Build .deb package
       run: |
         dpkg-buildpackage -us -uc
 
-    - name: Archive .deb files
+    - name: Upload Debian package artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: debian-packages
+        name: cuif-deb
         path: ../*.deb
