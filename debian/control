@@ -3,7 +3,6 @@ Section: devel
 Priority: optional
 Maintainer: Ishayu Shikhare <ishikhar@andrew.cmu.edu>
 Build-Depends: debhelper-compat (= 13),
-               cmake,
                dh-python,
                python3-all (>= 3.10),
                python3-dev (>= 3.10),

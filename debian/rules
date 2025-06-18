@@ -10,32 +10,6 @@ PYTHON = python3.10
 override_dh_auto_configure:
 	dh_auto_configure -- --interpreter=$(PYTHON)
 
-# Build using setup.py
-override_dh_auto_build:
-	echo "Running build with $(PYTHON)..."
-	$(PYTHON) setup.py build
-
-# Install the package
-override_dh_auto_install:
-	dh_auto_install -- --install-layout=deb
-
-# Build documentation
-override_dh_auto_build-arch:
-	dh_auto_build
-	# Build Sphinx documentation if it exists
-	if [ -d docs ] && [ -f docs/conf.py ]; then \
-		sphinx-build -b html docs docs/_build/html; \
-	fi
-
-# Install documentation
-override_dh_installdocs:
-	dh_installdocs
-	# Install Sphinx documentation if it was built
-	if [ -d docs/_build/html ]; then \
-		mkdir -p debian/robodsl-doc/usr/share/doc/robodsl-doc; \
-		cp -a docs/_build/html/* debian/robodsl-doc/usr/share/doc/robodsl-doc/; \
-	fi
-
 # Clean up build artifacts
 override_dh_auto_clean:
 	dh_auto_clean
@@ -46,10 +20,3 @@ override_dh_auto_clean:
 override_dh_auto_test:
 	echo "Skipping tests during package build"
 
-# Ensure Python 3 shebang is used
-override_dh_python3:
-	dh_python3 --shebang=/usr/bin/python3
-
-# Don't run sphinx-build in parallel as it can cause race conditions
-override_dh_auto_build-indep:
-	dh_auto_build -i -- sphinx-build -j1
