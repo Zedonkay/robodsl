@@ -3,6 +3,7 @@ Section: devel
 Priority: optional
 Maintainer: Ishayu Shikhare <ishikhar@andrew.cmu.edu>
 Build-Depends: debhelper-compat (= 13),
+               cmake,
                dh-python,
                python3-all (>= 3.10),
                python3-dev (>= 3.10),
@@ -19,7 +20,7 @@ Vcs-Git: https://github.com/Zedonkay/robodsl.git
 Rules-Requires-Root: no
 
 Package: robodsl
-Architecture: all
+Architecture: any
 Depends: ${python3:Depends},
          ${misc:Depends},
          python3-click (>= 8.0.0),
