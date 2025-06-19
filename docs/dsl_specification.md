@@ -4,6 +4,9 @@
 
 RoboDSL (Robot Domain-Specific Language) is a high-level language designed for building robust, performant, and maintainable robot applications. It provides a clean, declarative syntax for defining ROS2 nodes, components, and their interactions, with built-in support for advanced features like lifecycle management, QoS configuration, and GPU acceleration.
 
+### Version
+This specification applies to RoboDSL version 0.1.0 and later.
+
 ### Key Features
 
 - **ROS2 Lifecycle Node Support**: Built-in support for managed nodes with configurable lifecycle states and transitions
@@ -16,38 +19,34 @@ RoboDSL (Robot Domain-Specific Language) is a high-level language designed for b
 - **Build System Integration**: Native CMake integration with support for cross-platform development
 
 ## Table of Contents
-1. [Introduction](#introduction)
-2. [Syntax Overview](#syntax-overview)
-3. [Project Definition](#project-definition)
-4. [Node Definition](#node-definition)
+1. [Syntax Overview](#syntax-overview)
+2. [Project Definition](#project-definition)
+3. [Node Definition](#node-definition)
    - [Node Types](#node-types)
    - [Lifecycle Nodes](#lifecycle-nodes)
    - [Component Nodes](#component-nodes)
-5. [Communication](#communication)
+4. [Communication](#communication)
    - [Publishers](#publishers)
    - [Subscribers](#subscribers)
    - [Services](#services)
    - [Actions](#actions)
    - [Parameters](#parameters)
-6. [GPU Acceleration](#gpu-acceleration)
+5. [GPU Acceleration](#gpu-acceleration)
    - [CUDA Kernels](#cuda-kernels)
    - [Thrust Integration](#thrust-integration)
-7. [Build Configuration](#build-configuration)
-8. [Standard Library](#standard-library)
-9. [Best Practices](#best-practices)
-10. [Examples](#examples)
+6. [Build Configuration](#build-configuration)
+7. [Standard Library](#standard-library)
+8. [Best Practices](#best-practices)
+9. [Examples](#examples)
+10. [Troubleshooting](#troubleshooting)
 
-## Introduction
+## Design Goals
 
-RoboDSL is a domain-specific language designed for defining ROS2 nodes with CUDA acceleration. This document provides a complete specification of the RoboDSL syntax and semantics.
-
-### Version
-This specification applies to RoboDSL version 0.1.0 and later.
-
-### Design Goals
 - Provide a clean, declarative syntax for defining ROS2 nodes
 - Simplify integration of CUDA-accelerated computations
 - Enable code reuse through modular components
+- Ensure type safety and compile-time validation
+- Support cross-platform development
 - Support both simple and complex robotics applications
 - Maintain compatibility with ROS2 ecosystem
 
@@ -148,18 +147,27 @@ Lifecycle nodes implement the ROS2 managed node pattern, providing a state machi
 
 Lifecycle nodes in RoboDSL provide a structured way to manage the state and resources of your ROS2 nodes. They follow the ROS2 managed node pattern, allowing for controlled state transitions and better system management.
 
-### Basic Lifecycle Node Definition
+### Lifecycle States
+
+Lifecycle nodes transition through the following states:
+
+1. **Unconfigured**: Initial state, node is inactive
+2. **Inactive**: Node is configured but not active
+3. **Active**: Node is fully operational
+4. **Finalized**: Node is shutting down
+
+### Basic Definition
 
 ```python
 lifecycle_node my_lifecycle_node {
     # Node identification
     namespace = "robot1"
     
-    # Enable automatic parameter declaration and handling
+    # Automatic parameter handling
     automatically_declare_parameters_from_overrides = true
     allow_undeclared_parameters = false
     
-    # Remap topics/services
+    # Topic/service remapping
     remap = {
         "cmd_vel": "cmd_vel_nav",
         "/camera/image_raw": "/sensors/camera/front/image_raw"
@@ -175,7 +183,7 @@ lifecycle_node my_lifecycle_node {
         depth = 10
     }
     
-    # Parameters
+    # Node parameters
     parameters = [
         {
             name = "max_speed"
@@ -192,7 +200,7 @@ lifecycle_node my_lifecycle_node {
         }
     ]
     
-    # Lifecycle callbacks (all optional)
+    # Lifecycle callbacks
     on_configure = "on_configure_callback"
     on_activate = "on_activate_callback"
     on_deactivate = "on_deactivate_callback"
@@ -353,93 +361,60 @@ component_node camera_node {
 
 ### Quality of Service (QoS)
 
-RoboDSL provides fine-grained control over Quality of Service (QoS) settings for all ROS2 communication channels. QoS policies determine how messages are handled in terms of reliability, durability, and resource usage, allowing you to optimize communication for different types of data and network conditions.
+RoboDSL provides fine-grained control over Quality of Service (QoS) settings for ROS2 communication channels, allowing optimization for different data types and network conditions.
 
-#### QoS Policies
+#### Configuration Levels
 
-QoS policies can be configured at different levels:
+QoS settings can be configured at multiple levels:
 
-1. **Global Defaults**: Set in the node configuration
-2. **Per Communication Channel**: Override for specific publishers/subscribers/services
-3. **Runtime Overrides**: Modify QoS settings dynamically
+1. **Global Defaults**: Set in node configuration
+2. **Per Channel**: Override for specific publishers/subscribers/services
+3. **Runtime**: Modify settings dynamically during execution
 
-#### Policy Types
+#### Policy Types and Recommendations
 
-1. **Reliability**:
-   - `reliable`: Ensures message delivery with retries (TCP-like)
-     - Use for: Commands, critical control messages
-     - Impact: Higher latency, guaranteed delivery
-   - `best_effort`: No delivery guarantees (UDP-like)
-     - Use for: High-frequency sensor data where occasional loss is acceptable
-     - Impact: Lower latency, potential message loss
-   - **Default**: `reliable`
+| Policy | Options | Default | Recommended Use |
+|--------|---------|---------|----------------|
+| **Reliability** | `reliable`, `best_effort` | `reliable` | Commands: `reliable`<br>Sensor data: `best_effort` |
+| **Durability** | `volatile`, `transient_local` | `volatile` | Parameters: `transient_local`<br>Sensor data: `volatile` |
+| **History** | `keep_last(N)`, `keep_all` | `keep_last(10)` | Most cases: `keep_last`<br>Critical data: `keep_all` |
+| **Deadline** | Duration (e.g., "100ms") | Infinite | Real-time systems |
+| **Liveliness** | `automatic`, `manual_by_topic`, `manual_by_node` | `automatic` | Failure detection |
+| **Lease Duration** | Duration | System default | Must be > signal period |
 
-2. **Durability**:
-   - `volatile`: Messages not persisted for late-joining subscribers
-     - Use for: Real-time data where only the latest message matters
-   - `transient_local`: Last message stored for late-joining subscribers
-     - Use for: Parameter servers, configuration data
-   - **Default**: `volatile`
+#### Predefined Profiles
 
-3. **History**:
-   - `keep_last`: Store last N messages
-     - `depth`: Number of messages to keep in the queue
-     - Use for: Most use cases where only recent data is relevant
-   - `keep_all`: Store all messages (use with caution)
-     - Use for: Critical data where no loss is acceptable
-   - **Default**: `keep_last` with depth 10
-
-4. **Deadline**:
-   - Expected maximum time between messages
-   - Format: Duration string (e.g., "100ms", "1s")
-   - Use for: Real-time systems with strict timing requirements
-
-5. **Lifespan**:
-   - Maximum time a message is considered valid
-   - Format: Duration string
-   - Use for: Stale data detection and cleanup
-
-6. **Liveliness**:
-   - `automatic`: Node is alive if process is running
-   - `manual_by_topic`: Node must signal liveliness per topic
-   - `manual_by_node`: Node must signal liveliness for all topics
-   - **Default**: `automatic`
-   - Use for: Failure detection and system monitoring
-
-7. **Liveliness Lease Duration**:
-   - Time after which a node is considered not alive if no liveliness signal is received
-   - Format: Duration string
-   - Must be greater than the expected liveliness signal period
-
-#### Predefined QoS Profiles
-
-RoboDSL provides several predefined QoS profiles for common use cases:
+Common QoS configurations are available as predefined profiles:
 
 ```python
-# Sensor Data (best effort, small queue)
+# Sensor Data - Optimized for high-frequency data
 sensor_data_qos = {
     reliability = "best_effort"
     durability = "volatile"
     history = { kind: "keep_last", depth: 5 }
-    deadline = "100ms"
 }
 
-# Commands (reliable, transient local for late joiners)
+# Commands - Reliable delivery for control messages
 command_qos = {
     reliability = "reliable"
     durability = "transient_local"
     history = { kind: "keep_last", depth: 10 }
-    deadline = "1s"
 }
 
-# Parameters (reliable, persistent)
+# Parameters - Persistent configuration data
 parameter_qos = {
     reliability = "reliable"
     durability = "transient_local"
     history = { kind: "keep_all" }
-    deadline = "10s"
 }
+```
 
+#### Best Practices
+
+1. **Default Settings**: Start with defaults and adjust based on requirements
+2. **Matching Pairs**: Ensure publishers and subscribers use compatible QoS settings
+3. **Resource Usage**: Be mindful of memory usage with large queues or `keep_all` history
+4. **Performance**: Use `best_effort` for high-frequency data where occasional loss is acceptable
 # Services (reliable, volatile)
 service_qos = {
     reliability = "reliable"
@@ -694,77 +669,30 @@ action_servers = [
 ]
 ```
 
-#### CUDA-Accelerated Actions
+## GPU Acceleration
 
-For compute-intensive actions, you can leverage CUDA acceleration:
+RoboDSL provides first-class support for CUDA-accelerated computations, allowing you to offload compute-intensive operations to NVIDIA GPUs.
 
-```python
-action_servers = [
-    {
-        name = "process_pointcloud"
-        type = "sensor_msgs/action/ProcessPointCloud"
-        execute_callback = "process_pointcloud_callback"
-        
-        # Enable and configure CUDA acceleration
-        cuda = {
-            enabled = true
-            # Reference to a defined cuda_kernel
-            kernel = "process_pointcloud_kernel"
-            
-            # Memory requirements (optional)
-            device_memory = 2048  # MB required on GPU
-            
-            # Input/output mapping between action fields and kernel parameters
-            input_mapping = [
-                { action_field: "goal.point_cloud", kernel_param: "input_points" },
-                { action_field: "goal.params", kernel_param: "params" }
-            ],
-            output_mapping = [
-                { kernel_param: "output_points", action_field: "result.processed_cloud" },
-                { kernel_param: "num_processed", action_field: "result.num_processed" }
-            ],
-            
-            # Kernel launch configuration (optional)
-            launch_config = {
-                block_size = 256
-                grid_size = "auto"  # Will be calculated based on input size
-                shared_mem = 0       # Bytes of shared memory per block
-                stream = 0           # CUDA stream (0 = default stream)
-            }
-        },
-        
-        # QoS configuration for action server
-        qos = {
-            goal_service = "services"
-            result_service = "services"
-            cancel_service = "services"
-            feedback_topic = "sensor_data"
-            status_topic = "default"
-        }
-    }
-]
-```
+### CUDA Kernel Definition
 
-#### CUDA Kernel Definition
-
-Define CUDA kernels that can be used with actions:
+Define CUDA kernels that can be used throughout your application:
 
 ```python
 cuda_kernel process_pointcloud_kernel {
-    # Input parameters
+    # Input parameters (device pointers)
     inputs = [
         { name: "input_points", type: "const float4*" },
         { name: "params", type: "const ProcessingParams*" },
         { name: "num_points", type: "size_t" }
     ]
     
-    # Output parameters (will be written by the kernel)
+    # Output parameters
     outputs = [
         { name: "output_points", type: "float4*" },
         { name: "num_processed", type: "size_t*" }
     ]
     
-    # CUDA code (will be compiled at build time)
+    # CUDA code (compiled at build time)
     code = """
     __global__ void process_pointcloud_kernel(
         const float4* input_points,
@@ -790,39 +718,61 @@ cuda_kernel process_pointcloud_kernel {
 }
 ```
 
-#### Action Handler with CUDA Offloading
+### CUDA-Accelerated Actions
 
-Example of an action handler that uses CUDA acceleration:
+Easily integrate CUDA kernels with ROS2 actions:
 
 ```python
-def process_pointcloud_callback(goal_handle):
-    # Get goal data
-    goal = goal_handle.request
-    
-    try:
-        # Allocate device memory
-        num_points = len(goal.point_cloud.data)
-        d_points = cuda.mem_alloc(num_points * 16)  # float4 is 16 bytes
-        d_processed = cuda.mem_alloc(num_points * 16)
-        d_num_processed = cuda.mem_alloc(8)  # size_t
+action_servers = [
+    {
+        name = "process_pointcloud"
+        type = "sensor_msgs/action/ProcessPointCloud"
+        execute_callback = "process_pointcloud_callback"
         
-        # Copy input data to device
-        cuda.memcpy_htod(d_points, goal.point_cloud.data)
-        
-        # Prepare CUDA kernel launch
-        block_size = 256
-        grid_size = (num_points + block_size - 1) // block_size
-        
-        # Get the kernel function
-        kernel = get_cuda_kernel("process_pointcloud_kernel")
-        
-        # Launch kernel
-        kernel(
-            d_points,               # input_points
-            d_params,              # params
-            np.uint64(num_points),  # num_points
-            d_processed,           # output_points
-            d_num_processed,       # num_processed
+        # CUDA acceleration configuration
+        cuda = {
+            enabled = true
+            kernel = "process_pointcloud_kernel"  # Reference to kernel definition
+            device_memory = 2048                  # MB required on GPU
+            
+            # Map action fields to kernel parameters
+            input_mapping = [
+                { action_field: "goal.point_cloud", kernel_param: "input_points" },
+                { action_field: "goal.params", kernel_param: "params" }
+            ]
+            output_mapping = [
+                { kernel_param: "output_points", action_field: "result.processed_cloud" },
+                { kernel_param: "num_processed", action_field: "result.num_processed" }
+            ]
+            
+            # Kernel launch configuration
+            launch_config = {
+                block_size = 256
+                grid_size = "auto"  # Auto-calculated
+                shared_mem = 0      # Bytes per block
+                stream = 0          # Default stream
+            }
+        }
+    }
+]
+```
+
+### Best Practices
+
+1. **Memory Management**:
+   - Use `cuda.mem_alloc()` for device memory
+   - Always free memory with `cuda.mem_free()`
+   - Use `cuda.memcpy_htod()` and `cuda.memcpy_dtoh()` for host-device transfers
+
+2. **Kernel Launch**:
+   - Start with `block_size = 256` as a baseline
+   - Use `grid_size = (num_elements + block_size - 1) // block_size`
+   - Profile with different block sizes for optimal performance
+
+3. **Error Handling**:
+   - Check CUDA API return values
+   - Use `cuda.get_last_error()` after kernel launches
+   - Implement proper cleanup in error cases
             block=(block_size, 1, 1),
             grid=(grid_size, 1)
         )

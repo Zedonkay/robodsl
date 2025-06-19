@@ -1,4 +1,4 @@
-# RoboDSL
+# RoboDSL - WIP
 
 A domain-specific language and compiler for building high-performance, GPU-accelerated robotics applications with ROS2 and CUDA integration. RoboDSL simplifies the development of complex robotics systems by providing a clean, declarative syntax for defining ROS2 nodes, services, and CUDA-accelerated computations.
 
@@ -161,7 +161,7 @@ RoboDSL is a powerful framework that simplifies the development of GPU-accelerat
   - Plotting utilities
   - Custom visualization plugins
 
-### 🎯 Advanced Features
+### Advanced Features
 
 #### CUDA Integration
 - **Kernel Definition**: Define CUDA kernels directly in DSL
@@ -652,7 +652,7 @@ RoboDSL builds upon these amazing open source projects:
 - [Click](https://click.palletsprojects.com/) - Command line interface creation
 
 Special thanks to all our contributors and the open source community for their support and feedback.
-
+<!-- 
 ## Examples
 
 Explore our collection of examples to see RoboDSL in action:
@@ -739,4 +739,4 @@ robodsl build
 
 ## License
 
-MIT
+MIT -->

@@ -93,60 +93,86 @@ robodsl/
 └── docs/                   # Documentation
 ```
 
-## Architecture
+## Implementation Architecture
 
-RoboDSL follows a modular architecture designed for extensibility and maintainability. The system is composed of several core components that work together to provide a seamless development experience for GPU-accelerated robotics applications.
+This section provides an overview of RoboDSL's implementation architecture, focusing on key design patterns and extension points. For the complete system architecture, see the [DSL Specification](./dsl_specification.md#architecture).
 
-### Core Components
+### Core Design Patterns
 
-1. **CLI Interface** (`src/robodsl/cli.py`)
-   - Built on top of Python's Click library
-   - Provides a user-friendly command-line interface
-   - Handles command parsing and validation
-   - Manages the execution flow of code generation
-   - Implements command grouping for better organization
-   - Supports both interactive and non-interactive modes
-   - Provides helpful error messages and usage instructions
+1. **Command Pattern (CLI Interface)**
+   ```python
+   @click.group()
+   def cli():
+       """RoboDSL command-line interface."""
+       pass
+   
+   @cli.command()
+   @click.argument('project_name')
+   def init(project_name):
+       """Initialize a new RoboDSL project."""
+       # Implementation...
+   ```
 
-2. **Parser Module** (`src/robodsl/parser.py`)
-   - Implements the RoboDSL language parser
-   - Uses a lexer/parser architecture to process input files
-   - Validates syntax and semantic rules
-   - Generates an Abstract Syntax Tree (AST)
-   - Provides detailed error reporting with line numbers
-   - Supports custom syntax extensions
+2. **Interpreter Pattern (DSL Parser)**
+   - Lexical analysis with PLY (Python Lex-Yacc)
+   - Context-free grammar for syntax validation
+   - Abstract Syntax Tree (AST) generation
+   - Semantic analysis and type checking
 
-3. **Generator Module** (`src/robodsl/generator.py`)
-   - Converts AST into executable code
-   - Manages template rendering with Jinja2
-   - Handles file system operations
-   - Ensures consistent code style and formatting
-   - Supports multiple output formats (C++, CUDA, CMake, etc.)
-   - Implements code optimization passes
+3. **Template Method (Code Generation)**
+   - Base generator class with common functionality
+   - Specialized generators for different node types
+   - Template rendering with Jinja2
+   - Post-processing for code formatting
 
-4. **Template System** (`src/robodsl/templates/`)
-   - Jinja2-based template engine
-   - Template inheritance and composition
-   - Custom filters and extensions
-   - Support for multiple template directories
-   - Conditional template rendering based on features
-   - Automatic template discovery and loading
+### Extension Points
 
-5. **ROS2 Integration Layer** 
-   - Lifecycle node management
-   - QoS profile configuration
-   - Namespace and remapping support
-   - Parameter handling with runtime updates
-   - Component lifecycle management
-   - Service and action server/client generation
+1. **Custom Node Types**
+   ```python
+   class CustomNodeGenerator(NodeGenerator):
+       def __init__(self, node_config):
+           super().__init__(node_config)
+           self.template_name = 'custom_node.cpp.jinja2'
+   
+       def validate(self):
+           # Custom validation logic
+           pass
+   ```
 
-6. **CUDA Acceleration**
-   - Kernel template generation
-   - Memory management utilities
-   - CPU-GPU data transfer optimization
-   - Thrust algorithm integration
-   - Multi-GPU support
-   - Fallback CPU implementations
+2. **Template Customization**
+   - Override default templates in `~/.robodsl/templates/`
+   - Use template inheritance for customizations
+   - Add custom Jinja2 filters and extensions
+
+3. **Build System Integration**
+   - Custom CMake modules
+   - Platform-specific build configurations
+   - Dependency management
+   - Cross-compilation support
+
+### Threading and Concurrency
+
+1. **Thread Safety**
+   - Immutable configuration objects
+   - Thread-local storage for parser state
+   - Lock-free data structures where possible
+
+2. **Parallel Code Generation**
+   - Concurrent template rendering
+   - Parallel file I/O operations
+   - Caching of intermediate results
+
+### Error Handling
+
+1. **Validation Framework**
+   - Schema validation with JSON Schema
+   - Custom validation rules
+   - Detailed error messages with context
+
+2. **Recovery Strategies**
+   - Partial parsing and error recovery
+   - Auto-correction of common mistakes
+   - Fallback mechanisms for optional features
 
 ### Data Flow
 
@@ -164,40 +190,68 @@ flowchart LR
     style F fill:#9f9,stroke:#333
 ```
 
-## ROS2 Lifecycle Nodes
+## Implementing ROS2 Lifecycle Nodes
 
-RoboDSL provides first-class support for ROS2 Lifecycle nodes, enabling better state management and system reliability. Lifecycle nodes follow a well-defined state machine with the following states:
+For detailed specifications about Lifecycle Nodes, see the [DSL Specification](./dsl_specification.md#lifecycle-nodes). This section focuses on implementation patterns and best practices.
 
-```mermaid
-stateDiagram-v2
-    [*] --> Unconfigured
-    Unconfigured --> Inactive: configure()
-    Inactive --> Active: activate()
-    Active --> Inactive: deactivate()
-    Inactive --> Unconfigured: cleanup()
-    Unconfigured --> Finalized: shutdown()
-    Inactive --> Finalized: shutdown()
-    Active --> Finalized: shutdown()
-    Finalized --> [*]
+### Implementation Patterns
+
+1. **State Transition Handlers**
+   - Implement clean separation between state transition logic
+   - Use guard clauses for early returns in error cases
+   - Log state transitions for debugging
+
+```python
+def on_configure_callback() -> CallbackReturn:
+    """Handle configure transition."""
+    try:
+        if not initialize_resources():
+            get_logger().error("Failed to initialize resources")
+            return CallbackReturn.ERROR
+        return CallbackReturn.SUCCESS
+    except Exception as e:
+        get_logger().error(f"Configuration failed: {str(e)}")
+        return CallbackReturn.FAILURE
 ```
 
-### Key Features
-
-1. **State Management**
-   - Automatic state transition handling
-   - State change callbacks
-   - Error handling and recovery
-   - State transition timeouts
-
 2. **Resource Management**
-   - Lazy initialization of resources
-   - Clean resource cleanup on shutdown
-   - State-specific resource allocation
+   - Use RAII for resource management
+   - Implement proper cleanup in error cases
+   - Consider using smart pointers for dynamic resources
 
-3. **Error Handling**
-   - State transition error reporting
-   - Automatic deactivation on errors
-   - Recovery procedures
+```cpp
+class ResourceManager {
+public:
+    ResourceManager() {
+        // Initialize resources
+    }
+    
+    ~ResourceManager() {
+        // Cleanup resources
+    }
+    
+    // Delete copy/move to prevent accidental copies
+    ResourceManager(const ResourceManager&) = delete;
+    ResourceManager& operator=(const ResourceManager&) = delete;
+};
+```
+
+### Best Practices
+
+1. **Error Handling**
+   - Log detailed error messages
+   - Implement recovery strategies
+   - Use error codes for programmatic error handling
+
+2. **State Validation**
+   - Validate state preconditions before transitions
+   - Implement state guards for thread safety
+   - Use state patterns for complex state machines
+
+3. **Testing**
+   - Test all state transitions
+   - Simulate error conditions
+   - Verify resource cleanup
 
 Example lifecycle node definition:
 
@@ -235,51 +289,47 @@ qos_profile "sensor_data" {
     depth = 10
     deadline = "100ms"
     lifespan = "1s"
-    liveliness = "automatic"
-    liveliness_lease_duration = "1s"
-}
 
-qos_profile "command" {
-    reliability = "reliable"
-    durability = "transient_local"
-    history = "keep_all"
-}
-```
+2. **Command and Control**
+   - Use `reliable` for critical commands
+   - Consider `transient_local` for important state updates
+   - Example:
+     ```python
+     command_qos = {
+         reliability = "reliable"
+         durability = "transient_local"
+         history = { kind: "keep_last", depth: 1 }
+     }
+     ```
 
-### QoS Policies
+3. **Parameters**
+   - Always use `reliable` and `transient_local`
+   - Use `keep_all` history for parameters
+   - Example:
+     ```python
+     param_qos = {
+         reliability = "reliable"
+         durability = "transient_local"
+         history = { kind: "keep_all" }
+     }
+     ```
 
-1. **Reliability**
-   - `reliable`: Ensures message delivery with retries (TCP-like)
-   - `best_effort`: No delivery guarantees (UDP-like)
-   - **Default**: `reliable`
-   - **Use Case**: Use `reliable` for commands, `best_effort` for high-frequency sensor data
+### Best Practices
 
-2. **Durability**
-   - `volatile`: Messages not stored for late-joining subscribers
-   - `transient_local`: Last message stored for late-joining subscribers
-   - **Default**: `volatile`
-   - **Use Case**: Use `transient_local` for parameters, `volatile` for real-time data
+1. **Matching QoS Policies**
+   - Ensure publishers and subscribers have compatible QoS settings
+   - Use `rqt` or `ros2 topic info --verbose` to verify QoS compatibility
+   - Test with different QoS settings to find the optimal configuration
 
-3. **History**
-   - `keep_last`: Store last N messages (specified by depth)
-   - `keep_all`: Store all messages (be careful with memory)
-   - **Default**: `keep_last` with depth=10
-   - **Use Case**: Use `keep_all` for critical data, `keep_last` for high-frequency topics
+2. **Performance Considerations**
+   - Higher reliability and durability settings increase resource usage
+   - Larger queue depths consume more memory
+   - Consider using `best_effort` for non-critical, high-frequency data
 
-4. **Deadline**
-   - Expected maximum time between messages
-   - Format: `"<number>ms"` or `"<number>s"`
-   - **Use Case**: Detect missing sensor updates
-
-5. **Lifespan**
-   - Maximum time a message is considered valid
-   - Format: `"<number>ms"` or `"<number>s"`
-   - **Use Case**: Stale data detection
-
-6. **Liveliness**
-   - `automatic`: Node is alive if connected
-   - `manual_by_topic`: Node must assert liveliness
-   - **Use Case**: Detect node failures
+3. **Debugging**
+   - Enable ROS2 logging for QoS compatibility warnings
+   - Monitor system resources when changing QoS settings
+   - Use `ros2 topic hz` to verify message rates
 
 ### Applying QoS Profiles
 
@@ -351,53 +401,86 @@ node my_node {
             to = "/sensors/camera/front/image_raw"
             qos_override = "sensor_data"
         },
-        # More remappings...
-    ]
-}
-```
 
 ## CUDA Offloading
 
-RoboDSL simplifies GPU acceleration by providing built-in support for CUDA kernel definition and execution.
+For detailed specifications about CUDA integration, see the [DSL Specification](./dsl_specification.md#gpu-acceleration). This section covers practical implementation patterns and performance considerations.
 
-### Defining CUDA Kernels
+### Kernel Implementation Patterns
 
-```python
-cuda_kernel process_image {
-    inputs = [
-        { name: "input", type: "const cv::cuda::GpuMat&" },
-        { name: "params", type: "const ImageParams&" }
-    ]
-    outputs = [
-        { name: "output", type: "cv::cuda::GpuMat&" }
-    ]
+1. **Memory Management**
+   - Use RAII wrappers for CUDA memory
+   - Implement proper error checking
+   - Consider using memory pools for frequent allocations
+
+```cpp
+class CudaBuffer {
+    float* d_data;
+    size_t size;
     
-    includes = [
-        "opencv2/core/cuda.hpp",
-        "opencv2/cudaimgproc.hpp"
-    ]
-    
-    block_size = [32, 32, 1]
-    
-    code = """
-    __global__ void process_image_kernel(
-        const cv::cuda::PtrStepSz<uchar3> src,
-        cv::cuda::PtrStepSz<uchar3> dst,
-        const ImageParams* params) {
-        
-        int x = blockIdx.x * blockDim.x + threadIdx.x;
-        int y = blockIdx.y * blockDim.y + threadIdx.y;
-        
-        if (x >= src.cols || y >= src.rows) return;
-        
-        // Process pixel at (x,y)
-        uchar3 pixel = src(y, x);
-        // ... processing ...
-        dst(y, x) = pixel;
+public:
+    CudaBuffer(size_t n) : size(n) {
+        cudaMalloc(&d_data, n * sizeof(float));
     }
-    """
-}
-```
+    
+    ~CudaBuffer() {
+        if (d_data) cudaFree(d_data);
+    }
+    
+    // Delete copy constructor/assignment
+    CudaBuffer(const CudaBuffer&) = delete;
+    CudaBuffer& operator=(const CudaBuffer&) = delete;
+    
+    // Move semantics
+    CudaBuffer(CudaBuffer&& other) noexcept : d_data(other.d_data), size(other.size) {
+        other.d_data = nullptr;
+    }
+    
+    float* data() const { return d_data; }
+};
+
+### Performance Optimization
+
+1. **Asynchronous Operations**
+   - Overlap computation and data transfer
+   - Use CUDA streams for concurrency
+   - Example:
+     ```cpp
+     cudaStream_t stream;
+     cudaStreamCreate(&stream);
+     
+     // Asynchronous memory copy
+     cudaMemcpyAsync(d_a, h_a, size, cudaMemcpyHostToDevice, stream);
+     
+     // Launch kernel
+     vector_add_kernel<<<blocks, threads, 0, stream>>>(d_a, d_b, d_c, n);
+     
+     // Asynchronous copy back
+     cudaMemcpyAsync(h_c, d_c, size, cudaMemcpyDeviceToHost, stream);
+     
+     // Synchronize when needed
+     cudaStreamSynchronize(stream);
+     cudaStreamDestroy(stream);
+     ```
+
+2. **Optimization Techniques**
+   - Use shared memory for data reuse
+   - Optimize memory access patterns
+   - Consider using CUDA libraries (cuBLAS, cuFFT, etc.)
+   - Profile with Nsight Systems/Compute
+
+### Debugging CUDA Code
+
+1. **Error Checking**
+   - Always check CUDA API return values
+   - Use `cudaGetLastError()` after kernel launches
+   - Implement proper error reporting
+
+2. **Tools**
+   - `cuda-memcheck` for memory errors
+   - `nvprof` for performance profiling
+   - Nsight tools for detailed analysis
+   - CUDA-GDB for debugging
 
 ### Using CUDA Kernels in Nodes
 
@@ -1361,30 +1444,181 @@ Parses `.robodsl` files and validates the syntax.
 - Validates message types and parameter values
 - Generates an abstract syntax tree (AST)
 
-#### Example DSL
-```rubynode my_node {
-    publisher /output std_msgs/msg/String "Hello"
-    subscriber /input std_msgs/msg/String
-    parameter rate 10
+#### Practical Examples
+
+This section provides practical examples of RoboDSL usage patterns and best practices. For complete syntax reference, see the [DSL Specification](./dsl_specification.md).
+
+### 1. Basic Node with Lifecycle Support
+
+```python
+# my_robot.robodsl
+
+# Define a lifecycle node
+node my_robot_node {
+    # Configure node as a lifecycle node
+    lifecycle = true
+    
+    # Add parameters
+    parameters = [
+        { name: "max_speed", type: "double", default: 1.0 },
+        { name: "sensor_timeout", type: "double", default: 1.0 }
+    ]
+    
+    # Define publishers and subscribers with QoS profiles
+    publishers = [
+        {
+            topic: "/robot/status",
+            type: "std_msgs/msg/String",
+            qos: "sensor_data"  # Reference to a QoS profile
+        }
+    ]
+    
+    subscribers = [
+        {
+            topic: "/robot/command",
+            type: "std_msgs/msg/String",
+            callback: "command_callback",
+            qos: "command"
+        }
+    ]
+    
+    # Define lifecycle callbacks
+    callbacks = [
+        { name: "on_configure", impl: "on_configure_callback" },
+        { name: "on_activate", impl: "on_activate_callback" },
+        { name: "on_deactivate", impl: "on_deactivate_callback" },
+        { name: "on_cleanup", impl: "on_cleanup_callback" },
+        { name: "on_shutdown", impl: "on_shutdown_callback" }
+    ]
+}
+
+# Define custom QoS profiles
+qos_profile "sensor_data" {
+    reliability = "best_effort"
+    history = { kind: "keep_last", depth: 10 }
+    deadline = "100ms"
+}
+
+qos_profile "command" {
+    reliability = "reliable"
+    durability = "transient_local"
+    history = { kind: "keep_last", depth: 1 }
 }
 ```
 
-### 3. Code Generation
+### 2. CUDA-Accelerated Image Processing
 
-#### C++ Generation
-- Creates `.hpp` and `.cpp` files
-- Handles class definitions and implementations
-- Manages include guards and namespaces
+```python
+# image_processor.robodsl
 
-#### Python Generation
-- Generates executable Python nodes
-- Handles imports and class definitions
-- Sets up ROS2 node lifecycle
+# Enable CUDA support
+cuda = {
+    enabled = true
+    compute_capability = "7.5"
+}
 
-### 4. Build System
-- Generates `CMakeLists.txt`
-- Handles dependencies
-- Configures CUDA compilation (coming soon)
+# Define a CUDA kernel
+cuda_kernel image_processor {
+    inputs = [
+        { name: "input", type: "const cv::cuda::GpuMat&" },
+        { name: "params", type: "const ImageParams&" }
+    ]
+    outputs = [
+        { name: "output", type: "cv::cuda::GpuMat&" }
+    ]
+    
+    includes = [
+        "opencv2/core/cuda.hpp",
+        "opencv2/cudaimgproc.hpp"
+    ]
+    
+    block_size = [32, 32, 1]
+    
+    code = """
+    __global__ void process_image_kernel(
+        const cv::cuda::PtrStepSz<uchar3> src,
+        cv::cuda::PtrStepSz<uchar3> dst,
+        const ImageParams* params) {
+        
+        int x = blockIdx.x * blockDim.x + threadIdx.x;
+        int y = blockIdx.y * blockDim.y + threadIdx.y;
+        
+        if (x >= src.cols || y >= src.rows) return;
+        
+        // Process pixel at (x,y)
+        uchar3 pixel = src(y, x);
+        // ... processing ...
+        dst(y, x) = pixel;
+    }
+    """
+}
+
+# Define the node that uses the CUDA kernel
+node image_processor_node {
+    # Enable CUDA support
+    cuda_kernels = ["image_processor"]
+    
+    # Add necessary dependencies
+    dependencies = ["OpenCV"]
+    
+    # Define parameters
+    parameters = [
+        { name: "threshold", type: "double", default: 0.5 },
+        { name: "blur_size", type: "int", default: 5 }
+    ]
+    
+    # Define publishers and subscribers
+    publishers = [
+        {
+            topic: "/processed_image",
+            type: "sensor_msgs/msg/Image",
+            qos: "sensor_data"
+        }
+    ]
+    
+    subscribers = [
+        {
+            topic: "/camera/image_raw",
+            type: "sensor_msgs/msg/Image",
+            callback: "image_callback"
+        }
+    ]
+}
+```
+
+### 3. Building and Running
+
+```bash
+# Build the project
+robodsl build
+
+# Source the setup files
+source install/setup.bash
+
+# Run a node
+ros2 run my_package my_robot_node
+
+# Or use the launch file
+ros2 launch my_package my_robot.launch.py
+```
+
+### 4. Debugging and Monitoring
+
+```bash
+# View node graph
+rqt_graph
+
+# Monitor topics
+ros2 topic list
+ros2 topic echo /robot/status
+
+# View parameters
+ros2 param list
+ros2 param get /my_robot_node max_speed
+
+# Profile performance
+ros2 run --prefix 'perf record -g' my_package my_robot_node
+```
 
 ## Development Workflow
 

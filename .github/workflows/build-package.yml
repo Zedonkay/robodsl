@@ -1,0 +1,83 @@
+name: Build and Publish Debian Package
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags (e.g., v1.0.0)
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+        # No pip cache since we don't have requirements.txt
+    
+    - name: Install build dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          build-essential \
+          debhelper \
+          dh-python \
+          python3-all \
+          python3-setuptools \
+          python3-sphinx \
+          python3-sphinx-rtd-theme \
+          python3-sphinxcontrib.apidoc
+    
+    - name: Build Debian package
+      run: |
+        chmod +x build-deb-direct.sh
+        ./build-deb-direct.sh
+    
+    - name: Upload package artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: debian-package
+        path: |
+          robodsl_*.deb
+          robodsl_*.changes
+          robodsl_*.buildinfo
+        retention-days: 5
+        if-no-files-found: error
+    
+    - name: Publish to GitHub Packages
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: actions/upload-artifact@v4
+      with:
+        name: github-packages
+        path: robodsl_*.deb
+        retention-days: 5
+        if-no-files-found: error
+
+    - name: Set up GitHub Pages
+      if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+      uses: actions/configure-pages@v4
+      
+    - name: Set up APT repository
+      if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+      run: |
+        mkdir -p apt-repo
+        cp robodsl_*.deb apt-repo/
+        cd apt-repo
+        apt-ftparchive packages . > Packages
+        gzip -k -f Packages
+        apt-ftparchive release . > Release
+        gpg --batch --yes --default-key "packages@robodsl.org" -abs -o Release.gpg Release
+        gpg --batch --yes --default-key "packages@robodsl.org" --clearsign -o InRelease Release
+    
+    - name: Upload to GitHub Pages
+      if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: apt-repo/
+        retention-days: 5
