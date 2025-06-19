@@ -42,12 +42,12 @@ RUN mkdir -p /build/debian-pkgs
 # Build the package with retry logic
 CMD ["/bin/bash", "-c", "\
     set -ex && \
-    # Ensure debian/changelog exists and is valid\n    if [ ! -f debian/changelog ]; then \
+    if [ ! -f debian/changelog ]; then \
         echo 'Creating initial changelog...' && \
         dch --create --package robodsl --newversion 0.1.0-1 'Initial release'; \
     fi && \
-    # Build the package with retries\n    for i in {1..3}; do \
-        echo "Attempt $i/3: Building package..." && \
+    for i in {1..3}; do \
+        echo \"Attempt $i/3: Building package...\" && \
         if dpkg-buildpackage -us -uc; then \
             echo 'Package built successfully!' && \
             mv ../*.deb /build/debian-pkgs/ && \
@@ -55,9 +55,7 @@ CMD ["/bin/bash", "-c", "\
             ls -la /build/debian-pkgs/*.deb && \
             exit 0; \
         else \
-            echo "Attempt $i failed, retrying in 5 seconds..." >&2; \
+            echo \"Attempt $i failed, retrying in 5 seconds...\" >&2; \
             sleep 5; \
         fi; \
-    done && \
-    echo '❌ Error: Failed to build package after 3 attempts' >&2 && \
-    exit 1"]
+    done"]
