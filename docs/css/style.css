@@ -1,26 +1,17 @@
-/* Base styles */
+/* Base styles - Dark Theme */
 :root {
-    --primary-color: #2563eb;
-    --primary-dark: #1d4ed8;
-    --secondary-color: #4b5563;
-    --background: #ffffff;
-    --sidebar-bg: #f8fafc;
-    --text: #1f2937;
-    --text-light: #6b7280;
-    --border: #e5e7eb;
-    --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --primary-color: #3b82f6;
+    --primary-dark: #2563eb;
+    --secondary-color: #9ca3af;
+    --background: #111827;
+    --sidebar-bg: #1f2937;
+    --text: #f9fafb;
+    --text-light: #9ca3af;
+    --border: #374151;
+    --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
     --transition: all 0.3s ease;
-}
-
-/* Dark mode */
-@media (prefers-color-scheme: dark) {
-    :root {
-        --background: #111827;
-        --sidebar-bg: #1f2937;
-        --text: #f9fafb;
-        --text-light: #9ca3af;
-        --border: #374151;
-    }
+    --card-bg: #1f2937;
+    --hover-bg: #374151;
 }
 
 /* Main content area */
@@ -43,7 +34,7 @@
 
 /* Cards */
 .card {
-    background: var(--background);
+    background: var(--card-bg);
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 1.5rem;
@@ -51,6 +42,11 @@
     color: var(--text);
     transition: var(--transition);
     box-shadow: var(--card-shadow);
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
 }
 
 .card h3 {
@@ -251,9 +247,22 @@ body {
 }
 
 .feature-card p {
-    color: var(--text-light);
-    margin-bottom: 1.5rem;
-    line-height: 1.6;
+    color: var(--primary-color);
+    text-decoration: none;
+    transition: var(--transition);
+}
+
+a:hover {
+    color: #93c5fd;
+    text-decoration: underline;
+}
+
+/* Active link in navigation */
+.menu a.active,
+.menu a.active:hover {
+    color: #ffffff;
+    background-color: var(--primary-dark);
+    border-radius: 4px;
 }
 
 .feature-link {
