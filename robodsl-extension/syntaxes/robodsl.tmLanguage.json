@@ -4,6 +4,9 @@
     "fileTypes": ["robodsl"],
     "patterns": [
         {
+            "include": "#includes"
+        },
+        {
             "include": "#comments"
         },
         {
@@ -26,11 +29,23 @@
         }
     ],
     "repository": {
+        "includes": {
+            "patterns": [
+                {
+                    "name": "meta.preprocessor.include.robodsl",
+                    "match": "^\\s*(#\\s*include)\\s*(<[^>]+>|\\\"[^\"]+\")",
+                    "captures": {
+                        "1": { "name": "keyword.control.import.include.robodsl" },
+                        "2": { "name": "string.quoted.other.lt-gt.include.robodsl" }
+                    }
+                }
+            ]
+        },
         "comments": {
             "patterns": [
                 {
                     "name": "comment.line.number-sign.robodsl",
-                    "match": "#.*$"
+                    "match": "#(?!include).*$"
                 },
                 {
                     "name": "comment.block.robodsl",
