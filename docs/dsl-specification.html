@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Dsl Specification | RoboDSL</title>
+<link href="css/style.css" rel="stylesheet"/>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+</head>
+<body>
+<div class="container">
+<header>
+<h1>RoboDSL</h1>
+<p>Domain-Specific Language for GPU-Accelerated Robotics</p>
+</header>
+<nav id="sidebar">
+<div class="search-box">
+<input id="search" placeholder="Search..." type="text"/>
+<button><i class="fas fa-search"></i></button>
+</div>
+<ul class="menu">
+<li><a href="#getting-started"><i class="fas fa-rocket"></i> Getting Started</a></li>
+<li><a href="#installation"><i class="fas fa-download"></i> Installation</a></li>
+<li><a href="#tutorials"><i class="fas fa-graduation-cap"></i> Tutorials</a></li>
+<li class="has-submenu">
+<a href="#features"><i class="fas fa-star"></i> Features <i class="fas fa-chevron-down"></i></a>
+<ul class="submenu">
+<li><a href="#ros2-lifecycle">ROS2 Lifecycle</a></li>
+<li><a href="#qos-configuration">QoS Configuration</a></li>
+<li><a href="#cuda-offloading">CUDA Offloading</a></li>
+</ul>
+</li>
+<li><a href="#api-reference"><i class="fas fa-book"></i> API Reference</a></li>
+<li><a href="#examples"><i class="fas fa-code"></i> Examples</a></li>
+</ul>
+</nav>
+<nav class="breadcrumb mb-6"><a href="index.html">Home</a> &gt; Dsl Specification</nav><main id="content"><div class="prose max-w-none"><h1 id="robodsl-language-specification">RoboDSL Language Specification</h1>
+<h2 id="introduction">Introduction</h2>
+<p>RoboDSL (Robot Domain-Specific Language) is a high-level language designed for building robust, performant, and maintainable robot applications. It provides a clean, declarative syntax for defining ROS2 nodes, components, and their interactions, with built-in support for advanced features like lifecycle management, QoS configuration, and GPU acceleration.</p>
+<h3 id="version">Version</h3>
+<p>This specification applies to RoboDSL version 0.1.0 and later.</p>
+<h3 id="key-features">Key Features</h3>
+<ul>
+<li><strong>ROS2 Lifecycle Node Support</strong>: Built-in support for managed nodes with configurable lifecycle states and transitions</li>
+<li><strong>Quality of Service (QoS) Configuration</strong>: Fine-grained control over communication reliability, durability, and resource usage</li>
+<li><strong>Namespace and Remapping</strong>: Flexible namespace management and topic/service remapping</li>
+<li><strong>CUDA Offloading</strong>: Seamless integration of GPU-accelerated computations</li>
+<li><strong>Conditional Compilation</strong>: Feature flags for building different configurations from the same codebase</li>
+<li><strong>Component-Based Architecture</strong>: Modular design for better code organization and reuse</li>
+<li><strong>Type Safety</strong>: Strong typing for messages, services, and parameters</li>
+<li><strong>Build System Integration</strong>: Native CMake integration with support for cross-platform development</li>
+</ul>
+<h2 id="table-of-contents">Table of Contents</h2>
+<ol>
+<li><a href="#syntax-overview">Syntax Overview</a></li>
+<li><a href="#project-definition">Project Definition</a></li>
+<li><a href="#node-definition">Node Definition</a></li>
+<li><a href="#node-types">Node Types</a></li>
+<li><a href="#lifecycle-nodes">Lifecycle Nodes</a></li>
+<li><a href="#component-nodes">Component Nodes</a></li>
+<li><a href="#communication">Communication</a></li>
+<li><a href="#publishers">Publishers</a></li>
+<li><a href="#subscribers">Subscribers</a></li>
+<li><a href="#services">Services</a></li>
+<li><a href="#actions">Actions</a></li>
+<li><a href="#parameters">Parameters</a></li>
+<li><a href="#cuda-integration">CUDA Integration</a></li>
+<li><a href="#build-system">Build System</a></li>
+<li><a href="#faq">FAQ</a></li>
+</ol>
+<h2 id="syntax-overview">Syntax Overview</h2>
+<p>RoboDSL uses a C-like syntax with a focus on readability and simplicity. The language is statically typed and supports both imperative and declarative programming styles.</p>
+<h3 id="basic-structure">Basic Structure</h3>
+<pre class="bg-gray-100 p-4 rounded overflow-x-auto my-4"><code class="language-robodsl">// Single-line comment
+/* Multi-line
+   comment */
+
+// Import other RoboDSL files
+import "common.robodsl"
+
+// Project definition
+project "my_robot" {
+    version = "0.1.0"
+    description = "My Robot Application"
+}
+
+// Node definition
+node my_node {
+    // Node configuration
+    namespace = "robot1"
+    enable_lifecycle = true
+
+    // Publishers
+    publishers = [
+        {
+            name = "odom"
+            type = "nav_msgs/msg/Odometry"
+            qos = {
+                reliability = "reliable"
+                durability = "transient_local"
+                depth = 10
+            }
+        }
+    ]
+
+    // Subscribers
+    subscribers = [
+        {
+            name = "cmd_vel"
+            type = "geometry_msgs/msg/Twist"
+            callback = "on_cmd_vel"
+        }
+    ]
+
+    // CUDA kernels
+    cuda_kernels = ["process_image"]
+}
+</code></pre>
+<h2 id="project-definition">Project Definition</h2>
+<p>Every RoboDSL file must begin with a project definition that specifies the project name and version.</p>
+<pre class="bg-gray-100 p-4 rounded overflow-x-auto my-4"><code class="language-robodsl">project "my_robot" {
+    version = "0.1.0"
+    description = "My Robot Application"
+    license = "Apache-2.0"
+    authors = ["Your Name &lt;your.email@example.com&gt;"]
+}
+</code></pre>
+<h2 id="node-definition">Node Definition</h2>
+<p>Nodes are the fundamental building blocks of a RoboDSL application. They represent individual components that can communicate with each other through topics, services, and actions.</p>
+<h3 id="basic-node">Basic Node</h3>
+<pre class="bg-gray-100 p-4 rounded overflow-x-auto my-4"><code class="language-robodsl">node my_node {
+    // Node configuration
+    namespace = "robot1"
+    enable_lifecycle = true
+
+    // Publishers
+    publishers = [
+        {
+            name = "odom"
+            type = "nav_msgs/msg/Odometry"
+        }
+    ]
+}
+</code></pre>
+<h3 id="lifecycle-nodes">Lifecycle Nodes</h3>
+<p>Lifecycle nodes provide a structured way to manage the state and resources of your ROS2 nodes. They follow the ROS2 managed node pattern, allowing for controlled state transitions and better system management.</p>
+<pre class="bg-gray-100 p-4 rounded overflow-x-auto my-4"><code class="language-robodsl">node my_lifecycle_node {
+    enable_lifecycle = true
+
+    // Lifecycle callbacks
+    on_configure = "on_configure"
+    on_activate = "on_activate"
+    on_deactivate = "on_deactivate"
+    on_cleanup = "on_cleanup"
+    on_shutdown = "on_shutdown"
+
+    // Error handling
+    on_error = "on_error"
+}
+</code></pre>
+<h2 id="communication">Communication</h2>
+<h3 id="publishers">Publishers</h3>
+<p>Publishers allow nodes to send messages to specific topics.</p>
+<pre class="bg-gray-100 p-4 rounded overflow-x-auto my-4"><code class="language-robodsl">publishers = [
+    {
+        name = "odom"
+        type = "nav_msgs/msg/Odometry"
+        qos = {
+            reliability = "reliable"
+            durability = "transient_local"
+            depth = 10
+        }
+    }
+]
+</code></pre>
+<h3 id="subscribers">Subscribers</h3>
+<p>Subscribers receive messages from topics and invoke callback functions.</p>
+<pre class="bg-gray-100 p-4 rounded overflow-x-auto my-4"><code class="language-robodsl">subscribers = [
+    {
+        name = "cmd_vel"
+        type = "geometry_msgs/msg/Twist"
+        callback = "on_cmd_vel"
+        qos = {
+            reliability = "best_effort"
+            durability = "volatile"
+            depth = 1
+        }
+    }
+]
+</code></pre>
+<h2 id="cuda-integration">CUDA Integration</h2>
+<p>RoboDSL provides first-class support for CUDA acceleration. You can define CUDA kernels directly in your node definitions.</p>
+<pre class="bg-gray-100 p-4 rounded overflow-x-auto my-4"><code class="language-robodsl">node image_processor {
+    // Enable CUDA support
+    cuda_kernels = ["process_image"]
+
+    // CUDA source files
+    cuda_sources = ["src/kernels/image_processing.cu"]
+
+    // CUDA compilation flags
+    cuda_flags = ["-O3", "--ptxas-options=-v"]
+}
+</code></pre>
+<h2 id="build-system">Build System</h2>
+<p>RoboDSL generates CMake files for building your application. The build system supports:</p>
+<ul>
+<li>Cross-platform compilation</li>
+<li>Dependency management</li>
+<li>CUDA compilation</li>
+<li>Installation rules</li>
+<li>Testing</li>
+</ul>
+<h3 id="example-cmake-configuration">Example CMake Configuration</h3>
+<pre class="bg-gray-100 p-4 rounded overflow-x-auto my-4"><code class="language-cmake"># Minimum required CMake version
+cmake_minimum_required(VERSION 3.16)
+
+
+# Project name and version
+project(my_robot VERSION 0.1.0)
+
+
+# Find required packages
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(std_msgs REQUIRED)
+
+# Add your node executables
+add_executable(${PROJECT_NAME}_node
+  src/my_node.cpp
+)
+
+target_include_directories(${PROJECT_NAME}_node
+  PRIVATE
+    $&lt;BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include&gt;
+    $&lt;INSTALL_INTERFACE:include&gt;
+)
+
+target_link_libraries(${PROJECT_NAME}_node
+  rclcpp
+  std_msgs::std_msgs
+)
+
+# Install targets
+install(TARGETS
+  ${PROJECT_NAME}_node
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+# Install launch files
+install(DIRECTORY
+  launch
+  DESTINATION share/${PROJECT_NAME}/
+)
+
+# Install config files
+install(DIRECTORY
+  config
+  DESTINATION share/${PROJECT_NAME}/
+)
+
+# Install parameter files
+install(DIRECTORY
+  params
+  DESTINATION share/${PROJECT_NAME}/
+)
+
+# Export dependencies
+ament_export_dependencies(
+  rclcpp
+  std_msgs
+)
+
+# Export include directory
+ament_export_include_directories(include)
+
+# Export libraries
+ament_export_libraries(${PROJECT_NAME}_node)
+
+# Export build type
+ament_export_build_type()
+
+# Install Python modules if any
+install(PROGRAMS
+  scripts/my_script.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+# Add tests if test directory exists
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/test")
+  find_package(ament_lint_auto REQUIRED)
+  ament_lint_auto_find_test_dependencies()
+
+  find_package(ament_cmake_gtest REQUIRED)
+
+  # Add a test
+  ament_add_gtest(test_my_node
+    test/test_my_node.cpp
+  )
+
+  target_link_libraries(test_my_node
+    ${PROJECT_NAME}_node
+  )
+
+  # Add a Python test if needed
+  find_package(ament_cmake_pytest REQUIRED)
+  ament_add_pytest_test(test_my_python_node
+    test/test_my_node.py
+    PYTHON_EXECUTABLE "${PYTHON_EXECUTABLE}"
+  )
+endif()
+
+# Install the package.xml
+do_package_setup()
+</code></pre>
+<h2 id="faq">FAQ</h2>
+<h3 id="how-do-i-enable-lifecycle-management-for-a-node">How do I enable lifecycle management for a node?</h3>
+<p>Set <code>enable_lifecycle = true</code> in your node definition and implement the required callbacks.</p>
+<h3 id="what-qos-settings-should-i-use-for-my-publisherssubscribers">What QoS settings should I use for my publishers/subscribers?</h3>
+<ul>
+<li><strong>Commands</strong>: Use <code>reliable</code> reliability and <code>transient_local</code> durability</li>
+<li><strong>Sensor Data</strong>: Use <code>best_effort</code> reliability and <code>volatile</code> durability</li>
+<li><strong>Parameters</strong>: Use <code>reliable</code> reliability and <code>transient_local</code> durability</li>
+<li><strong>High-Frequency Data</strong>: Use <code>best_effort</code> reliability and <code>volatile</code> durability with small queue sizes</li>
+</ul>
+<h3 id="how-do-i-add-a-new-message-type">How do I add a new message type?</h3>
+<ol>
+<li>Define the message in a <code>.msg</code> file in the <code>msg</code> directory</li>
+<li>Add the message to <code>CMakeLists.txt</code></li>
+<li>Rebuild your package</li>
+<li>Use the new message type in your node definitions</li>
+</ol>
+<h3 id="how-do-i-debug-my-robodsl-application">How do I debug my RoboDSL application?</h3>
+<ol>
+<li>Enable debug logging in your node configuration:
+   <code>robodsl
+   node my_node {
+       log_level = "debug"
+   }</code></li>
+<li>Use ROS2's built-in logging tools:
+   <code>bash
+   ros2 run --prefix 'ros2 run --debug' my_package my_node</code></li>
+<li>Use GDB for debugging:
+   <code>bash
+   gdb --args ros2 run my_package my_node</code></li>
+</ol>
+<h3 id="how-do-i-profile-my-cuda-code">How do I profile my CUDA code?</h3>
+<ol>
+<li>Enable profiling in your CUDA configuration:
+   <code>robodsl
+   node my_node {
+       cuda_flags = ["-lineinfo", "-G", "-g"]
+   }</code></li>
+<li>Use NVIDIA Nsight Systems for profiling:
+   <code>bash
+   nsys profile -o my_profile ./my_node</code></li>
+<li>Use NVIDIA Nsight Compute for detailed kernel analysis:
+   <code>bash
+   ncu -o my_kernel_profile ./my_node</code></li>
+</ol>
+<h3 id="how-do-i-handle-different-configurations-for-simulation-vs-real-hardware">How do I handle different configurations for simulation vs. real hardware?</h3>
+<p>Use conditional compilation and parameters:</p>
+<pre class="bg-gray-100 p-4 rounded overflow-x-auto my-4"><code class="language-robodsl">node my_node {
+    // Default to simulation mode
+    param use_simulation = true
+
+    // Configure based on simulation flag
+    if (use_simulation) {
+        // Simulation-specific configuration
+        publishers = [
+            {
+                name = "sim/odom"
+                type = "nav_msgs/msg/Odometry"
+            }
+        ]
+    } else {
+        // Hardware-specific configuration
+        publishers = [
+            {
+                name = "odom"
+                type = "nav_msgs/msg/Odometry"
+            }
+        ]
+    }
+}
+</code></pre></div></main>
+<footer>
+<p>© 2025 RoboDSL Project. All rights reserved.</p>
+</footer>
+</div>
+<script src="js/main.js"></script>
+</body>
+</html>
