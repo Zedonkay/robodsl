@@ -1,51 +1,51 @@
-name: Build cuif Debian Package
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-    
-    - name: Set up Python 3.10
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
-    
-    - name: Add Python 3.10 repository
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y software-properties-common
-        sudo add-apt-repository ppa:deadsnakes/ppa -y
-        sudo apt-get update
-    
-    - name: Install build dependencies
-      run: |
-        sudo apt-get install -y \
-          devscripts \
-          debhelper \
-          dh-python \
-          build-essential \
-          cmake \
-          python3.10 \
-          python3.10-dev \
-          python3.10-venv \
-          python3-all \
-          python3-setuptools \
-          python3-sphinx \
-          python3-sphinx-rtd-theme \
-          python3-sphinxcontrib.apidoc
-    
-    - name: Build .deb package
-      run: |
-        dpkg-buildpackage -us -uc
-    
-    - name: Upload Debian package artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: cuif-deb
-        path: ../*.deb
+# name: Build cuif Debian Package
+#  on:
+#   push:
+#     branches: [ main ]
+#   pull_request:
+#     branches: [ main ]
+# jobs:
+#   build:
+#     runs-on: ubuntu-latest
+#     steps:
+#     - name: Checkout repository
+#       uses: actions/checkout@v4
+#     
+#     - name: Set up Python 3.10
+#       uses: actions/setup-python@v5
+#       with:
+#         python-version: '3.10'
+#     
+#     - name: Add Python 3.10 repository
+#       run: |
+#         sudo apt-get update
+#         sudo apt-get install -y software-properties-common
+#         sudo add-apt-repository ppa:deadsnakes/ppa -y
+#         sudo apt-get update
+#     
+#     - name: Install build dependencies
+#       run: |
+#         sudo apt-get install -y \
+#           devscripts \
+#           debhelper \
+#           dh-python \
+#           build-essential \
+#           cmake \
+#           python3.10 \
+#           python3.10-dev \
+#           python3.10-venv \
+#           python3-all \
+#           python3-setuptools \
+#           python3-sphinx \
+#           python3-sphinx-rtd-theme \
+#           python3-sphinxcontrib.apidoc
+#     
+#     - name: Build .deb package
+#       run: |
+#         dpkg-buildpackage -us -uc
+#     
+#     - name: Upload Debian package artifacts
+#       uses: actions/upload-artifact@v4
+#       with:
+#         name: cuif-deb
+#         path: ../*.deb

@@ -14,6 +14,7 @@ find_package(Threads REQUIRED)
 enable_language(CUDA)
 set(CMAKE_CUDA_ARCHITECTURES "native")
 
+
 # Set CUDA compilation flags
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O3 --default-stream per-thread")
 
