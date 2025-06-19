@@ -20,45 +20,84 @@
                 <button><i class="fas fa-search"></i></button>
             </div>
             <ul class="menu">
-                <li><a href="#getting-started"><i class="fas fa-rocket"></i> Getting Started</a></li>
-                <li><a href="#installation"><i class="fas fa-download"></i> Installation</a></li>
-                <li><a href="#tutorials"><i class="fas fa-graduation-cap"></i> Tutorials</a></li>
+                <li><a href="index.html" class="active"><i class="fas fa-home"></i> Home</a></li>
+                <li><a href="getting-started.html"><i class="fas fa-rocket"></i> Getting Started</a></li>
                 <li class="has-submenu">
-                    <a href="#features"><i class="fas fa-star"></i> Features <i class="fas fa-chevron-down"></i></a>
+                    <a href="#"><i class="fas fa-book"></i> Documentation <i class="fas fa-chevron-down"></i></a>
                     <ul class="submenu">
-                        <li><a href="#ros2-lifecycle">ROS2 Lifecycle</a></li>
-                        <li><a href="#qos-configuration">QoS Configuration</a></li>
-                        <li><a href="#cuda-offloading">CUDA Offloading</a></li>
+                        <li><a href="developer-guide.html">Developer Guide</a></li>
+                        <li><a href="dsl-specification.html">DSL Specification</a></li>
+                        <li><a href="faq.html">FAQ</a></li>
                     </ul>
                 </li>
-                <li><a href="#api-reference"><i class="fas fa-book"></i> API Reference</a></li>
-                <li><a href="#examples"><i class="fas fa-code"></i> Examples</a></li>
+                <li class="has-submenu">
+                    <a href="#"><i class="fas fa-star"></i> Features <i class="fas fa-chevron-down"></i></a>
+                    <ul class="submenu">
+                        <li><a href="dsl-specification.html#lifecycle-nodes">ROS2 Lifecycle</a></li>
+                        <li><a href="dsl-specification.html#qos-configuration">QoS Configuration</a></li>
+                        <li><a href="dsl-specification.html#cuda-integration">CUDA Integration</a></li>
+                    </ul>
+                </li>
+                <li class="has-submenu">
+                    <a href="#"><i class="fas fa-users"></i> Community <i class="fas fa-chevron-down"></i></a>
+                    <ul class="submenu">
+                        <li><a href="contributing.html">Contributing</a></li>
+                        <li><a href="code-of-conduct.html">Code of Conduct</a></li>
+                    </ul>
+                </li>
             </ul>
         </nav>
 
         <main id="content">
-            <section id="welcome">
+            <section class="card">
                 <h1>Welcome to RoboDSL</h1>
                 <p>RoboDSL is a domain-specific language for building GPU-accelerated robotics applications with ROS2 and CUDA integration.</p>
                 
                 <div class="card-container">
-                    <a href="#getting-started" class="card">
+                    <a href="getting-started.html" class="card">
                         <i class="fas fa-rocket"></i>
                         <h3>Get Started</h3>
                         <p>Learn how to install and use RoboDSL</p>
                     </a>
                     
-                    <a href="#tutorials" class="card">
-                        <i class="fas fa-graduation-cap"></i>
-                        <h3>Tutorials</h3>
-                        <p>Step-by-step guides and examples</p>
+                    <a href="developer-guide.html" class="card">
+                        <i class="fas fa-code"></i>
+                        <h3>Developer Guide</h3>
+                        <p>Learn about the architecture and development</p>
                     </a>
                     
-                    <a href="#api-reference" class="card">
+                    <a href="dsl-specification.html" class="card">
                         <i class="fas fa-book"></i>
-                        <h3>API Reference</h3>
-                        <p>Complete API documentation</p>
+                        <h3>DSL Specification</h3>
+                        <p>Complete language reference</p>
                     </a>
+                </div>
+            </section>
+            
+            <section id="features" class="card">
+                <h2>Key Features</h2>
+                <div class="feature-list">
+                    <div class="feature">
+                        <i class="fas fa-bolt"></i>
+                        <div>
+                            <h3>GPU Acceleration</h3>
+                            <p>Leverage CUDA for high-performance computing in your robotics applications.</p>
+                        </div>
+                    </div>
+                    <div class="feature">
+                        <i class="fas fa-project-diagram"></i>
+                        <div>
+                            <h3>ROS2 Integration</h3>
+                            <p>Built-in support for ROS2 lifecycle nodes and QoS configuration.</p>
+                        </div>
+                    </div>
+                    <div class="feature">
+                        <i class="fas fa-tachometer-alt"></i>
+                        <div>
+                            <h3>High Performance</h3>
+                            <p>Optimized for real-time performance with minimal overhead.</p>
+                        </div>
+                    </div>
                 </div>
             </section>
 

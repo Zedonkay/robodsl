@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Contributing | RoboDSL</title>
+<link href="css/style.css" rel="stylesheet"/>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+</head>
+<body>
+<div class="container">
+<header>
+<h1>RoboDSL</h1>
+<p>Domain-Specific Language for GPU-Accelerated Robotics</p>
+</header>
+<nav id="sidebar">
+<div class="search-box">
+<input id="search" placeholder="Search..." type="text"/>
+<button><i class="fas fa-search"></i></button>
+</div>
+<ul class="menu">
+<li><a href="#getting-started"><i class="fas fa-rocket"></i> Getting Started</a></li>
+<li><a href="#installation"><i class="fas fa-download"></i> Installation</a></li>
+<li><a href="#tutorials"><i class="fas fa-graduation-cap"></i> Tutorials</a></li>
+<li class="has-submenu">
+<a href="#features"><i class="fas fa-star"></i> Features <i class="fas fa-chevron-down"></i></a>
+<ul class="submenu">
+<li><a href="#ros2-lifecycle">ROS2 Lifecycle</a></li>
+<li><a href="#qos-configuration">QoS Configuration</a></li>
+<li><a href="#cuda-offloading">CUDA Offloading</a></li>
+</ul>
+</li>
+<li><a href="#api-reference"><i class="fas fa-book"></i> API Reference</a></li>
+<li><a href="#examples"><i class="fas fa-code"></i> Examples</a></li>
+</ul>
+</nav>
+<nav class="breadcrumb mb-6"><a href="index.html">Home</a> &gt; Contributing</nav><main id="content"><div class="prose max-w-none"><h1 id="contributing-to-robodsl">Contributing to RoboDSL</h1>
+<p>Thank you for your interest in contributing to RoboDSL! We welcome contributions from the community to help improve the project. This guide will help you get started with contributing to the project.</p>
+<h2 id="table-of-contents">Table of Contents</h2>
+<ol>
+<li><a href="#code-of-conduct">Code of Conduct</a></li>
+<li><a href="#quick-start">Quick Start</a></li>
+<li><a href="#development-environment">Development Environment</a></li>
+<li><a href="#code-style">Code Style</a></li>
+<li><a href="#testing">Testing</a></li>
+<li><a href="#pull-request-process">Pull Request Process</a></li>
+<li><a href="#reporting-issues">Reporting Issues</a></li>
+<li><a href="#feature-requests">Feature Requests</a></li>
+<li><a href="#documentation">Documentation</a></li>
+<li><a href="#code-review-guidelines">Code Review Guidelines</a></li>
+<li><a href="#release-process">Release Process</a></li>
+<li><a href="#license">License</a></li>
+</ol>
+<h2 id="quick-start">Quick Start</h2>
+<ol>
+<li><strong>Fork</strong> the repository on GitHub</li>
+<li><strong>Clone</strong> your fork locally
+   <code>bash
+   git clone https://github.com/Zedonkay/robodsl.git
+   cd robodsl</code></li>
+<li>Set up the development environment (see below)</li>
+<li>Create a <strong>branch</strong> for your changes
+   <code>bash
+   git checkout -b feature/your-feature-name</code></li>
+<li>Make your changes and <strong>commit</strong> them with a descriptive message
+   <code>bash
+   git commit -m "feat: add new feature"</code></li>
+<li><strong>Push</strong> your changes to your fork
+   <code>bash
+   git push origin feature/your-feature-name</code></li>
+<li>Open a <strong>pull request</strong> against the <code>main</code> branch</li>
+</ol>
+<h2 id="development-environment">Development Environment</h2>
+<h3 id="prerequisites">Prerequisites</h3>
+<ul>
+<li>Python 3.8+</li>
+<li>ROS2 Humble or newer (for ROS2 features)</li>
+<li>CUDA Toolkit 11.0+ (for CUDA features)</li>
+<li>CMake 3.15+</li>
+<li>Git</li>
+</ul>
+<h3 id="setup">Setup</h3>
+<ol>
+<li>
+<p>Create and activate a virtual environment:
+   <code>bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate</code></p>
+</li>
+<li>
+<p>Install development dependencies:
+   <code>bash
+   pip install -e ".[dev]"</code></p>
+</li>
+<li>
+<p>Install pre-commit hooks:
+   <code>bash
+   pre-commit install</code></p>
+</li>
+</ol>
+<h2 id="code-style">Code Style</h2>
+<p>We follow these coding standards:</p>
+<ul>
+<li><strong>Python</strong>: PEP 8 with Black formatting</li>
+<li><strong>C++</strong>: Google C++ Style Guide with clang-format</li>
+<li><strong>CMake</strong>: Follow Modern CMake practices</li>
+<li><strong>Documentation</strong>: Google-style docstrings</li>
+</ul>
+<h3 id="pre-commit-hooks">Pre-commit Hooks</h3>
+<p>We use pre-commit to enforce code quality. The following hooks are configured:</p>
+<ul>
+<li>Black (code formatting)</li>
+<li>isort (import sorting)</li>
+<li>flake8 (linting)</li>
+<li>mypy (type checking)</li>
+<li>clang-format (C++ formatting)</li>
+</ul>
+<p>Run the pre-commit hooks manually:</p>
+<pre class="bg-gray-100 p-4 rounded overflow-x-auto my-4"><code class="language-bash">pre-commit run --all-files
+</code></pre>
+<h2 id="testing">Testing</h2>
+<h3 id="running-tests">Running Tests</h3>
+<pre class="bg-gray-100 p-4 rounded overflow-x-auto my-4"><code class="language-bash"># Run all tests
+pytest
+
+# Run tests with coverage
+pytest --cov=robodsl tests/
+
+# Run a specific test file
+pytest tests/test_parser.py
+
+# Run with verbose output
+pytest -v
+</code></pre>
+<h3 id="writing-tests">Writing Tests</h3>
+<ul>
+<li>Place test files in the <code>tests/</code> directory</li>
+<li>Follow the <code>test_*.py</code> naming convention</li>
+<li>Use descriptive test function names</li>
+<li>Include docstrings explaining test purpose</li>
+<li>Use fixtures for common test setup</li>
+</ul>
+<h2 id="pull-request-process">Pull Request Process</h2>
+<ol>
+<li>Ensure all tests pass</li>
+<li>Update documentation as needed</li>
+<li>Add your changes to CHANGELOG.md</li>
+<li>Submit a draft PR early for discussion</li>
+<li>Request reviews from maintainers</li>
+<li>Address all review comments</li>
+<li>Ensure CI passes before merging</li>
+</ol>
+<h3 id="commit-message-format">Commit Message Format</h3>
+<p>We follow the <a href="https://www.conventionalcommits.org/">Conventional Commits</a> specification:</p>
+<pre class="bg-gray-100 p-4 rounded overflow-x-auto my-4"><code>&lt;type&gt;[optional scope]: &lt;description&gt;
+
+[optional body]
+
+[optional footer(s)]
+</code></pre>
+<p>Types:
+- <code>feat</code>: New feature
+- <code>fix</code>: Bug fix
+- <code>docs</code>: Documentation changes
+- <code>style</code>: Code style changes
+- <code>refactor</code>: Code changes that neither fix bugs nor add features
+- <code>perf</code>: Performance improvements
+- <code>test</code>: Adding or modifying tests
+- <code>chore</code>: Changes to the build process or auxiliary tools</p>
+<p>Example:</p>
+<pre class="bg-gray-100 p-4 rounded overflow-x-auto my-4"><code>feat(parser): add support for custom node types
+
+Add ability to define custom node types with validation.
+
+Closes #123
+</code></pre>
+<h2 id="reporting-issues">Reporting Issues</h2>
+<p>When reporting issues, please include:</p>
+<ol>
+<li>Description of the problem</li>
+<li>Steps to reproduce</li>
+<li>Expected behavior</li>
+<li>Actual behavior</li>
+<li>Environment details</li>
+<li>Any relevant logs or error messages</li>
+</ol>
+<h2 id="feature-requests">Feature Requests</h2>
+<p>We welcome feature requests! Please:</p>
+<ol>
+<li>Check if the feature already exists</li>
+<li>Explain why this feature is valuable</li>
+<li>Describe the proposed solution</li>
+<li>Include any relevant examples</li>
+</ol>
+<h2 id="documentation">Documentation</h2>
+<h3 id="building-documentation">Building Documentation</h3>
+<pre class="bg-gray-100 p-4 rounded overflow-x-auto my-4"><code class="language-bash"># Install documentation dependencies
+pip install -e ".[docs]"
+
+# Build the documentation
+cd docs
+make html
+
+# View the documentation
+open _build/html/index.html
+</code></pre>
+<h3 id="documentation-guidelines">Documentation Guidelines</h3>
+<ul>
+<li>Use Markdown for all documentation</li>
+<li>Follow the Google Style Guide for docstrings</li>
+<li>Include examples for public APIs</li>
+<li>Update documentation when changing behavior</li>
+<li>Add diagrams for complex concepts</li>
+</ul>
+<h2 id="code-review-guidelines">Code Review Guidelines</h2>
+<h3 id="reviewers">Reviewers</h3>
+<ul>
+<li>Focus on code quality and correctness</li>
+<li>Check for security implications</li>
+<li>Verify test coverage</li>
+<li>Ensure documentation is updated</li>
+<li>Consider performance impact</li>
+</ul>
+<h3 id="authors">Authors</h3>
+<ul>
+<li>Keep PRs focused and small</li>
+<li>Address all review comments</li>
+<li>Update documentation and tests</li>
+<li>Be responsive to feedback</li>
+<li>Fix CI failures promptly</li>
+</ul>
+<h2 id="release-process">Release Process</h2>
+<ol>
+<li>Update version in <code>pyproject.toml</code></li>
+<li>Update <code>CHANGELOG.md</code></li>
+<li>Create a release tag</li>
+<li>Build and publish packages</li>
+<li>Update documentation</li>
+</ol>
+<h2 id="license">License</h2>
+<p>By contributing to RoboDSL, you agree that your contributions will be licensed under the MIT License. See <a href="../LICENSE">LICENSE</a> for details.</p>
+<h2 id="code-of-conduct">Code of Conduct</h2>
+<p>By participating in this project, you are expected to uphold our <a href="code_of_conduct.md">Code of Conduct</a>. Please report any unacceptable behavior to the project maintainers.</p>
+<h2 id="getting-started">Getting Started</h2>
+<ol>
+<li><strong>Fork</strong> the repository on GitHub</li>
+<li><strong>Clone</strong> your fork locally
+   <code>bash
+   git clone https://github.com/your-username/robodsl.git
+   cd robodsl</code></li>
+<li>Create a <strong>branch</strong> for your changes
+   <code>bash
+   git checkout -b feature/your-feature-name</code></li>
+<li>Make your changes and <strong>commit</strong> them
+   <code>bash
+   git commit -m "Add your commit message"</code></li>
+<li><strong>Push</strong> your changes to your fork
+   <code>bash
+   git push origin feature/your-feature-name</code></li>
+<li>Open a <strong>pull request</strong> against the main repository</li>
+</ol>
+<h2 id="development-environment_1">Development Environment</h2>
+<h3 id="prerequisites_1">Prerequisites</h3>
+<ul>
+<li>Python 3.8+</li>
+<li>ROS2 (Humble/Foxy/Galactic)</li>
+<li>CUDA Toolkit 11.0+</li>
+<li>CMake 3.15+</li>
+<li>Git</li>
+</ul>
+<h3 id="setup_1">Setup</h3>
+<ol>
+<li>
+<p>Create a Python virtual environment
+   <code>bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate</code></p>
+</li>
+<li>
+<p>Install development dependencies
+   <code>bash
+   pip install -r requirements-dev.txt
+   pip install -e .</code></p>
+</li>
+<li>
+<p>Install pre-commit hooks
+   <code>bash
+   pre-commit install</code></p>
+</li>
+</ol>
+<h2 id="code-style_1">Code Style</h2>
+<h3 id="python">Python</h3>
+<p>We follow the <a href="https://www.python.org/dev/peps/pep-0008/">PEP 8</a> style guide with the following additional guidelines:</p>
+<ul>
+<li>Maximum line length: 88 characters (enforced by Black)</li>
+<li>Use double quotes for strings</li>
+<li>Use type hints for all function signatures</li>
+<li>Document all public APIs with docstrings</li>
+</ul>
+<h3 id="c">C++</h3>
+<p>We follow the <a href="https://google.github.io/styleguide/cppguide.html">Google C++ Style Guide</a> with the following exceptions:</p>
+<ul>
+<li>Use <code>#pragma once</code> instead of include guards</li>
+<li>Maximum line length: 100 characters</li>
+<li>Use C++17 features where appropriate</li>
+</ul>
+<h3 id="formatting">Formatting</h3>
+<p>We use automated tools to enforce code style:</p>
+<ul>
+<li><strong>Python</strong>: <a href="https://github.com/psf/black">Black</a>, <a href="https://pycqa.github.io/isort/">isort</a>, <a href="https://flake8.pycqa.org/">flake8</a></li>
+<li><strong>C++</strong>: <a href="https://clang.llvm.org/docs/ClangFormat.html">clang-format</a></li>
+<li><strong>Markdown</strong>: <a href="https://prettier.io/">Prettier</a></li>
+</ul>
+<p>Run the following command to format your code:</p>
+<pre class="bg-gray-100 p-4 rounded overflow-x-auto my-4"><code class="language-bash">make format
+</code></pre>
+<h2 id="testing_1">Testing</h2>
+<h3 id="running-tests_1">Running Tests</h3>
+<pre class="bg-gray-100 p-4 rounded overflow-x-auto my-4"><code class="language-bash"># Run all tests
+make test
+
+# Run unit tests only
+pytest tests/unit
+
+# Run integration tests
+pytest tests/integration
+
+# Run tests with coverage
+pytest --cov=robodsl tests/
+</code></pre>
+<h3 id="writing-tests_1">Writing Tests</h3>
+<ul>
+<li>Write tests for all new functionality</li>
+<li>Follow the Arrange-Act-Assert pattern</li>
+<li>Use descriptive test names</li>
+<li>Keep tests independent and isolated</li>
+<li>Mock external dependencies</li>
+</ul>
+<h2 id="pull-request-process_1">Pull Request Process</h2>
+<ol>
+<li>Ensure your code passes all tests and linters</li>
+<li>Update documentation as needed</li>
+<li>Add or update tests for your changes</li>
+<li>Keep your pull request focused on a single feature or bug fix</li>
+<li>Write a clear commit message following the <a href="https://www.conventionalcommits.org/">Conventional Commits</a> specification:
+   ```
+   <type>[optional scope]: <description></description></type></li>
+</ol>
+<p>[optional body]</p>
+<p>[optional footer]
+   ```</p>
+<p>Example:
+   ```
+   feat(parser): add support for custom message types</p>
+<p>Added support for defining custom message types in the DSL syntax.
+   This allows users to create their own message types with custom fields.</p>
+<p>Fixes #123
+   ```</p>
+<ol>
+<li>Reference any related issues in your pull request description</li>
+<li>Request reviews from at least one maintainer</li>
+</ol>
+<h2 id="reporting-issues_1">Reporting Issues</h2>
+<p>When reporting issues, please include:</p>
+<ol>
+<li>A clear, descriptive title</li>
+<li>Steps to reproduce the issue</li>
+<li>Expected behavior</li>
+<li>Actual behavior</li>
+<li>Environment details (OS, Python version, ROS2 version, etc.)</li>
+<li>Any relevant error messages or logs</li>
+</ol>
+<h2 id="feature-requests_1">Feature Requests</h2>
+<p>For feature requests, please:</p>
+<ol>
+<li>Describe the feature you'd like to see</li>
+<li>Explain why this feature would be useful</li>
+<li>Provide any relevant examples or use cases</li>
+<li>Consider contributing the feature yourself if possible</li>
+</ol>
+<h2 id="documentation_1">Documentation</h2>
+<p>Good documentation is crucial for the success of the project. When making changes:</p>
+<ol>
+<li>Update relevant documentation</li>
+<li>Add docstrings to new functions and classes</li>
+<li>Include examples where appropriate</li>
+<li>Keep the README up to date</li>
+</ol>
+<h2 id="license_1">License</h2>
+<p>By contributing to RoboDSL, you agree that your contributions will be licensed under the <a href="LICENSE">MIT License</a>.</p>
+<h2 id="acknowledgments">Acknowledgments</h2>
+<p>Thank you to all the contributors who have helped make RoboDSL better!</p></div></main>
+<footer>
+<p>© 2025 RoboDSL Project. All rights reserved.</p>
+</footer>
+</div>
+<script src="js/main.js"></script>
+</body>
+</html>
