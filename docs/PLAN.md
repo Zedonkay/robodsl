@@ -53,7 +53,7 @@ RoboDSL is a Domain-Specific Language (DSL) and compiler designed to simplify th
   - [x] CUDA compilation flags
   - [x] Dependency management
   - [x] Component registration
-  - [x] Installation rules
+  - [x] Installation rulesL
 - [x] Project scaffolding
   - [x] New project creation
   - [x] Adding components to existing projects
