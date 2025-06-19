@@ -1,0 +1,16 @@
+# .vscodeignore
+.vscode/**
+.gitignore
+.git/**
+.vscode-test.*
+**/*.code-workspace
+**/.eslintrc.json
+**/.gitkeep
+**/.npmignore
+**/tsconfig.json
+**/tslint.json
+**/vsc-extension-quickstart.md
+**/yarn.lock
+**/yarn-error.log
+**/node_modules/**
+**/*.vsix
