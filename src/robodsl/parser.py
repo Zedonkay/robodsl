@@ -505,7 +505,7 @@ def parse_robodsl(content: str) -> RoboDSLConfig:
                 ))
 
             # Parse code block
-            code_match = re.search(r'code\s*``[(?:cuda)?\s*([^](cci:1://file:///Users/ishayu/Documents/Random_projects/cuif/src/robodsl/generator.py:40:4-86:30)]+)```', kernel_content, re.DOTALL)
+            code_match = re.search(r'code\s*\{([^}]*)\}', kernel_content, re.DOTALL)
             if code_match:
                 code = code_match.group(1).strip()
 
