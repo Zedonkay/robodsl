@@ -1,0 +1,107 @@
+{
+    "name": "RoboDSL",
+    "scopeName": "source.robodsl",
+    "fileTypes": ["robodsl"],
+    "patterns": [
+        {
+            "include": "#comments"
+        },
+        {
+            "include": "#keywords"
+        },
+        {
+            "include": "#qos-settings"
+        },
+        {
+            "include": "#cuda-kernel"
+        },
+        {
+            "include": "#strings"
+        },
+        {
+            "include": "#numbers"
+        },
+        {
+            "include": "#operators"
+        }
+    ],
+    "repository": {
+        "comments": {
+            "patterns": [
+                {
+                    "name": "comment.line.number-sign.robodsl",
+                    "match": "#.*$"
+                },
+                {
+                    "name": "comment.block.robodsl",
+                    "begin": "/\\*",
+                    "end": "\\*/"
+                }
+            ]
+        },
+        "keywords": {
+            "patterns": [
+                {
+                    "name": "keyword.control.robodsl",
+                    "match": "\\b(node|publisher|subscriber|service|action|parameter|timer|lifecycle|cuda_kernels|kernel|input|output|code|include|define|remap|namespace|enable_parameter_callbacks)\\b"
+                },
+                {
+                    "name": "keyword.operator.robodsl",
+                    "match": "\\b(oneshot|autostart|cleanup_on_shutdown|use_thrust|shared_memory|block_size|grid_size)\\b"
+                },
+                {
+                    "name": "constant.language.boolean.robodsl",
+                    "match": "\\b(true|false|yes|no|on|off)\\b"
+                }
+            ]
+        },
+        "qos-settings": {
+            "patterns": [
+                {
+                    "name": "support.type.qos.robodsl",
+                    "match": "\\b(reliability|durability|history|depth|deadline|lifespan|liveliness|liveliness_lease_duration)\\b"
+                },
+                {
+                    "name": "support.constant.qos.robodsl",
+                    "match": "\\b(reliable|best_effort|transient_local|volatile|keep_last|keep_all|automatic|manual_by_topic)\\b"
+                }
+            ]
+        },
+        "cuda-kernel": {
+            "name": "meta.cuda-kernel.robodsl",
+            "begin": "code\\s*\\{",
+            "end": "\\}",
+            "beginCaptures": {
+                "0": { "name": "punctuation.section.block.begin.robodsl" }
+            },
+            "endCaptures": {
+                "0": { "name": "punctuation.section.block.end.robodsl" }
+            },
+            "contentName": "source.cuda",
+            "patterns": [
+                {
+                    "include": "source.cuda"
+                }
+            ]
+        },
+        "strings": {
+            "name": "string.quoted.double.robodsl",
+            "begin": "\"",
+            "end": "\"",
+            "patterns": [
+                {
+                    "name": "constant.character.escape.robodsl",
+                    "match": "\\\\(x\\h{2}|[0-2][0-7]{0,2}|3[0-6][0-7]|37[0-7]?|[4-7][0-7]?|t|n|v|f|r|\\\"|\\'|\\\\)"
+                }
+            ]
+        },
+        "numbers": {
+            "name": "constant.numeric.robodsl",
+            "match": "\\b((0(x|X)[0-9a-fA-F]*)|(\\d+(\\.\\d+)?(e[+\\-]?\\d+)?))\\b"
+        },
+        "operators": {
+            "name": "keyword.operator.robodsl",
+            "match": "[=:;{}\\[\\]()<>.,+\\-*/%&|^!~]"
+        }
+    }
+}
