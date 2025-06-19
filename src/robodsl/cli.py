@@ -344,12 +344,68 @@ def init(project_name: str, template: str, output_dir: str) -> None:
             "#include <std_msgs/msg/string.hpp>\n"
             "#include <sensor_msgs/msg/image.hpp>\n\n"
             "# Main node configuration\n"
-            "node main_node {{\n    # Node namespace (optional)\n    namespace: /{0}\n\n    # Enable lifecycle (default: false)\n    # lifecycle: true\n\n    # Enable parameter callbacks (default: false)\n    # parameter_callbacks: true\n\n    # Topic remapping (optional)\n    # remap /source_topic /target_topic\n\n    # Parameters with different types\n    parameter int count: 0\n    parameter double rate: 10.0\n    parameter string name: \"{0}\"\n    parameter bool enabled: true\n\n    # Publisher with QoS settings\n    publisher /chatter std_msgs/msg/String {{\n        qos: {{\n            reliability: reliable\n            history: keep_last\n            depth: 10\n        }}\n        queue_size: 10\n    }}\n\n    # Subscriber with QoS settings\n    subscriber /chatter std_msgs/msg/String {{\n        qos: {{\n            reliability: best_effort\n            history: keep_last\n            depth: 10\n        }}\n        queue_size: 10\n    }}\n\n    # Timer example (1.0 second period)\n    timer my_timer 1.0 on_timer_callback\n}}\n\n"
+            "node main_node {\n"
+            "    # Node namespace (optional)\n"
+            f"    namespace: /{project_name}\n\n"
+            "    # Enable lifecycle (default: false)\n"
+            "    # lifecycle: true\n\n"
+            "    # Enable parameter callbacks (default: false)\n"
+            "    # parameter_callbacks: true\n\n"
+            "    # Topic remapping (optional)\n"
+            "    # remap /source_topic /target_topic\n\n"
+            "    # Parameters with different types\n"
+            "    parameter int count: 0\n"
+            "    parameter double rate: 10.0\n"
+            f"    parameter string name: \"{project_name}\"\n"
+            "    parameter bool enabled: true\n\n"
+            "    # Publisher with QoS settings\n"
+            "    publisher /chatter std_msgs/msg/String {\n"
+            "        qos: {\n"
+            "            reliability: reliable\n"
+            "            history: keep_last\n"
+            "            depth: 10\n"
+            "        }\n"
+            "        queue_size: 10\n"
+            "    }\n\n"
+            "    # Subscriber with QoS settings\n"
+            "    subscriber /chatter std_msgs/msg/String {\n"
+            "        qos: {\n"
+            "            reliability: best_effort\n"
+            "            history: keep_last\n"
+            "            depth: 10\n"
+            "        }\n"
+            "        queue_size: 10\n"
+            "    }\n\n"
+            "    # Timer example (1.0 second period)\n"
+            "    timer my_timer 1.0 on_timer_callback\n"
+            "}\n\n"
             "# CUDA Kernels section\n"
-            "cuda_kernels {{\n    # Example vector addition kernel\n    kernel vector_add {{\n        # Input parameters\n        input float* a\n        input float* b\n        output float* c\n        input int size\n        \n        # Kernel configuration\n        block_size = (256, 1, 1)\n        \n        # Include additional headers\n        include <cuda_runtime.h>\n        include <device_launch_parameters.h>\n        \n        # Kernel code\n        code ```\n        __global__ void vector_add(const float* a, const float* b, float* c, int size) {{\n            int i = blockIdx.x * blockDim.x + threadIdx.x;\n            if (i < size) {{\n                c[i] = a[i] + b[i];\n            }}\n        }}\n        ```\n    }}\n}}\n\n"
+            "cuda_kernels {\n"
+            "    # Example vector addition kernel\n"
+            "    kernel vector_add {\n"
+            "        # Input parameters\n"
+            "        input float* a\n"
+            "        input float* b\n"
+            "        output float* c\n"
+            "        input int size\n\n"
+            "        # Kernel configuration\n"
+            "        block_size = (256, 1, 1)\n\n"
+            "        # Include additional headers\n"
+            "        include <cuda_runtime.h>\n"
+            "        include <device_launch_parameters.h>\n\n"
+            "        # Kernel code\n"
+            "        code {\n"
+            "        __global__ void vector_add(const float* a, const float* b, float* c, int size) {\n"
+            "            int i = blockIdx.x * blockDim.x + threadIdx.x;\n"
+            "            if (i < size) {\n"
+            "                c[i] = a[i] + b[i];\n"
+            "            }\n"
+            "        }\n"
+            "        }\n"
+            "    }\n"
+            "}\n\n"
             "# For more examples and documentation, see: examples/comprehensive_example.robodsl\n"
         )
-        
         click.echo(f"Initialized RoboDSL project in {project_path}")
         click.echo(f"Edit {project_name}.robodsl to define your application")
         
@@ -528,7 +584,11 @@ def add_node(node_name: str, publisher: List[tuple], subscriber: List[tuple],
     try:
         click.echo(f"Node '{node_name}' added successfully!")
         click.echo(f"\nNext steps:")
-        click.echo(f"1. Edit the node implementation in: {src_dir}/" + "/".join(node_name.split('.')) + f"_node.{'py' if language == 'python' else 'cpp'}")
+        click.echo(
+            f"1. Edit the node implementation in: {src_dir}/" +
+            "/".join(node_name.split('.')) +
+            f"_node.{'py' if language == 'python' else 'cpp'}"
+        )
         click.echo(f"2. Update the configuration in: {project_path}/robodsl/nodes/{'/'.join(node_name.split('.'))}.robodsl")
         click.echo(f"3. Launch the node with: ros2 launch {project_path.name} {node_name}.launch.py")
     except Exception as e:
