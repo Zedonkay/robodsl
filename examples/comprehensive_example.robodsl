@@ -208,14 +208,14 @@ cuda_kernels {
         define BLOCK_SIZE 256
         
         # Kernel code
-        code ```
-        __global__ void vector_add(const float* a, const float* b, float* c, int size) {
-            int i = blockIdx.x * blockDim.x + threadIdx.x;
-            if (i < size) {
-                c[i] = a[i] + b[i];
+        code {
+            __global__ void vector_add(const float* a, const float* b, float* c, int size) {
+                int i = blockIdx.x * blockDim.x + threadIdx.x;
+                if (i < size) {
+                    c[i] = a[i] + b[i];
+                }
             }
         }
-        ```
     }
     
     # Another kernel with Thrust support
@@ -232,16 +232,16 @@ cuda_kernels {
         include <thrust/sort.h>
         include <thrust/execution_policy.h>
         
-        code ```
-        __global__ void sort_kernel(float* input, float* output, int size) {
-            // Thrust sort example
-            thrust::sort(thrust::device, input, input + size);
-            
-            // Copy input to output (just an example)
-            for (int i = 0; i < size; i++) {
-                output[i] = input[i];
+        code {
+            __global__ void sort_kernel(float* input, float* output, int size) {
+                // Thrust sort example
+                thrust::sort(thrust::device, input, input + size);
+                
+                // Copy input to output (just an example)
+                for (int i = 0; i < size; i++) {
+                    output[i] = input[i];
+                }
             }
         }
-        ```
     }
 }

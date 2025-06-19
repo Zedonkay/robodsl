@@ -58,7 +58,7 @@
             "patterns": [
                 {
                     "name": "keyword.control.robodsl",
-                    "match": "\\b(node|publisher|subscriber|service|action|parameter|timer|lifecycle|cuda_kernels|kernel|input|output|code|include|define|remap|namespace|enable_parameter_callbacks)\\b"
+                    "match": "\\b(node|publisher|subscriber|service|action|parameter|timer|lifecycle|cuda_kernels|input|output|code|include|define|remap|namespace|enable_parameter_callbacks)\\b"
                 },
                 {
                     "name": "keyword.operator.robodsl",
