@@ -1,8 +1,8 @@
 # RoboDSL Language Support
 
-[![Version](https://vsmarketplacebadge.apphb.com/version/Zedonkay.robodsl.svg)](https://marketplace.visualstudio.com/items?itemName=Zedonkay.robodsl)
-[![Installs](https://vsmarketplacebadge.apphb.com/installs/Zedonkay.robodsl.svg)](https://marketplace.visualstudio.com/items?itemName=Zedonkay.robodsl)
-[![Rating](https://vsmarketplacebadge.apphb.com/rating/Zedonkay.robodsl.svg)](https://marketplace.visualstudio.com/items?itemName=Zedonkay.robodsl)
+[![Version](https://vsmarketplacebadge.apphb.com/version/Zedonkay.robodsl.png)](https://marketplace.visualstudio.com/items?itemName=Zedonkay.robodsl)
+[![Installs](https://vsmarketplacebadge.apphb.com/installs/Zedonkay.robodsl.png)](https://marketplace.visualstudio.com/items?itemName=Zedonkay.robodsl)
+[![Rating](https://vsmarketplacebadge.apphb.com/rating/Zedonkay.robodsl.png)](https://marketplace.visualstudio.com/items?itemName=Zedonkay.robodsl)
 
 Syntax highlighting and language support for RoboDSL files. RoboDSL is a domain-specific language for defining ROS 2 nodes with CUDA kernel support.
 
