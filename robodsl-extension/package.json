@@ -2,7 +2,7 @@
     "name": "robodsl",
     "displayName": "RoboDSL Language Support",
     "description": "Syntax highlighting and language support for RoboDSL files",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "publisher": "Zedonkay",
     "license": "MIT",
     "repository": {
@@ -46,7 +46,7 @@
         "path": "./syntaxes/robodsl.tmLanguage.json"
       }],
       "iconThemes": [{
-        "id": "robodsl-icons",
+        "id": "robodsl-icon-theme",
         "label": "RoboDSL Icons",
         "path": "./fileicons/robodsl-icon-theme.json"
       }]
