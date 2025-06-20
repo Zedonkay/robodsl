@@ -7,6 +7,12 @@
             "include": "#includes"
         },
         {
+            "include": "#cuda-keywords"
+        },
+        {
+            "include": "#cuda-kernel-declaration"
+        },
+        {
             "include": "#comments"
         },
         {
@@ -58,7 +64,7 @@
             "patterns": [
                 {
                     "name": "keyword.control.robodsl",
-                    "match": "\\b(node|publisher|subscriber|service|action|parameter|timer|lifecycle|cuda_kernels|input|output|code|include|define|remap|namespace|enable_parameter_callbacks)\\b"
+                    "match": "\\b(node|publisher|subscriber|service|action|parameter|include|import|from|as|true|false|null|if|else|for|while|return|break|continue|in|not|and|or|fn|let|const|var|type|interface|implements|extends|namespace|use|as|pub|priv|prot|static|final|abstract|override|virtual|new|this|super|class|struct|enum|switch|case|default|try|catch|throw|finally|async|await|yield|generator|function|lambda|match|when|is|as|typeof|instanceof|delete|void|any|never|unknown|object|string|number|boolean|symbol|bigint|undefined|null|true|false|this|super|new|typeof|void|delete|in|instanceof|as|is|keyof|readonly|infer|unique|symbol|type|interface|implements|extends|class|enum|const|declare|namespace|module|export|import|require|from|as|default|export=|import=|await|yield|async|function|let|var|const|if|else|switch|case|default|for|do|while|try|catch|finally|throw|break|continue|return|with|debugger|of|in|instanceof|new|delete|void|typeof|this|super|class|extends|static|public|private|protected|readonly|abstract|async|await|yield|get|set|constructor|implements|interface|package|type|enum|export|import|as|from|require|module|declare|namespace|any|boolean|number|string|symbol|void|never|unknown|object|undefined|null|true|false|this|super|new|typeof|void|delete|in|instanceof|as|is|keyof|readonly|infer|unique|symbol|type|interface|implements|extends|class|enum|const|declare|namespace|module|export|import|require|from|as|default|export=|import=|await|yield|async|function|let|var|const|if|else|switch|case|default|for|do|while|try|catch|finally|throw|break|continue|return|with|debugger|of|in|instanceof|new|delete|void|typeof|this|super|class|extends|static|public|private|protected|readonly|abstract|async|await|yield|get|set|constructor|implements|interface|package|type|enum|export|import|as|from|require|module|declare|namespace|any|boolean|number|string|symbol|void|never|unknown|object|undefined|null|true|false|kernel|input|output|block_size|grid_size|shared_mem_size|use_thrust|code)\\b"
                 },
                 {
                     "name": "keyword.operator.robodsl",
@@ -96,6 +102,18 @@
             "patterns": [
                 {
                     "include": "source.cuda"
+                },
+                {
+                    "include": "source.c++"
+                },
+                {
+                    "include": "source.cpp"
+                },
+                {
+                    "include": "source.c"
+                },
+                {
+                    "include": "#cuda-keywords"
                 }
             ]
         },

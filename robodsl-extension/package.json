@@ -16,11 +16,14 @@
     "engines": {
       "vscode": "^1.75.0"
     },
+    "extensionDependencies": [
+      "ms-vscode.cpptools-extension-pack",
+      "twxs.cmake"
+    ],
     "categories": [
       "Programming Languages",
       "Snippets",
-      "Extension Packs",
-      "CUDA"
+      "Extension Packs"
     ],
     "keywords": [
       "robodsl",
@@ -60,11 +63,6 @@
       "package": "vsce package",
       "publish": "vsce publish"
     },
-    "extensionDependencies": [
-      "ms-vscode.cpptools-extension-pack",
-      "twxs.cmake",
-      "ms-vscode.cmake-tools"
-    ],
     "devDependencies": {
       "@vscode/vsce": "^2.24.0"
     }
