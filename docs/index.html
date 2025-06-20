@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
     <title>RoboDSL Documentation</title>
-    <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
     <style>
         body { display: block !important; }
     </style>
@@ -20,30 +20,33 @@
         
         <nav id="sidebar">
             <div class="search-box">
-                <input type="text" id="search" placeholder="Search...">
+                <input type="text" id="search" placeholder="Search..." />
                 <button><i class="fas fa-search"></i></button>
             </div>
             <ul class="menu">
                 <li><a href="index.html" class="active"><i class="fas fa-home"></i> Home</a></li>
                 <li><a href="getting-started.html"><i class="fas fa-rocket"></i> Getting Started</a></li>
+
                 <li class="has-submenu">
-                    <a href="#"><i class="fas fa-book"></i> Documentation <i class="fas fa-chevron-down"></i></a>
+                    <button class="submenu-toggle"><i class="fas fa-book"></i> Documentation <i class="fas fa-chevron-down"></i></button>
                     <ul class="submenu">
                         <li><a href="developer-guide.html">Developer Guide</a></li>
                         <li><a href="dsl-specification.html">DSL Specification</a></li>
                         <li><a href="faq.html">FAQ</a></li>
                     </ul>
                 </li>
+
                 <li class="has-submenu">
-                    <a href="#"><i class="fas fa-star"></i> Features <i class="fas fa-chevron-down"></i></a>
+                    <button class="submenu-toggle"><i class="fas fa-star"></i> Features <i class="fas fa-chevron-down"></i></button>
                     <ul class="submenu">
                         <li><a href="dsl-specification.html#lifecycle-nodes">ROS2 Lifecycle</a></li>
                         <li><a href="dsl-specification.html#qos-configuration">QoS Configuration</a></li>
                         <li><a href="dsl-specification.html#cuda-integration">CUDA Integration</a></li>
                     </ul>
                 </li>
+
                 <li class="has-submenu">
-                    <a href="#"><i class="fas fa-users"></i> Community <i class="fas fa-chevron-down"></i></a>
+                    <button class="submenu-toggle"><i class="fas fa-users"></i> Community <i class="fas fa-chevron-down"></i></button>
                     <ul class="submenu">
                         <li><a href="contributing.html">Contributing</a></li>
                         <li><a href="code-of-conduct.html">Code of Conduct</a></li>
@@ -56,20 +59,18 @@
             <section class="card">
                 <h1>Welcome to RoboDSL</h1>
                 <p>RoboDSL is a domain-specific language for building GPU-accelerated robotics applications with ROS2 and CUDA integration.</p>
-                
+
                 <div class="card-container">
                     <a href="getting-started.html" class="card">
                         <i class="fas fa-rocket"></i>
                         <h3>Get Started</h3>
                         <p>Learn how to install and use RoboDSL</p>
                     </a>
-                    
                     <a href="developer-guide.html" class="card">
                         <i class="fas fa-code"></i>
                         <h3>Developer Guide</h3>
                         <p>Learn about the architecture and development</p>
                     </a>
-                    
                     <a href="dsl-specification.html" class="card">
                         <i class="fas fa-book"></i>
                         <h3>DSL Specification</h3>
@@ -77,8 +78,8 @@
                     </a>
                 </div>
             </section>
-            
-            <section id="features" class="card">
+
+            <section id="features-summary" class="card">
                 <h2>Key Features</h2>
                 <div class="feature-list">
                     <div class="feature">
@@ -108,14 +109,14 @@
             <section id="getting-started">
                 <h2>Getting Started</h2>
                 <p>Install RoboDSL with a single command:</p>
-                <pre><code>curl -sSL https://raw.githubusercontent.com/Zedonkay/robodsl/main/install.sh | bash
+<pre><code>curl -sSL https://raw.githubusercontent.com/Zedonkay/robodsl/main/install.sh | bash
 sudo apt update
 sudo apt install robodsl</code></pre>
             </section>
 
             <section id="features">
-                <h2>Features</h2>
-                
+                <h2>Advanced Features</h2>
+
                 <article id="ros2-lifecycle">
                     <h3>ROS2 Lifecycle Support</h3>
                     <p>RoboDSL provides built-in support for ROS2 lifecycle nodes, making it easy to manage the state of your robotics applications.</p>
