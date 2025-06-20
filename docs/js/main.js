@@ -1,204 +1,162 @@
+// Main JavaScript for RoboDSL website
+
 document.addEventListener('DOMContentLoaded', function() {
-    // Toggle submenus
-    const menuItems = document.querySelectorAll('.has-submenu > a');
+    // Toggle submenu functionality
+    const submenuToggles = document.querySelectorAll('.has-submenu > a');
     
-    menuItems.forEach(item => {
-        item.addEventListener('click', function(e) {
-            const submenu = this.nextElementSibling;
-            if (submenu && submenu.classList.contains('submenu')) {
-                e.preventDefault();
-                const parent = this.parentElement;
-                parent.classList.toggle('active');
-            }
+    submenuToggles.forEach(toggle => {
+        toggle.addEventListener('click', function(e) {
+            e.preventDefault();
+            const parent = this.parentElement;
+            
+            // Close other open submenus
+            document.querySelectorAll('.has-submenu.active').forEach(item => {
+                if (item !== parent) {
+                    item.classList.remove('active');
+                }
+            });
+            
+            // Toggle current submenu
+            parent.classList.toggle('active');
         });
     });
 
-    // Highlight active menu item based on scroll position
-    const sections = document.querySelectorAll('section[id]');
-    const menuLinks = document.querySelectorAll('.menu a[href^="#"]');
+    // Search functionality
+    const searchInput = document.getElementById('search');
+    const searchButton = document.querySelector('.search-box button');
     
-    function highlightMenu() {
-        let current = '';
-        
-        sections.forEach(section => {
-            const sectionTop = section.offsetTop - 100;
-            if (window.scrollY >= sectionTop) {
-                current = '#' + section.getAttribute('id');
-            }
-        });
-        
-        menuLinks.forEach(link => {
-            link.classList.remove('active');
-            if (link.getAttribute('href') === current) {
-                link.classList.add('active');
-                
-                // Expand parent menu if in a submenu
-                const parentMenu = link.closest('.submenu');
-                if (parentMenu) {
-                    parentMenu.previousElementSibling.classList.add('active');
-                    parentMenu.style.display = 'block';
-                }
+    function performSearch() {
+        const query = searchInput.value.toLowerCase().trim();
+        if (query) {
+            // Simple search functionality - highlights matching text in content
+            highlightSearchResults(query);
+        } else {
+            clearHighlights();
+        }
+    }
+    
+    if (searchInput) {
+        searchInput.addEventListener('input', performSearch);
+        searchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                performSearch();
             }
         });
     }
     
-    window.addEventListener('scroll', highlightMenu);
-    highlightMenu(); // Run once on load
+    if (searchButton) {
+        searchButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            performSearch();
+        });
+    }
+    
+    // Simple search highlighting
+    function highlightSearchResults(query) {
+        clearHighlights();
+        
+        if (!query) return;
+        
+        const content = document.getElementById('content');
+        if (!content) return;
+        
+        const walker = document.createTreeWalker(
+            content,
+            NodeFilter.SHOW_TEXT,
+            null,
+            false
+        );
+        
+        const textNodes = [];
+        let node;
+        
+        while (node = walker.nextNode()) {
+            if (node.nodeValue.toLowerCase().includes(query)) {
+                textNodes.push(node);
+            }
+        }
+        
+        textNodes.forEach(textNode => {
+            const parent = textNode.parentNode;
+            const text = textNode.nodeValue;
+            const regex = new RegExp(`(${escapeRegex(query)})`, 'gi');
+            const highlightedText = text.replace(regex, '<mark class="search-highlight">$1</mark>');
+            
+            if (highlightedText !== text) {
+                const span = document.createElement('span');
+                span.innerHTML = highlightedText;
+                parent.replaceChild(span, textNode);
+            }
+        });
+    }
+    
+    function clearHighlights() {
+        const highlights = document.querySelectorAll('.search-highlight');
+        highlights.forEach(highlight => {
+            const parent = highlight.parentNode;
+            parent.replaceChild(document.createTextNode(highlight.textContent), highlight);
+            parent.normalize();
+        });
+    }
+    
+    function escapeRegex(string) {
+        return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
     
     // Smooth scrolling for anchor links
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-        anchor.addEventListener('click', function(e) {
+        anchor.addEventListener('click', function (e) {
             e.preventDefault();
-            
-            const targetId = this.getAttribute('href');
-            if (targetId === '#') return;
-            
-            const targetElement = document.querySelector(targetId);
-            if (targetElement) {
-                window.scrollTo({
-                    top: targetElement.offsetTop - 80,
-                    behavior: 'smooth'
+            const target = document.querySelector(this.getAttribute('href'));
+            if (target) {
+                target.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start'
                 });
-                
-                // Update URL without page jump
-                if (history.pushState) {
-                    history.pushState(null, null, targetId);
-                } else {
-                    location.hash = targetId;
-                }
             }
         });
     });
     
-    // Search functionality
-    const searchInput = document.getElementById('search');
-    if (searchInput) {
-        searchInput.addEventListener('input', function() {
-            const searchTerm = this.value.toLowerCase();
-            const menuItems = document.querySelectorAll('.menu li');
-            
-            menuItems.forEach(item => {
-                const text = item.textContent.toLowerCase();
-                if (text.includes(searchTerm)) {
-                    item.style.display = '';
-                    // Expand parent menus if this is a submenu item
-                    const submenu = item.closest('.submenu');
-                    if (submenu) {
-                        submenu.style.display = 'block';
-                        submenu.previousElementSibling.classList.add('active');
-                    }
-                } else {
-                    item.style.display = 'none';
-                }
-            });
+    // Add CSS for search highlights
+    if (!document.querySelector('#search-highlight-style')) {
+        const style = document.createElement('style');
+        style.id = 'search-highlight-style';
+        style.textContent = `
+            .search-highlight {
+                background-color: #fbbf24;
+                color: #000;
+                padding: 0.1em 0.2em;
+                border-radius: 2px;
+                font-weight: 600;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    
+    // Mobile menu toggle (if needed for responsive design)
+    const sidebarToggle = document.querySelector('.sidebar-toggle');
+    const sidebar = document.getElementById('sidebar');
+    
+    if (sidebarToggle && sidebar) {
+        sidebarToggle.addEventListener('click', function() {
+            sidebar.classList.toggle('active');
+            document.body.classList.toggle('sidebar-open');
         });
     }
     
-    // Responsive menu toggle (for mobile)
-    const menuToggle = document.createElement('button');
-    menuToggle.className = 'menu-toggle';
-    menuToggle.innerHTML = '<i class="fas fa-bars"></i>';
-    document.querySelector('header').appendChild(menuToggle);
-    
-    menuToggle.addEventListener('click', function() {
-        document.getElementById('sidebar').classList.toggle('active');
-    });
-    
-    // Close menu when clicking outside on mobile
+    // Close mobile menu when clicking outside
     document.addEventListener('click', function(e) {
-        const sidebar = document.getElementById('sidebar');
-        if (!e.target.closest('#sidebar') && !e.target.closest('.menu-toggle')) {
-            sidebar.classList.remove('active');
+        if (window.innerWidth <= 768) {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.querySelector('.sidebar-toggle');
+            
+            if (sidebar && sidebar.classList.contains('active') && 
+                !sidebar.contains(e.target) && 
+                !sidebarToggle?.contains(e.target)) {
+                sidebar.classList.remove('active');
+                document.body.classList.remove('sidebar-open');
+            }
         }
     });
-    
-    // Add copy button to code blocks
-    document.querySelectorAll('pre').forEach(pre => {
-        const button = document.createElement('button');
-        button.className = 'copy-button';
-        button.innerHTML = '<i class="far fa-copy"></i>';
-        button.title = 'Copy to clipboard';
-        
-        button.addEventListener('click', function() {
-            const code = pre.querySelector('code').textContent;
-            navigator.clipboard.writeText(code).then(() => {
-                const originalText = this.innerHTML;
-                this.innerHTML = '<i class="fas fa-check"></i>';
-                this.classList.add('copied');
-                setTimeout(() => {
-                    this.innerHTML = originalText;
-                    this.classList.remove('copied');
-                }, 2000);
-            });
-        });
-        
-        pre.style.position = 'relative';
-        pre.appendChild(button);
-    });
 });
-
-// Add CSS for copy button
-const style = document.createElement('style');
-style.textContent = `
-.copy-button {
-    position: absolute;
-    top: 0.5rem;
-    right: 0.5rem;
-    background: rgba(0, 0, 0, 0.1);
-    border: none;
-    border-radius: 4px;
-    padding: 0.25rem 0.5rem;
-    cursor: pointer;
-    color: var(--text);
-    transition: all 0.2s ease;
-}
-
-.copy-button:hover {
-    background: rgba(0, 0, 0, 0.2);
-}
-
-.copy-button.copied {
-    background: #10b981;
-    color: white;
-}
-
-.menu-toggle {
-    display: none;
-    background: none;
-    border: none;
-    color: white;
-    font-size: 1.5rem;
-    cursor: pointer;
-    margin-left: auto;
-}
-
-@media (max-width: 768px) {
-    .menu-toggle {
-        display: block;
-    }
-    
-    #sidebar {
-        position: fixed;
-        top: 0;
-        left: -300px;
-        width: 280px;
-        height: 100vh;
-        z-index: 1000;
-        transition: left 0.3s ease;
-    }
-    
-    #sidebar.active {
-        left: 0;
-        box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
-    }
-    
-    .container {
-        grid-template-columns: 1fr;
-    }
-    
-    #content {
-        margin-left: 0;
-    }
-}
-`;
-document.head.appendChild(style);
