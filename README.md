@@ -132,12 +132,30 @@ For a complete list of features and detailed documentation, please visit our [do
 
 ## Documentation
 
-Comprehensive documentation is available in the [docs](docs/) directory:
+### Getting Started
+- [Quick Start Guide](docs/quickstart.md)
+- [Installation](docs/installation.md)
+- [Tutorials](docs/tutorials/)
 
-- [Developer Guide](docs/developer_guide.md) - Architecture, development workflow, and API reference
-- [DSL Specification](docs/dsl_specification.md) - Complete language reference and examples
-- [Contributing](docs/contributing.md) - How to contribute to the project
-- [Code of Conduct](docs/code_of_conduct.md) - Community guidelines
+### Reference
+- [DSL Specification](docs/dsl_specification.md)
+- [ROS2 Integration](docs/ros2_integration.md)
+- [CUDA Acceleration](docs/cuda_acceleration.md)
+- [API Reference](docs/api/)
+
+### Advanced Topics
+- [Lifecycle Nodes](docs/lifecycle_nodes.md)
+- [QoS Configuration](docs/qos_configuration.md)
+- [Namespace and Remapping](docs/namespaces.md)
+- [Conditional Compilation](docs/conditional_compilation.md)
+- [Multi-GPU Support](docs/multi_gpu.md)
+
+### Resources
+- [Examples](examples/)
+- [Contributing](CONTRIBUTING.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Changelog](CHANGELOG.md)
+- [Roadmap](ROADMAP.md)
 
 ## Examples
 
