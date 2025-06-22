@@ -1,203 +1,108 @@
 # ROS2 Integration
 
-RoboDSL provides seamless integration with ROS2, allowing you to define nodes, topics, services, and actions with a clean, declarative syntax. This document covers the various ROS2 features supported by RoboDSL.
+RoboDSL provides first-class support for ROS2 features. Here's a quick reference:
 
-## Table of Contents
-- [Lifecycle Nodes](#lifecycle-nodes)
-- [QoS Configuration](#qos-configuration)
-- [Namespaces and Remapping](#namespaces-and-remapping)
-- [Parameters](#parameters)
-- [Actions](#actions)
-- [Services](#services)
-- [Timers](#timers)
-
-## Lifecycle Nodes
-
-RoboDSL supports ROS2's managed nodes with full lifecycle management. To create a lifecycle node:
+## Lifecycle Node
 
 ```robodsl
-node my_lifecycle_node {
-    lifecycle: true  // Enable lifecycle management
-    
-    // Define transitions
-    on_configure {
-        // Initialization code
-        return SUCCESS
-    }
-    
-    on_activate {
-        // Activation code
-        return SUCCESS
-    }
-    
-    on_deactivate {
-        // Deactivation code
-        return SUCCESS
-    }
-    
-    on_cleanup {
-        // Cleanup code
-        return SUCCESS
-    }
-    
-    on_shutdown {
-        // Shutdown code
-        return SUCCESS
-    }
+node my_node {
+    enable_lifecycle = true
+    on_configure = "configure_cb"
+    on_activate = "activate_cb"
+    on_deactivate = "deactivate_cb"
+    on_cleanup = "cleanup_cb"
+    on_shutdown = "shutdown_cb"
+    on_error = "error_cb"
 }
 ```
 
 ## QoS Configuration
 
-RoboDSL allows fine-grained control over Quality of Service (QoS) settings for publishers and subscribers:
-
 ```robodsl
-node qos_example {
-    // Publisher with custom QoS
-    publisher /status std_msgs/msg/String {
-        qos: {
-            reliability: reliable      // or best_effort
-            durability: transient_local // or volatile
-            history: keep_last        // or keep_all
-            depth: 10                 // Only for keep_last
-            deadline: 100ms           // Optional
-            lifespan: 1000ms          // Optional
-            liveliness: automatic     // or manual_by_topic, manual_by_node
-            liveliness_lease_duration: 1000ms
-        }
+// Publisher with QoS
+publishers = [{
+    name = "status"
+    type = "std_msgs/msg/String"
+    qos = {
+        reliability = "reliable"  // or "best_effort"
+        durability = "transient_local"  // or "volatile"
+        depth = 10
     }
-    
-    // Subscriber with matching QoS
-    subscriber /input sensor_msgs/msg/Image {
-        qos: @reliable_transient_local
-    }
-}
+}]
 
-// Define reusable QoS profiles
-qos_profile reliable_transient_local {
-    reliability: reliable
-    durability: transient_local
-    history: keep_last
-    depth: 10
-}
+// Reusable QoS profile
+qos_profiles = [{
+    name = "sensor_qos"
+    reliability = "best_effort"
+    durability = "volatile"
+    depth = 1
+}]
 ```
 
-## Namespaces and Remapping
-
-### Namespaces
-
-You can organize nodes and topics into namespaces:
+## Namespaces & Remapping
 
 ```robodsl
+// Node with namespace
 node my_node {
-    namespace: /robot1
-    
-    // This will be published to /robot1/status
-    publisher status std_msgs/msg/String
-    
-    // Nested namespaces
-    namespace: /sensors {
-        // This will be published to /robot1/sensors/lidar
-        publisher lidar sensor_msgs/msg/PointCloud2
-    }
+    namespace = "robot1"  // Topics will be /robot1/...
 }
-```
 
-### Remapping
-
-Remap topic and service names at runtime:
-
-```robodsl
-node remap_example {
-    // Remap topic names
-    remap: {
-        from: /old_topic
-        to: /new_topic
+// Topic remapping
+remappings = [
+    {
+        from = "/old_topic"
+        to = "/new_topic"
+    },
+    {
+        from = "/camera/image_raw"
+        to = "/sensors/camera/left/image_raw"
     }
-    
-    // Multiple remaps
-    remap: {
-        from: /camera/image_raw
-        to: /sensors/camera/left/image_raw
-    }
-    
-    // This will publish to /new_topic
-    publisher /old_topic std_msgs/msg/String
-}
+]
 ```
 
 ## Parameters
 
-Define and use parameters with type safety:
-
 ```robodsl
-node param_example {
-    // Declare parameters
-    parameters {
-        // Required parameter with default value
-        string my_string {
-            default: "hello"
-            description: "A string parameter"
-        }
-        
-        // Integer parameter with constraints
-        int my_int {
-            default: 42
-            min: 0
-            max: 100
-            description: "An integer parameter"
-        }
-        
-        // Double parameter
-        double my_double {
-            default: 3.14
-            description: "A double parameter"
-        }
-        
-        // Boolean parameter
-        bool my_bool {
-            default: true
-            description: "A boolean parameter"
-        }
-        
-        // Array parameter
-        double[] gains {
-            default: [1.0, 2.0, 3.0]
-            description: "Array of gains"
-        }
-    }
-    
-    // Use parameters in callbacks
-    timer 1.0 {
-        // Access parameters using the 'params' object
-        let message = std_msgs::msg::String()
-        message.data = params.my_string + " " + str(params.my_int)
-        pub.publish(message)
-    }
+// Node with parameters
+node param_node {
+    parameters = [{
+        name = "my_param"
+        type = "string"
+        value = "default"
+        description = "Example parameter"
+    }]
 }
+
+// Access in code:
+// params.my_param
 ```
 
-## Actions
-
-Define and use ROS2 actions:
+## Actions & Services
 
 ```robodsl
-// Define a custom action
+// Action definition
 action Fibonacci {
-    // Goal
     int32 order
-    
-    // Result
+    ---
     int32[] sequence
-    
-    // Feedback
+    ---
     int32[] partial_sequence
 }
 
-node action_server_example {
-    // Action server
-    action_server /fibonacci Fibonacci {
-        // Called when a new goal is received
+// Action server
+actions = [{
+    name = "fibonacci"
+    type = "example_actions/action/Fibonacci"
+    execute_callback = "fibonacci_cb"
+}]
+
+// Service definition
+services = [{
+    name = "add_two_ints"
+    type = "example_interfaces/srv/AddTwoInts"
+    callback = "add_cb"
+}]
+```
         on_goal(goal_handle) {
             // Accept the goal
             goal_handle.succeed()
