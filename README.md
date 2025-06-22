@@ -4,200 +4,60 @@
 [![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/)
 [![ROS2 Version](https://img.shields.io/badge/ROS2-Humble%20%7C%20Foxy%20%7C%20Galactic-blueviolet)](https://docs.ros.org/)
 [![CUDA](https://img.shields.io/badge/CUDA-11.0%2B-green.svg)](https://developer.nvidia.com/cuda-toolkit)
-[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg)](docs/)
-[![Code Style: Black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-A domain-specific language and compiler for building high-performance, GPU-accelerated robotics applications with ROS2 and CUDA integration. RoboDSL simplifies the development of complex robotics systems by providing a clean, declarative syntax for defining ROS2 nodes, services, and CUDA-accelerated computations.
+A DSL for building GPU-accelerated robotics applications with ROS2 and CUDA.
 
 ## Quick Start
 
 ### Prerequisites
+- Linux/Windows (WSL2) with Python 3.8+
+- ROS2 (Humble/Foxy/Galactic)
+- CUDA 11.0+ (for GPU acceleration)
+- Build tools (CMake, make, g++)
 
-- **System**: Linux (Debian/Ubuntu recommended) or Windows (WSL2)
-- **Python**: 3.8 or higher
-- **ROS2**: Humble, Foxy, or Galactic
-- **CUDA Toolkit**: 11.0 or higher (for GPU acceleration)
-- **Build Tools**: CMake, make, g++
-
-### Installation
-
-#### Option 1: Debian Package (Recommended)
-
+### Install
 ```bash
 git clone https://github.com/yourusername/robodsl.git
 cd robodsl
-./build-deb-direct.sh
-sudo dpkg -i robodsl_0.1.0_all.deb
-sudo apt-get install -f  # Install dependencies
+# Choose one:
+./build-deb-direct.sh && sudo dpkg -i robodsl_0.1.0_all.deb  # Debian
+# OR
+pip install -e .  # Development
+# OR
+./build-with-minimal-docker.sh  # Docker
 ```
 
-#### Option 2: Development Installation
+## Features
 
-```bash
-git clone https://github.com/yourusername/robodsl.git
-cd robodsl
-pip install -e .
-```
-
-#### Option 3: Docker
-
-```bash
-git clone https://github.com/yourusername/robodsl.git
-cd robodsl
-./build-with-minimal-docker.sh
-# Find the package in debian-pkgs/
-```
-
-Verify your installation:
-
-```bash
-robodsl --version
-```
-
-For detailed installation instructions, see our [documentation](docs/).
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/)
-[![ROS2 Version](https://img.shields.io/badge/ROS2-Humble%20%7C%20Foxy%20%7C%20Galactic-blueviolet)](https://docs.ros.org/)
-[![CUDA](https://img.shields.io/badge/CUDA-11.0%2B-green.svg)](https://developer.nvidia.com/cuda-toolkit)
-[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg)](docs/)
-[![Code Style: Black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-
-RoboDSL is a powerful framework that simplifies the development of GPU-accelerated robotics applications by providing a clean, declarative syntax for defining ROS2 nodes and CUDA kernels. It handles all the boilerplate code and build system configuration, allowing developers to focus on algorithm development and system integration.
-
-## Key Features
-
-### Core Capabilities
-- **Declarative Syntax**: Define complex robotics applications with clean, readable code
-- **Component Architecture**: Build modular, reusable components with clear interfaces
-- **Cross-Platform**: Consistent behavior across Linux, Windows (WSL2), and macOS
-
-### Performance Optimization
-- **GPU Acceleration**: Seamless CUDA integration with automatic memory management
-- **Multi-Threading**: Built-in support for parallel processing and thread safety
-- **Optimized Builds**: Advanced compilation flags for maximum performance
-
-### ROS2 Integration
-- **Lifecycle Management**: Full support for ROS2 managed nodes with state management
-- **Quality of Service**: Fine-grained control over communication reliability and performance
-- **System Organization**: Advanced namespacing and remapping capabilities
-- **Parameter Server**: Type-safe parameter handling with validation
-
-For a complete list of features and detailed documentation, please visit our [documentation](docs/).
-
-### Developer Experience
-
-#### Code Generation
-- **Automatic Boilerplate**: Generate complete ROS2 packages
-- **Custom Templates**: Extend and customize code generation
-- **Multi-language Support**: C++ and Python node generation
-- **Message/Service/Action Generation**: Automatic IDL compilation
-
-#### Build System
-- **CMake Integration**: Automatic CMake configuration
-- **Dependency Management**: Automatic handling of ROS2 and CUDA dependencies
-- **Cross-Platform Builds**: Consistent builds across platforms
-- **Custom Build Steps**: Pre-build and post-build hooks
-
-#### Debugging & Profiling
-- **Integrated Logging**: Built-in logging macros
-- **Performance Profiling**: Built-in tools for performance analysis
-  - CPU/GPU timing utilities
-  - Memory usage tracking
-  - ROS2 performance measurements
-- **Debug Visualization**: Built-in visualization tools
-  - RViz integration
-  - Plotting utilities
-  - Custom visualization plugins
-
-### Advanced Features
-
-#### CUDA Integration
-- **Kernel Definition**: Define CUDA kernels directly in DSL
-- **Automatic Memory Management**: Smart pointers for device memory
-- **Stream Management**: CUDA stream support
-- **Multi-GPU Support**: Explicit device selection
-
-#### System Integration
-- **Component Model**: Build modular, reusable components
-- **Plugin System**: Runtime-loadable components
-- **External Library Integration**: Easy integration with common robotics libraries
-- **Simulation Support**: Integration with Gazebo and other simulators
-
-#### Security
-- **Authentication**: ROS2 security features
-- **Access Control**: Fine-grained permission management
-- **Network Security**: Secure communication channels
-- **Parameter Encryption**: Secure parameter storage
+- **DSL**: Clean syntax for ROS2 nodes and CUDA kernels
+- **Performance**: GPU acceleration with automatic memory management
+- **Modular**: Component-based architecture
+- **Cross-Platform**: Linux/Windows/macOS support
+- **ROS2**: Lifecycle nodes, QoS, namespacing
+- **Build**: Automatic CMake and dependency handling
 
 ## Documentation
 
-### Getting Started
-- [Quick Start Guide](docs/quickstart.md)
-- [Installation](docs/installation.md)
-- [Tutorials](docs/tutorials/)
-
-### Reference
 - [DSL Specification](docs/dsl_specification.md)
 - [ROS2 Integration](docs/ros2_integration.md)
 - [CUDA Acceleration](docs/cuda_acceleration.md)
-- [API Reference](docs/api/)
-
-### Advanced Topics
-- [Lifecycle Nodes](docs/lifecycle_nodes.md)
-- [QoS Configuration](docs/qos_configuration.md)
-- [Namespace and Remapping](docs/namespaces.md)
-- [Conditional Compilation](docs/conditional_compilation.md)
-- [Multi-GPU Support](docs/multi_gpu.md)
-
-### Resources
 - [Examples](examples/)
-- [Contributing](CONTRIBUTING.md)
-- [Code of Conduct](CODE_OF_CONDUCT.md)
-- [Changelog](CHANGELOG.md)
-- [Roadmap](ROADMAP.md)
-
-## Examples
-
-Explore the [examples](examples/) directory for sample projects and usage patterns.
 
 ## Development
 
-### Building from Source
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/robodsl.git
-   cd robodsl
-   ```
-
-2. Install build dependencies:
-   ```bash
-   sudo apt-get update
-   sudo apt-get install -y build-essential fakeroot debhelper dh-python python3-all python3-setuptools
-   ```
-
-3. Build and install in development mode:
-   ```bash
-   pip install -e .
-   ```
+```bash
+git clone https://github.com/yourusername/robodsl.git
+cd robodsl
+pip install -e .  # Development install
+```
 
 ## Contributing
 
-We welcome contributions! Please see our [Contributing Guide](docs/contributing.md) for details on how to contribute to the project.
+Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgements
-
-RoboDSL builds upon these amazing open source projects:
-
-- [ROS2](https://docs.ros.org/) - Robot Operating System
-- [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit) - GPU-accelerated computing
-- [Python](https://www.python.org/) - Programming language
-- [Jinja2](https://palletsprojects.com/p/jinja/) - Templating engine
+MIT - See [LICENSE](LICENSE)
 - [CMake](https://cmake.org/) - Build system generator
 - [Click](https://click.palletsprojects.com/) - Command line interface creation
 

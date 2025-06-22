@@ -1,110 +1,57 @@
 # RoboDSL Examples
 
-Welcome to the RoboDSL examples directory! This collection demonstrates how to leverage RoboDSL's powerful features through practical, runnable examples. Each example is designed to showcase specific capabilities while following best practices for ROS2 and CUDA development.
+Practical examples demonstrating RoboDSL features.
 
-## Getting Started
+## Prerequisites
 
-### Prerequisites
-- RoboDSL installed (see main [README](../README.md) for installation instructions)
-- ROS2 Humble or later
-- CUDA Toolkit (for GPU-accelerated examples)
-- Basic familiarity with ROS2 concepts
+- RoboDSL (see [README](../README.md))
+- ROS2 Humble+
+- CUDA Toolkit (for GPU examples)
 
-### How to Use These Examples
-1. Navigate to any example directory
-2. Follow the README for build and run instructions
-3. Experiment with the code to understand how it works
-4. Use as a reference for your own projects
+## Quick Start
 
-## Featured Examples
+```bash
+# Build examples
+$ cd /path/to/example
+$ colcon build --packages-select <example_name>
+$ source install/setup.bash
+$ ros2 run <example_name> <node_name>
+```
 
-### Comprehensive Example
-
-**File**: [comprehensive_example.robodsl](comprehensive_example.robodsl)
-
-A complete showcase of RoboDSL features in a single, well-documented example. Perfect for understanding how different components work together.
-
-**Key Features**:
-- Complete lifecycle node implementation
-- Custom QoS profiles for all communication
-- Parameter server integration
-- CUDA-accelerated processing
-- Namespace and remapping examples
-- Error handling and recovery
-
-### MPPI Robot Controller
-
-**Directory**: [mppi_robot/](mppi_robot/)
-
-An advanced implementation of a Model Predictive Path Integral (MPPI) controller for robot navigation, demonstrating real-world usage patterns.
-
-**Key Features**:
-- Advanced ROS2 node configuration
-- Parameter server with validation
-- Python node implementation
-- Launch file configuration
-- Performance optimization techniques
-
-## Example Files
+## Examples
 
 ### 1. Comprehensive Example
-- **File**: [comprehensive_example.robodsl](comprehensive_example.robodsl)
-- **Description**: A complete example showcasing most RoboDSL features including lifecycle nodes, QoS configuration, namespacing, and CUDA offloading.
-- **Features**:
-  - Lifecycle node with all callbacks
-  - Publishers and subscribers with custom QoS
-  - Service and action servers
-  - CUDA kernel offloading
-  - Conditional compilation
+`comprehensive_example.robodsl`
+- Lifecycle nodes
+- Custom QoS profiles
+- Parameter server
+- CUDA acceleration
+- Namespace/remapping
 
-### 2. MPPI Robot Controller
-- **Directory**: [mppi_robot/](mppi_robot/)
-- **Description**: A more complex example implementing a Model Predictive Path Integral (MPPI) controller for robot navigation.
-- **Features**:
-  - Advanced ROS2 node configuration
-  - Parameter server integration
-  - Python node implementation
-  - Launch file configuration
+### 2. MPPI Controller
+`mppi_robot/`
+- Advanced ROS2 config
+- Parameter validation
+- Python nodes
+- Launch files
 
-## Feature Showcase
-
-Explore specific RoboDSL features through these focused examples:
-
-### Lifecycle Node Example
-
-RoboDSL's lifecycle nodes provide a structured way to manage your node's resources and state. This example shows a complete implementation with all lifecycle callbacks.
-
-**Key Concepts**:
-- Node state management (Unconfigured, Inactive, Active, Finalized)
-- Resource lifecycle hooks
-- Error handling and recovery
-- Parameter handling
-
-**Example Code**:
+## Lifecycle Node
 
 ```python
 lifecycle_node sensor_processor {
     namespace = "robot1"
-    
-    # Enable automatic parameter handling
     allow_undeclared_parameters = false
-    automatically_declare_parameters_from_overrides = true
-    
-    # Topic remapping
     remap = {
         "image_raw": "camera/image_raw",
         "processed_image": "camera/processed"
     }
     
-    # Lifecycle callbacks
+    # Callbacks
     on_configure = "on_configure"
     on_activate = "on_activate"
     on_deactivate = "on_deactivate"
-    on_cleanup = "on_cleanup"
-    on_shutdown = "on_shutdown"
-    on_error = "on_error"
     
-    # QoS configuration
+    # QoS
     state_qos = {
         reliability = "reliable"
         durability = "transient_local"
@@ -113,67 +60,41 @@ lifecycle_node sensor_processor {
 }
 ```
 
-### QoS Configuration Example
-
-Quality of Service (QoS) settings are crucial for reliable ROS2 communication. This example demonstrates how to configure QoS profiles for different communication patterns.
-
-**Key Concepts**:
-- Reliability vs. best-effort delivery
-- Transient local durability
-- History depth and queue sizes
-- Deadline, lifespan, and liveliness policies
-
-**Example Code**:
+## QoS Configuration
 
 ```python
-# Define custom QoS profiles
+# QoS profiles
 sensor_qos = {
     reliability = "best_effort"
     durability = "volatile"
-    history = "keep_last"
     depth = 5
 }
 
 command_qos = {
     reliability = "reliable"
     durability = "transient_local"
-    history = "keep_last"
     depth = 10
 }
 
 node control_node {
-    publishers = [
-        {
-            name = "cmd_vel"
-            type = "geometry_msgs/msg/Twist"
-            topic = "cmd_vel"
-            qos = command_qos
-        }
-    ]
+    publishers = [{
+        name = "cmd_vel"
+        type = "geometry_msgs/msg/Twist"
+        topic = "cmd_vel"
+        qos = command_qos
+    }]
     
-    subscribers = [
-        {
-            name = "lidar_scan"
-            type = "sensor_msgs/msg/LaserScan"
-            topic = "scan"
-            qos = sensor_qos
-            callback = "lidar_callback"
-        }
-    ]
+    subscribers = [{
+        name = "lidar_scan"
+        type = "sensor_msgs/msg/LaserScan"
+        topic = "scan"
+        qos = sensor_qos
+        callback = "lidar_callback"
+    }]
 }
 ```
 
-### CUDA Offloading Example
-
-Leverage GPU acceleration for compute-intensive tasks with RoboDSL's seamless CUDA integration.
-
-**Key Concepts**:
-- Kernel definition and invocation
-- Memory management
-- Grid and block configuration
-- Host-device data transfer
-
-**Example Code**:
+## CUDA Offloading
 
 ```python
 cuda_kernel process_image {
@@ -184,20 +105,24 @@ cuda_kernel process_image {
         { name: "height", type: "int" }
     ]
     
-    grid = { x: "(width + 15) / 16", y: "(height + 15) / 16", z: 1 }
+    grid = { x: "(width + 15)/16", y: "(height + 15)/16", z: 1 }
     block = { x: 16, y: 16, z: 1 }
     
     code = """
-    __global__ void process_image_kernel(const uchar4* input, uchar4* output, int width, int height) {
+    __global__ void process_image_kernel(
+        const uchar4* input, 
+        uchar4* output, 
+        int width, 
+        int height
+    ) {
         int x = blockIdx.x * blockDim.x + threadIdx.x;
         int y = blockIdx.y * blockDim.y + threadIdx.y;
         
         if (x < width && y < height) {
             int idx = y * width + x;
             uchar4 pixel = input[idx];
-            
-            // Simple grayscale conversion
-            unsigned char gray = 0.299f * pixel.x + 0.587f * pixel.y + 0.114f * pixel.z;
+            // Grayscale conversion
+            unsigned char gray = 0.299f*pixel.x + 0.587f*pixel.y + 0.114f*pixel.z;
             output[idx] = make_uchar4(gray, gray, gray, 255);
         }
     }

@@ -1,44 +1,30 @@
 # Contributing to RoboDSL
 
-Thank you for your interest in contributing to RoboDSL! We welcome contributions from the community to help improve the project. This guide will help you get started with contributing to the project.
-
-## Table of Contents
-
-1. [Code of Conduct](#code-of-conduct)
-2. [Quick Start](#quick-start)
-3. [Development Environment](#development-environment)
-4. [Code Style](#code-style)
-5. [Testing](#testing)
-6. [Pull Request Process](#pull-request-process)
-7. [Reporting Issues](#reporting-issues)
-8. [Feature Requests](#feature-requests)
-9. [Documentation](#documentation)
-10. [Code Review Guidelines](#code-review-guidelines)
-11. [Release Process](#release-process)
-12. [License](#license)
+We welcome contributions! Here's how to get started.
 
 ## Quick Start
 
-1. **Fork** the repository on GitHub
-2. **Clone** your fork locally
-   ```bash
-   git clone https://github.com/Zedonkay/robodsl.git
-   cd robodsl
-   ```
-3. Set up the development environment (see below)
-4. Create a **branch** for your changes
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-5. Make your changes and **commit** them with a descriptive message
-   ```bash
-   git commit -m "feat: add new feature"
-   ```
-6. **Push** your changes to your fork
-   ```bash
-   git push origin feature/your-feature-name
-   ```
-7. Open a **pull request** against the `main` branch
+```bash
+# 1. Fork & clone
+$ git clone https://github.com/yourusername/robodsl.git
+$ cd robodsl
+
+# 2. Setup env
+$ python -m venv venv
+$ source venv/bin/activate  # or `venv\Scripts\activate` on Windows
+$ pip install -e ".[dev]"
+$ pre-commit install
+
+# 3. Make changes
+$ git checkout -b feat/your-feature
+# ... make changes ...
+
+# 4. Test & submit
+$ pytest
+$ git commit -m "feat: add new feature"
+$ git push origin feat/your-feature
+# Create PR from GitHub UI
+```
 
 ## Development Environment
 
@@ -68,141 +54,87 @@ Thank you for your interest in contributing to RoboDSL! We welcome contributions
    pre-commit install
    ```
 
-## Code Style
-
-We follow these coding standards:
-
-- **Python**: PEP 8 with Black formatting
-- **C++**: Google C++ Style Guide with clang-format
-- **CMake**: Follow Modern CMake practices
-- **Documentation**: Google-style docstrings
-
-### Pre-commit Hooks
-
-We use pre-commit to enforce code quality. The following hooks are configured:
-
-- Black (code formatting)
-- isort (import sorting)
-- flake8 (linting)
-- mypy (type checking)
-- clang-format (C++ formatting)
-
-Run the pre-commit hooks manually:
-
-```bash
-pre-commit run --all-files
-```
-
 ## Testing
-
-### Running Tests
 
 ```bash
 # Run all tests
-pytest
+$ pytest
 
-# Run tests with coverage
-pytest --cov=robodsl tests/
+# With coverage
+$ pytest --cov=robodsl
 
-# Run a specific test file
-pytest tests/test_parser.py
-
-# Run with verbose output
-pytest -v
+# Specific test file
+$ pytest tests/test_feature.py -v
 ```
 
-### Writing Tests
+Write tests in `tests/` with `test_*.py` naming.
 
-- Place test files in the `tests/` directory
-- Follow the `test_*.py` naming convention
-- Use descriptive test function names
-- Include docstrings explaining test purpose
-- Use fixtures for common test setup
+## Pull Requests
 
-## Pull Request Process
-
-1. Ensure all tests pass
-2. Update documentation as needed
-3. Add your changes to CHANGELOG.md
-4. Submit a draft PR early for discussion
-5. Request reviews from maintainers
-6. Address all review comments
-7. Ensure CI passes before merging
-
-### Commit Message Format
-
-We follow the [Conventional Commits](https://www.conventionalcommits.org/) specification:
+1. Keep PRs focused and small
+2. Update docs if needed
+3. Add tests for new features
+4. Ensure all tests pass
+5. Follow commit message format:
 
 ```
-<type>[optional scope]: <description>
+type(scope): description
 
-[optional body]
-
-[optional footer(s)]
-```
-
-Types:
-- `feat`: New feature
-- `fix`: Bug fix
-- `docs`: Documentation changes
-- `style`: Code style changes
-- `refactor`: Code changes that neither fix bugs nor add features
-- `perf`: Performance improvements
-- `test`: Adding or modifying tests
-- `chore`: Changes to the build process or auxiliary tools
-
-Example:
-```
-feat(parser): add support for custom node types
-
-Add ability to define custom node types with validation.
+Optional body
 
 Closes #123
 ```
 
-## Reporting Issues
+Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`
 
-When reporting issues, please include:
+## Issues & Features
 
-1. Description of the problem
-2. Steps to reproduce
-3. Expected behavior
-4. Actual behavior
-5. Environment details
-6. Any relevant logs or error messages
+### Reporting Bugs
 
-## Feature Requests
+1. Check existing issues first
+2. Include:
+   - Steps to reproduce
+   - Expected vs actual behavior
+   - Environment details
+   - Error logs
 
-We welcome feature requests! Please:
+### Feature Requests
 
-1. Check if the feature already exists
-2. Explain why this feature is valuable
-3. Describe the proposed solution
-4. Include any relevant examples
+1. Check existing issues
+2. Explain the use case
+3. Propose a solution
+4. Include examples if possible
 
 ## Documentation
 
-### Building Documentation
-
 ```bash
-# Install documentation dependencies
-pip install -e ".[docs]"
-
-# Build the documentation
-cd docs
-make html
-
-# View the documentation
-open _build/html/index.html
+# Build docs
+$ cd docs
+$ pip install -r requirements.txt
+$ make html
 ```
 
-### Documentation Guidelines
+- Keep docs in `docs/`
+- Use Markdown (.md)
+- Follow Google style for docstrings
+- Update when adding features
 
-- Use Markdown for all documentation
-- Follow the Google Style Guide for docstrings
-- Include examples for public APIs
-- Update documentation when changing behavior
-- Add diagrams for complex concepts
+## License
+
+MIT - See [LICENSE](LICENSE)
+
+## Code Style
+
+- **Python**: Black + isort
+- **C++**: clang-format
+- **Commits**: Conventional Commits
+- **Docs**: Google style
+
+Pre-commit handles formatting. Install hooks once:
+
+```bash
+$ pre-commit install
+```
 
 ## Code Review Guidelines
 
@@ -229,10 +161,6 @@ open _build/html/index.html
 3. Create a release tag
 4. Build and publish packages
 5. Update documentation
-
-## License
-
-By contributing to RoboDSL, you agree that your contributions will be licensed under the MIT License. See [LICENSE](../LICENSE) for details.
 
 ## Code of Conduct
 

@@ -1,201 +1,194 @@
-# RoboDSL Language Specification
+# RoboDSL DSL Reference
 
-## Introduction
+> **Version**: 0.1.0+
 
-RoboDSL (Robot Domain-Specific Language) is a high-level language designed for building robust, performant, and maintainable robot applications. It provides a clean, declarative syntax for defining ROS2 nodes, components, and their interactions, with built-in support for advanced features like lifecycle management, QoS configuration, and GPU acceleration.
+RoboDSL is a high-level language for building robot applications with ROS2 and CUDA.
 
-### Version
-This specification applies to RoboDSL version 0.1.0 and later.
+## Key Features
 
-### Key Features
+- ROS2 Lifecycle nodes & components
+- QoS configuration
+- Namespace/remapping
+- CUDA integration
+- Type safety
+- CMake integration
 
-- **ROS2 Lifecycle Node Support**: Built-in support for managed nodes with configurable lifecycle states and transitions
-- **Quality of Service (QoS) Configuration**: Fine-grained control over communication reliability, durability, and resource usage
-- **Namespace and Remapping**: Flexible namespace management and topic/service remapping
-- **CUDA Offloading**: Seamless integration of GPU-accelerated computations
-- **Conditional Compilation**: Feature flags for building different configurations from the same codebase
-- **Component-Based Architecture**: Modular design for better code organization and reuse
-- **Type Safety**: Strong typing for messages, services, and parameters
-- **Build System Integration**: Native CMake integration with support for cross-platform development
-
-## Table of Contents
-1. [Syntax Overview](#syntax-overview)
-2. [Project Definition](#project-definition)
-3. [Node Definition](#node-definition)
-   - [Node Types](#node-types)
-   - [Lifecycle Nodes](#lifecycle-nodes)
-   - [Component Nodes](#component-nodes)
-4. [Communication](#communication)
-   - [Publishers](#publishers)
-   - [Subscribers](#subscribers)
-   - [Services](#services)
-   - [Actions](#actions)
-5. [Parameters](#parameters)
-6. [CUDA Integration](#cuda-integration)
-7. [Build System](#build-system)
-8. [FAQ](#faq)
-
-## Syntax Overview
-
-RoboDSL uses a C-like syntax with a focus on readability and simplicity. The language is statically typed and supports both imperative and declarative programming styles.
-
-### Basic Structure
+## Quick Start
 
 ```robodsl
-// Single-line comment
-/* Multi-line
-   comment */
-
-// Import other RoboDSL files
-import "common.robodsl"
-
 // Project definition
 project "my_robot" {
     version = "0.1.0"
-    description = "My Robot Application"
 }
 
-// Node definition
+// Node with publisher and subscriber
 node my_node {
-    // Node configuration
     namespace = "robot1"
-    enable_lifecycle = true
     
-    // Publishers
-    publishers = [
-        {
-            name = "odom"
-            type = "nav_msgs/msg/Odometry"
-            qos = {
-                reliability = "reliable"
-                durability = "transient_local"
-                depth = 10
-            }
-        }
-    ]
+    publishers = [{
+        name = "odom"
+        type = "nav_msgs/msg/Odometry"
+    }]
     
-    // Subscribers
-    subscribers = [
-        {
-            name = "cmd_vel"
-            type = "geometry_msgs/msg/Twist"
-            callback = "on_cmd_vel"
-        }
-    ]
-    
-    // CUDA kernels
-    cuda_kernels = ["process_image"]
+    subscribers = [{
+        name = "cmd_vel"
+        type = "geometry_msgs/msg/Twist"
+        callback = "on_cmd_vel"
+    }]
 }
 ```
 
-## Project Definition
+## Full Reference
 
-Every RoboDSL file must begin with a project definition that specifies the project name and version.
+### Project Definition
 
 ```robodsl
-project "my_robot" {
+project "name" {
     version = "0.1.0"
-    description = "My Robot Application"
-    license = "Apache-2.0"
-    authors = ["Your Name <your.email@example.com>"]
+    description = "..."
+    license = "..."
+    authors = ["..."]
 }
 ```
 
-## Node Definition
-
-Nodes are the fundamental building blocks of a RoboDSL application. They represent individual components that can communicate with each other through topics, services, and actions.
-
-### Basic Node
+### Node Definition
 
 ```robodsl
-node my_node {
-    // Node configuration
-    namespace = "robot1"
-    enable_lifecycle = true
-    
-    // Publishers
-    publishers = [
-        {
-            name = "odom"
-            type = "nav_msgs/msg/Odometry"
-        }
-    ]
+node name {
+    namespace = "..."
+    enable_lifecycle = true/false
 }
 ```
 
-### Lifecycle Nodes
-
-Lifecycle nodes provide a structured way to manage the state and resources of your ROS2 nodes. They follow the ROS2 managed node pattern, allowing for controlled state transitions and better system management.
+### Lifecycle Node
 
 ```robodsl
-node my_lifecycle_node {
+node name {
     enable_lifecycle = true
-    
-    // Lifecycle callbacks
-    on_configure = "on_configure"
-    on_activate = "on_activate"
-    on_deactivate = "on_deactivate"
-    on_cleanup = "on_cleanup"
-    on_shutdown = "on_shutdown"
-    
-    // Error handling
-    on_error = "on_error"
+    on_configure = "..."
+    on_activate = "..."
+    on_deactivate = "..."
+    on_cleanup = "..."
+    on_shutdown = "..."
+    on_error = "..."
 }
 ```
-
-## Communication
 
 ### Publishers
 
-Publishers allow nodes to send messages to specific topics.
-
 ```robodsl
-publishers = [
-    {
-        name = "odom"
-        type = "nav_msgs/msg/Odometry"
-        qos = {
-            reliability = "reliable"
-            durability = "transient_local"
-            depth = 10
-        }
+publishers = [{
+    name = "topic_name"
+    type = "pkg/msg/Type"
+    qos = {
+        reliability = "reliable|best_effort"
+        durability = "volatile|transient_local"
+        depth = 10
     }
-]
+}]
 ```
 
 ### Subscribers
 
-Subscribers receive messages from topics and invoke callback functions.
-
 ```robodsl
-subscribers = [
-    {
-        name = "cmd_vel"
-        type = "geometry_msgs/msg/Twist"
-        callback = "on_cmd_vel"
-        qos = {
-            reliability = "best_effort"
-            durability = "volatile"
-            depth = 1
-        }
-    }
-]
+subscribers = [{
+    name = "topic_name"
+    type = "pkg/msg/Type"
+    callback = "function_name"
+    qos = { ... }  // same as publisher
+}]
 ```
 
-## CUDA Integration
-
-RoboDSL provides first-class support for CUDA acceleration. You can define CUDA kernels directly in your node definitions.
+### Services
 
 ```robodsl
-node image_processor {
-    // Enable CUDA support
-    cuda_kernels = ["process_image"]
+services = [{
+    name = "service_name"
+    type = "pkg/srv/Type"
+    callback = "function_name"
+}]
+```
+
+### Actions
+
+```robodsl
+actions = [{
+    name = "action_name"
+    type = "pkg/action/Type"
+    execute_callback = "execute_cb"
+    goal_callback = "goal_cb"
+    cancel_callback = "cancel_cb"
+}]
+```
+
+### Parameters
+
+```robodsl
+parameters = [{
+    name = "param_name"
+    type = "int|double|string|bool"
+    value = 42
+    description = "..."
+}]
+```
+
+### CUDA Integration
+
+```robodsl
+node gpu_node {
+    cuda_kernels = ["kernel1", "kernel2"]
+    cuda_sources = ["kernels.cu"]
+    cuda_flags = ["-O3"]
+}
+```
+
+## Build Configuration
+
+```robodsl
+build {
+    cpp_std = "17"
+    cmake_min_version = "3.16"
+    dependencies = [
+        "rclcpp",
+        "std_msgs"
+    ]
+}
+```
+
+## Full Example
+
+```robodsl
+project "robot_arm" {
+    version = "1.0.0"
+    description = "Robot Arm Control"
+}
+
+node arm_controller {
+    namespace = "arm"
+    enable_lifecycle = true
     
-    // CUDA source files
-    cuda_sources = ["src/kernels/image_processing.cu"]
+    publishers = [{
+        name = "joint_states"
+        type = "sensor_msgs/msg/JointState"
+    }]
     
-    // CUDA compilation flags
-    cuda_flags = ["-O3", "--ptxas-options=-v"]
+    subscribers = [{
+        name = "joint_commands"
+        type = "trajectory_msgs/msg/JointTrajectory"
+        callback = "on_joint_commands"
+    }]
+    
+    services = [{
+        name = "calibrate"
+        type = "std_srvs/srv/Trigger"
+        callback = "on_calibrate"
+    }]
+    
+    parameters = [{
+        name = "max_velocity"
+        type = "double"
+        value = 1.0
+    }]
 }
 ```
 

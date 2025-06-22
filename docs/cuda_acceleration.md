@@ -1,203 +1,148 @@
 # CUDA Acceleration
 
-RoboDSL provides first-class support for CUDA acceleration, allowing you to write high-performance GPU-accelerated code directly in your RoboDSL files. This document covers how to define and use CUDA kernels, manage device memory, and optimize your GPU code.
+RoboDSL provides seamless CUDA integration for GPU acceleration. Here's a quick reference:
 
-## Table of Contents
-- [Defining CUDA Kernels](#defining-cuda-kernels)
-- [Memory Management](#memory-management)
-- [Streams and Events](#streams-and-events)
-- [Multi-GPU Support](#multi-gpu-support)
-- [Thrust Integration](#thrust-integration)
-- [Performance Optimization](#performance-optimization)
-- [Debugging CUDA Code](#debugging-cuda-code)
-
-## Defining CUDA Kernels
-
-### Basic Kernel Definition
+## Basic Usage
 
 ```robodsl
-// Define a CUDA kernel
-cuda_kernels {
-    kernel vector_add {
-        // Input parameters
-        input float* a
-        input float* b
-        output float* c
-        input int n
-        
-        // Kernel configuration
-        block_size = (256, 1, 1)
-        grid_size = ((n + 255) / 256, 1, 1)
-        
-        // Kernel code
-        code {
-            __global__ void vector_add_kernel(
-                const float* a,
-                const float* b,
-                float* c,
-                int n) {
-                
-                int i = blockIdx.x * blockDim.x + threadIdx.x;
-                if (i < n) {
-                    c[i] = a[i] + b[i];
-                }
-            }
-        }
-    }
+// In your .robodsl file
+node gpu_processor {
+    // Enable CUDA and specify kernels
+    cuda_kernels = ["vector_add", "matrix_mult"]
+    
+    // CUDA source files
+    cuda_sources = [
+        "src/kernels/vector_ops.cu",
+        "src/kernels/matrix_ops.cu"
+    ]
+    
+    // Compilation flags
+    cuda_flags = ["-O3"]
 }
 ```
 
-### Kernel with Shared Memory
+## Kernel Definition
 
-```robodsl
-cuda_kernels {
-    kernel matrix_multiply {
-        // Input parameters
-        input float* a
-        input float* b
-        output float* c
-        input int width
-        
-        // Shared memory declaration
-        shared: "extern __shared__ float sdata[];"
-        
-        // Kernel configuration
-        block_size = (16, 16, 1)
-        grid_size = (width / 16, width / 16, 1)
-        
-        // Shared memory size (in bytes)
-        shared_mem_size: "2 * 16 * 16 * sizeof(float)"
-        
-        // Kernel code
-        code {
-            __global__ void matrix_multiply_kernel(
-                const float* A,
-                const float* B,
-                float* C,
-                int width) {
-                
-                // 2D thread and block indices
-                int tx = threadIdx.x;
-                int ty = threadIdx.y;
-                int bx = blockIdx.x;
-                int by = blockIdx.y;
-                
-                // Shared memory for tiles
-                extern __shared__ float sdata[];
-                float* sA = sdata;
-                float* sB = sdata + 16 * 16;
-                
-                // Calculate row and column for this thread
-                int row = by * blockDim.y + ty;
-                int col = bx * blockDim.x + tx;
-                
-                float sum = 0.0f;
-                
-                // Loop over tiles
-                for (int t = 0; t < width / 16; ++t) {
-                    // Load tiles into shared memory
-                    sA[ty * 16 + tx] = A[row * width + (t * 16 + tx)];
-                    sB[ty * 16 + tx] = B[(t * 16 + ty) * width + col];
-                    
-                    // Synchronize to ensure all threads have loaded their data
-                    __syncthreads();
-                    
-                    // Compute partial product
-                    for (int k = 0; k < 16; ++k) {
-                        sum += sA[ty * 16 + k] * sB[k * 16 + tx];
-                    }
-                    
-                    // Synchronize before next tile
-                    __syncthreads();
-                }
-                
-                // Write result to global memory
-                if (row < width && col < width) {
-                    C[row * width + col] = sum;
-                }
-            }
-        }
-    }
+```cuda
+// In vector_ops.cu
+__global__ void vector_add(
+    const float* a,
+    const float* b,
+    float* c,
+    int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) c[i] = a[i] + b[i];
 }
 ```
 
 ## Memory Management
 
-### Device Memory Allocation
+```robodsl
+// Allocate device memory
+device_ptr<float> d_data = cuda_malloc<float>(1024)
 
-RoboDSL provides automatic memory management for device memory:
+// Copy data to device
+cuda_memcpy_host_to_device(d_data.get(), h_data.data(), 1024 * sizeof(float))
+
+// Process on GPU...
+
+// Copy back to host
+cuda_memcpy_device_to_host(h_result.data(), d_data.get(), 1024 * sizeof(float))
+```
+
+## Advanced Features
+
+### Streams
 
 ```robodsl
-node memory_example {
-    // Allocate device memory
-    device_memory {
-        // Allocate a float array on the device
-        float* d_a = cuda_malloc<float>(1024)
-        
-        // Allocate a 2D array
-        float* d_matrix = cuda_malloc_2d<float>(1024, 1024)
-        
-        // Allocate a 3D array
-        float* d_volume = cuda_malloc_3d<float>(256, 256, 256)
-        
-        // Memory is automatically freed when it goes out of scope
-    }
+// Create and use streams
+cuda_stream stream = cuda_stream_create()
+
+// Launch kernel with stream
+cuda_launch_kernel(
+    kernel_func,
+    grid_size,
+    block_size,
+    args...,
+    stream
+)
+
+// Synchronize stream
+cuda_stream_synchronize(stream)
+cuda_stream_destroy(stream)
+```
+
+### Shared Memory
+
+```cuda
+// In your CUDA kernel
+__global__ void shared_mem_kernel(float* input, float* output) {
+    extern __shared__ float sdata[];
+    int tid = threadIdx.x;
     
-    // Or use smart pointers for automatic management
-    device_ptr<float> d_data = cuda_make_shared<float>(1024)
+    // Load into shared memory
+    sdata[tid] = input[tid];
+    __syncthreads();
     
-    // Access the raw pointer when needed
-    float* raw_ptr = d_data.get()
+    // Process...
+    
+    // Write back
+    output[tid] = sdata[tid];
 }
 ```
 
-### Memory Transfers
+## Multi-GPU
 
 ```robodsl
-node memory_transfer_example {
-    // Host data
-    std::vector<float> h_data(1024, 1.0f)
-    
-    // Allocate device memory
-    device_ptr<float> d_data = cuda_make_shared<float>(1024)
-    
-    // Copy host to device
-    cuda_memcpy_host_to_device(d_data.get(), h_data.data(), 1024 * sizeof(float))
-    
-    // Process data on device...
-    
-    // Copy device to host
-    std::vector<float> h_result(1024)
-    cuda_memcpy_device_to_host(h_result.data(), d_data.get(), 1024 * sizeof(float))
-    
-    // Asynchronous copy with stream
-    cuda_stream stream = cuda_stream_create()
-    cuda_memcpy_async(
-        d_data.get(), 
-        h_data.data(), 
-        1024 * sizeof(float), 
-        cudaMemcpyHostToDevice, 
-        stream
-    )
-    
-    // Wait for the copy to complete
-    cuda_stream_synchronize(stream)
-    cuda_stream_destroy(stream)
-}
+// Set device
+cuda_set_device(device_id)
+
+// Get device count
+int count = cuda_get_device_count()
+
+// Get device properties
+cuda_device_prop prop = cuda_get_device_properties(device_id)
 ```
 
-## Streams and Events
+## Performance Tips
 
-### Using Streams for Concurrent Execution
+1. Use `device_ptr` for automatic memory management
+2. Prefer asynchronous operations with streams
+3. Minimize host-device transfers
+4. Use shared memory for data reuse
+5. Set appropriate block/grid sizes
+
+## Debugging
 
 ```robodsl
-node stream_example {
-    // Create streams
-    cuda_stream stream1 = cuda_stream_create()
-    cuda_stream stream2 = cuda_stream_create()
+// Check for CUDA errors
+cuda_error_t err = cuda_get_last_error()
+if (err != cudaSuccess) {
+    // Handle error
+}
+
+// Synchronize device
+cuda_device_synchronize()
+```
+
+## Integration with ROS2
+
+```robodsl
+node gpu_node {
+    // Process ROS2 messages on GPU
+    subscribers = [{
+        name = "input"
+        type = "sensor_msgs/msg/Image"
+        callback = "process_image"
+    }]
     
-    // Allocate host and device memory
-    std::vector<float> h_data1(1024, 1.0f)
+    publishers = [{
+        name = "output"
+        type = "sensor_msgs/msg/Image"
+    }]
+    
+    cuda_kernels = ["image_processing"]
+}
     std::vector<float> h_data2(1024, 2.0f)
     device_ptr<float> d_data1 = cuda_make_shared<float>(1024)
     device_ptr<float> d_data2 = cuda_make_shared<float>(1024)
