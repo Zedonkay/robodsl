@@ -22,8 +22,8 @@ def test_parse_node_with_publisher():
     node = config.nodes[0]
     assert node.name == "test_node"
     assert len(node.publishers) == 1
-    assert node.publishers[0]["topic"] == "/camera/image_raw"
-    assert node.publishers[0]["msg_type"] == "sensor_msgs/msg/Image"
+    assert node.publishers[0].topic == "/camera/image_raw"
+    assert node.publishers[0].msg_type == "sensor_msgs/msg/Image"
 
 def test_parse_node_with_subscriber():
     """Test parsing a node with a subscriber."""
@@ -37,8 +37,8 @@ def test_parse_node_with_subscriber():
     node = config.nodes[0]
     assert node.name == "test_node"
     assert len(node.subscribers) == 1
-    assert node.subscribers[0]["topic"] == "/cmd_vel"
-    assert node.subscribers[0]["msg_type"] == "geometry_msgs/msg/Twist"
+    assert node.subscribers[0].topic == "/cmd_vel"
+    assert node.subscribers[0].msg_type == "geometry_msgs/msg/Twist"
 
 def test_parse_node_with_service():
     """Test parsing a node with a service."""
@@ -52,8 +52,8 @@ def test_parse_node_with_service():
     node = config.nodes[0]
     assert node.name == "test_node"
     assert len(node.services) == 1
-    assert node.services[0]["service"] == "/get_status"
-    assert node.services[0]["srv_type"] == "std_srvs/srv/Trigger"
+    assert node.services[0].service == "/get_status"
+    assert node.services[0].srv_type == "std_srvs/srv/Trigger"
 
 def test_parse_node_with_parameters():
     """Test parsing a node with parameters."""
@@ -69,9 +69,20 @@ def test_parse_node_with_parameters():
     node = config.nodes[0]
     assert node.name == "test_node"
     assert len(node.parameters) == 3
-    assert node.parameters["max_speed"] == "1.5"
-    assert node.parameters["use_gpu"] == "true"
-    assert node.parameters["sensor_name"] == "\"front_camera\""
+    # Convert parameters to a dict for easier lookup
+    param_dict = {param.name: param for param in node.parameters}
+    
+    assert "max_speed" in param_dict
+    assert param_dict["max_speed"].default == 1.5
+    assert param_dict["max_speed"].type == "double"
+    
+    assert "use_gpu" in param_dict
+    assert param_dict["use_gpu"].default is True
+    assert param_dict["use_gpu"].type == "bool"
+    
+    assert "sensor_name" in param_dict
+    assert param_dict["sensor_name"].default == "front_camera"
+    assert param_dict["sensor_name"].type == "string"
 
 def test_parse_complete_node():
     """Test parsing a complete node with all features."""
@@ -102,24 +113,50 @@ def test_parse_complete_node():
     
     # Verify publishers
     assert len(node.publishers) == 2
-    assert node.publishers[0] == {"topic": "/odom", "msg_type": "nav_msgs/msg/Odometry"}
-    assert node.publishers[1] == {"topic": "/status", "msg_type": "std_msgs/msg/String"}
+    pub_topics = [p.topic for p in node.publishers]
+    assert "/odom" in pub_topics
+    assert "/status" in pub_topics
+    
+    odom_pub = next(p for p in node.publishers if p.topic == "/odom")
+    status_pub = next(p for p in node.publishers if p.topic == "/status")
+    
+    assert odom_pub.msg_type == "nav_msgs/msg/Odometry"
+    assert status_pub.msg_type == "std_msgs/msg/String"
     
     # Verify subscribers
     assert len(node.subscribers) == 1
-    assert node.subscribers[0] == {"topic": "/cmd_vel", "msg_type": "geometry_msgs/msg/Twist"}
+    assert node.subscribers[0].topic == "/cmd_vel"
+    assert node.subscribers[0].msg_type == "geometry_msgs/msg/Twist"
     
     # Verify services
     assert len(node.services) == 2
-    assert node.services[0] == {"service": "/get_status", "srv_type": "std_srvs/srv/Trigger"}
-    assert node.services[1] == {"service": "/reset_odom", "srv_type": "std_srvs/srv/Empty"}
+    service_names = [s.service for s in node.services]
+    assert "/get_status" in service_names
+    assert "/reset_odom" in service_names
+    
+    status_srv = next(s for s in node.services if s.service == "/get_status")
+    reset_srv = next(s for s in node.services if s.service == "/reset_odom")
+    
+    assert status_srv.srv_type == "std_srvs/srv/Trigger"
+    assert reset_srv.srv_type == "std_srvs/srv/Empty"
     
     # Verify parameters
     assert len(node.parameters) == 4
-    assert node.parameters["wheel_radius"] == "0.1"
-    assert node.parameters["max_speed"] == "2.5"
-    assert node.parameters["use_gpu"] == "true"
-    assert node.parameters["robot_name"] == "\"turtlebot1\""
+    param_names = [p.name for p in node.parameters]
+    assert "wheel_radius" in param_names
+    assert "max_speed" in param_names
+    assert "use_gpu" in param_names
+    assert "robot_name" in param_names
+    
+    wheel_param = next(p for p in node.parameters if p.name == "wheel_radius")
+    max_speed_param = next(p for p in node.parameters if p.name == "max_speed")
+    use_gpu_param = next(p for p in node.parameters if p.name == "use_gpu")
+    robot_name_param = next(p for p in node.parameters if p.name == "robot_name")
+    
+    assert wheel_param.value == 0.1
+    assert max_speed_param.value == 2.5
+    assert use_gpu_param.value is True
+    assert robot_name_param.value == "turtlebot1"
 
 def test_parse_cuda_kernel():
     """Test parsing a CUDA kernel definition."""
@@ -136,12 +173,18 @@ def test_parse_cuda_kernel():
     assert len(config.cuda_kernels) == 1
     kernel = config.cuda_kernels[0]
     assert kernel.name == "process_image"
-    assert len(kernel.inputs) == 1
-    assert kernel.inputs[0]["type"] == "Image"
-    assert kernel.inputs[0]["width"] == "640"
-    assert kernel.inputs[0]["height"] == "480"
-    assert len(kernel.outputs) == 1
-    assert kernel.outputs[0]["type"] == "Image"
+    
+    # Check inputs (parameters with direction='in')
+    input_params = [p for p in kernel.parameters if p.direction == 'in']
+    assert len(input_params) == 1
+    assert input_params[0].type == "Image"
+    assert input_params[0].get('width') == 640
+    assert input_params[0].get('height') == 480
+    
+    # Check outputs (parameters with direction='out')
+    output_params = [p for p in kernel.parameters if p.direction == 'out']
+    assert len(output_params) == 1
+    assert output_params[0].type == "Image"
     assert kernel.block_size == (16, 16, 1)
 
 def test_parse_complete_example():
@@ -174,12 +217,11 @@ def test_parse_complete_example():
     node = config.nodes[0]
     assert node.name == "image_processor"
     assert len(node.subscribers) == 1
-    assert node.subscribers[0]["topic"] == "/camera/image_raw"
-    assert node.subscribers[0]["msg_type"] == "sensor_msgs/msg/Image"
-    
+    assert node.subscribers[0].topic == "/camera/image_raw"
+    assert node.subscribers[0].msg_type == "sensor_msgs/msg/Image"
     assert len(node.publishers) == 1
-    assert node.publishers[0]["topic"] == "/processed_image"
-    assert node.publishers[0]["msg_type"] == "sensor_msgs/msg/Image"
+    assert node.publishers[0].topic == "/processed_image"
+    assert node.publishers[0].msg_type == "sensor_msgs/msg/Image"
     
     # Verify CUDA kernels
     assert len(config.cuda_kernels) == 2

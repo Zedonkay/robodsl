@@ -20,7 +20,46 @@ $ ros2 run <example_name> <node_name>
 
 ## Examples
 
-### 1. Comprehensive Example
+### 1. C++ Method Support
+`cpp_methods_example.robodsl`
+- Define custom C++ methods in RoboDSL
+- Virtual method generation
+- Integration with ROS2 and CUDA
+
+```robodsl
+node data_processor {
+    // Define custom C++ methods
+    methods = [{
+        name = "processSensorData"
+        return_type = "std::vector<float>"
+        parameters = [
+            "const std::vector<float>& raw_data",
+            "float scale_factor"
+        ]
+        implementation = """
+            // Process data with scale factor
+            std::vector<float> result;
+            result.reserve(raw_data.size());
+            for (const auto& val : raw_data) {
+                result.push_back(val * scale_factor);
+            }
+            return result;
+        """
+    }, {
+        name = "validateConfiguration"
+        return_type = "bool"
+        parameters = ["const Config& config"]
+        implementation = """
+            // Validate configuration parameters
+            if (config.max_speed <= 0.0f) return false;
+            if (config.sensor_count == 0) return false;
+            return true;
+        """
+    }]
+}
+```
+
+### 2. Comprehensive Example
 `comprehensive_example.robodsl`
 - Lifecycle nodes
 - Custom QoS profiles

@@ -8,7 +8,7 @@ import jinja2
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Set
 
-from .parser import RoboDSLConfig, NodeConfig, CudaKernelConfig
+from .parser import RoboDSLConfig, NodeConfig, CudaKernelConfig, QoSConfig
 
 # Set up Jinja2 environment with template directories
 template_dirs = [
@@ -97,6 +97,62 @@ class CodeGenerator:
         
         return generated_files
     
+    def _generate_method_implementations(self, class_name: str, methods: List[Any]) -> List[str]:
+        """Generate C++ method implementations from method configurations.
+        
+        Args:
+            class_name: Name of the C++ class
+            methods: List of method configurations
+            
+        Returns:
+            List of C++ method implementations as strings
+        """
+        implementations = []
+        for method in methods:
+            # Format parameters with types and names
+            params = []
+            param_names = []
+            for param in method.parameters:
+                # Split on whitespace and take the last part as the parameter name
+                parts = param.split()
+                param_type = ' '.join(parts[:-1])
+                param_name = parts[-1]
+                params.append(f"{param_type} {param_name}")
+                param_names.append(param_name)
+            
+            # Create method implementation
+            implementation = f"{method.return_type} {class_name}::{method.name}({', '.join(params)})"
+            implementation += f" {{\n{method.implementation}\n}}\n"
+            implementations.append(implementation)
+        
+        return implementations
+
+    def _generate_method_declarations(self, methods: List[Any]) -> List[str]:
+        """Generate C++ method declarations from method configurations.
+        
+        Args:
+            methods: List of method configurations
+            
+        Returns:
+            List of C++ method declarations as strings
+        """
+        declarations = []
+        for method in methods:
+            # Format parameters with types and names
+            params = []
+            for param in method.parameters:
+                # Split on whitespace and take the last part as the parameter name
+                parts = param.split()
+                param_type = ' '.join(parts[:-1])
+                param_name = parts[-1]
+                params.append(f"{param_type} {param_name}")
+            
+            # Create method declaration
+            declaration = f"    virtual {method.return_type} {method.name}({', '.join(params)});"
+            declarations.append(declaration)
+        
+        return declarations
+
     def _generate_message_includes(self, node: NodeConfig) -> List[str]:
         """Generate message includes wrapped in ENABLE_ROS2 guards or stub definitions."""
         includes: List[str] = []
@@ -193,9 +249,17 @@ class CodeGenerator:
             'services': [],
             'timers': [],
             'parameters': [],
-            'cuda_kernels': []
+            'cuda_kernels': [],
+            'methods': self._generate_method_declarations(getattr(node, 'methods', []))
         }
         
+        # Add method includes
+        if hasattr(node, 'methods') and node.methods:
+            context['includes'].extend([
+                '#include <vector>',
+                '#include <string>'
+            ])
+
         # Add ROS2 includes if needed
         if (hasattr(node, 'services') and node.services) or (hasattr(node, 'parameters') and node.parameters):
             context['ros2_includes'].extend([
@@ -1315,6 +1379,35 @@ endif()
         Returns:
             Path to the generated source file
         """
+        # Convert node name to a valid C++ class name (e.g., 'my_node' -> 'MyNode')
+        class_name = ''.join(word.capitalize() for word in node.name.split('_'))
+        
+        # Generate method implementations
+        method_implementations = []
+        if hasattr(node, 'methods') and node.methods:
+            method_implementations = self._generate_method_implementations(
+                class_name, node.methods)
+        
+        # Prepare context for template
+        context = {
+            'class_name': class_name,
+            'node_name': node.name,
+            'base_class': 'rclcpp_lifecycle::LifecycleNode' if getattr(node, 'lifecycle', False) else 'rclcpp::Node',
+            'is_lifecycle': getattr(node, 'lifecycle', False),
+            'namespace': node.get('namespace', ''),
+            'method_implementations': method_implementations,
+        }
+        
+        # Generate source code from template
+        template = env.get_template('node.cpp.j2')
+        source_code = template.render(**context)
+        
+        # Write to file
+        source_path = self.output_dir / 'src' / f"{node.name}.cpp"
+        source_path.parent.mkdir(parents=True, exist_ok=True)
+        source_path.write_text(source_code)
+        
+        return source_path
         # Convert node name to a valid C++ class name (e.g., 'my_node' -> 'MyNode')
         class_name = ''.join(word.capitalize() for word in node.name.split('_'))
         

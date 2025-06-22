@@ -134,11 +134,18 @@ def get_node_file_paths(project_path: Path, node_name: str, language: str) -> tu
     src_dir = project_path / 'src'
     include_dir = project_path / 'include'
     
-    # Create source and header file paths
+    # For C++ source files, create nested directories matching the node structure
+    if len(parts) > 1:
+        src_dir = src_dir / '/'.join(parts[:-1])
+    src_dir.mkdir(parents=True, exist_ok=True)
     src_file = src_dir / f"{node_base_name}_node.cpp"
     
-    # For C++ headers, create a subdirectory matching the node name
-    node_include_dir = include_dir / node_name
+    # For C++ headers, create nested directories matching the node structure
+    # but put the header file in the parent directory (without the base name as a subdirectory)
+    if len(parts) > 1:
+        node_include_dir = include_dir / '/'.join(parts[:-1])
+    else:
+        node_include_dir = include_dir
     node_include_dir.mkdir(parents=True, exist_ok=True)
     
     header_file = node_include_dir / f"{node_base_name}_node.hpp"
@@ -419,7 +426,7 @@ def init(project_name: str, template: str, output_dir: str) -> None:
 @main.command()
 @click.argument('project_dir', default='.')
 def build(project_dir: str) -> None:
-    """Build the RoboDSL project."""
+    """Build the RoboDSL project. - WIP"""
     project_dir = Path(project_dir).resolve()
     click.echo(f"Building project in {project_dir}...")
     
@@ -433,7 +440,7 @@ def build(project_dir: str) -> None:
 @click.option('--project-dir', type=click.Path(file_okay=False, dir_okay=True, path_type=Path, exists=True),
               default='.', help='Project directory (default: current directory)')
 def create_launch_file(node_name: str, language: str, project_dir: Path) -> None:
-    """Create a launch file for a node.
+    """Create a launch file for a node. 
     
     Args:
         node_name: Name of the node (can contain dots for subnodes)
@@ -538,18 +545,18 @@ def add_node(node_name: str, publisher: List[tuple], subscriber: List[tuple],
         click.echo(f"Error: Directory '{project_dir}' does not exist", err=True)
         sys.exit(1)
         
+    # Create necessary directories
+    src_dir = project_path / 'src'
+    include_dir = project_path / 'include'
+    launch_dir = project_path / 'launch'
+    config_dir = project_path / 'config'
+    
     # Create include directory structure for C++
     if language == 'cpp':
         node_parts = node_name.split('.')
         if len(node_parts) > 1:
             include_node_dir = include_dir / '/'.join(node_parts)
             include_node_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Create necessary directories
-    src_dir = project_path / 'src'
-    include_dir = project_path / 'include'
-    launch_dir = project_path / 'launch'
-    config_dir = project_path / 'config'
     
     # Ensure all required directories exist
     for directory in [src_dir, include_dir, launch_dir, config_dir]:
@@ -570,8 +577,8 @@ def add_node(node_name: str, publisher: List[tuple], subscriber: List[tuple],
                      [{'topic': p[0], 'msg_type': p[1]} for p in publisher],
                      [{'topic': s[0], 'msg_type': s[1]} for s in subscriber])
     
-    # Create launch file
-    create_launch_file(project_path, node_name, language)
+    # Create launch file using the internal implementation directly
+    _create_launch_file_impl(project_path, node_name, language)
     
     # Create or update RoboDSL config
     create_robodsl_config(

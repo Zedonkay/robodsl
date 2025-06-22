@@ -40,6 +40,43 @@ node my_node {
 
 ## Full Reference
 
+### C++ Method Support
+
+Define custom C++ methods that will be generated as virtual member functions in your node class. These methods can be overridden in derived classes and work alongside ROS2 lifecycle methods and CUDA kernels.
+
+```robodsl
+node my_node {
+    // ... other node configuration ...
+    
+    // Define standard C++ methods
+    methods = [{
+        name = "processData"
+        return_type = "std::vector<float>"
+        parameters = ["const std::vector<float>& input", "const Config& config"]
+        implementation = """
+            // C++ implementation
+            std::vector<float> result;
+            result.reserve(input.size());
+            for (const auto& val : input) {
+                result.push_back(val * config.scale);
+            }
+            return result;
+        """
+    }, {
+        name = "validateInput"
+        return_type = "bool"
+        parameters = ["const std::string& data"]
+        implementation = "return !data.empty();"
+    }]
+}
+```
+
+Method properties:
+- `name`: Method name (must be a valid C++ identifier)
+- `return_type`: C++ return type (e.g., `void`, `int`, `std::string`)
+- `parameters`: List of parameter declarations (e.g., `"const std::string& name"`)
+- `implementation`: C++ method body (multiline string with proper indentation)
+
 ### Project Definition
 
 ```robodsl
@@ -57,6 +94,17 @@ project "name" {
 node name {
     namespace = "..."
     enable_lifecycle = true/false
+    
+    // Optional: Define custom C++ methods
+    methods = [{
+        name = "methodName"
+        return_type = "returnType"
+        parameters = ["type1 param1", "const type2& param2"]
+        implementation = """
+            // C++ implementation
+            return defaultValue;
+        """
+    }]
 }
 ```
 

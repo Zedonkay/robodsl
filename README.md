@@ -10,14 +10,16 @@ A DSL for building GPU-accelerated robotics applications with ROS2 and CUDA.
 ## Quick Start
 
 ### Prerequisites
+
 - Linux/Windows (WSL2) with Python 3.8+
 - ROS2 (Humble/Foxy/Galactic)
 - CUDA 11.0+ (for GPU acceleration)
 - Build tools (CMake, make, g++)
 
 ### Install
+
 ```bash
-git clone https://github.com/yourusername/robodsl.git
+git clone https://github.com/Zedonkay/robodsl.git
 cd robodsl
 # Choose one:
 ./build-deb-direct.sh && sudo dpkg -i robodsl_0.1.0_all.deb  # Debian
@@ -38,7 +40,7 @@ pip install -e .  # Development
 
 ## Documentation
 
-- [DSL Specification](docs/dsl_specification.md)
+- [DSL Specification](docs/dsl-specification.md)
 - [ROS2 Integration](docs/ros2_integration.md)
 - [CUDA Acceleration](docs/cuda_acceleration.md)
 - [Examples](examples/)
@@ -500,7 +502,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 For questions and support, please:
 1. Check the [documentation](#documentation)
-2. Search the [issue tracker](https://github.com/yourusername/robodsl/issues)
+2. Search the [issue tracker](https://github.com/Zedonkay/robodsl/issues)
 3. Open a new issue if your question hasn't been answered
 
 ## Acknowledgements
