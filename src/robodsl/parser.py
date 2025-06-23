@@ -111,6 +111,15 @@ class RemapRule:
     to_topic: str
 
 @dataclass
+class CppMethod:
+    """Represents a standard C++ method defined inside a RoboDSL node."""
+    return_type: str
+    name: str
+    params: str  # Raw parameter list string (kept verbatim for now)
+    body: str
+
+
+@dataclass
 class NodeConfig:
     """Configuration for a ROS 2 node (extended)."""
     name: str
@@ -130,6 +139,10 @@ class NodeConfig:
     
     # Parameter callback handling
     parameter_callbacks: bool = False
+
+    # --- New C++ CPU extensions ---
+    cpp_helpers: List[str] = field(default_factory=list)
+    methods: List[CppMethod] = field(default_factory=list)
     
     # Backward compatibility for code that might access these
     @property
@@ -142,6 +155,7 @@ class NodeConfig:
     def parameters_dict(self) -> Dict[str, Any]:
         """For backward compatibility, return parameters as a dictionary."""
         return {param.name: param.default for param in self.parameters}
+
 @dataclass
 class KernelParameter:
     name: str
@@ -262,14 +276,17 @@ def parse_robodsl(content: str) -> RoboDSLConfig:
             # Convert default value to appropriate type
             default_value = None
             if param_default is not None:
-                if param_type == 'int':
-                    default_value = int(param_default)
-                elif param_type == 'double':
-                    default_value = float(param_default)
-                elif param_type == 'bool':
-                    default_value = param_default.lower() in ('true', '1', 'yes')
-                else:  # string or other types
-                    default_value = param_default.strip('"\'')
+                try:
+                    if param_type == 'int':
+                        default_value = int(param_default)
+                    elif param_type == 'double':
+                        default_value = float(param_default)
+                    elif param_type == 'bool':
+                        default_value = param_default.lower() in ('true', '1', 'yes')
+                    else:  # string or other types
+                        default_value = param_default.strip('"\'')
+                except ValueError:
+                    default_value = param_default
             
             node.parameters.append(ParameterConfig(
                 name=param_name,
@@ -278,6 +295,25 @@ def parse_robodsl(content: str) -> RoboDSLConfig:
                 description=param_desc
             ))
             
+        # Parse C++ helper blocks (cpp { ... })
+        for cpp_match in re.finditer(r'cpp\s*\{([^}]*)\}', node_content, re.DOTALL):
+            node.cpp_helpers.append(cpp_match.group(1).strip())
+
+        # Parse C++ method blocks (method <sig> { ... })
+        method_pattern = re.compile(r'method\s+([^\{]+)\{([^}]*)\}', re.DOTALL)
+        signature_re = re.compile(r'([\w:<>]+)\s+(\w+)\s*\(([^)]*)\)')
+        for m in method_pattern.finditer(node_content):
+            signature = m.group(1).strip()
+            body = m.group(2).strip()
+            sig_match = signature_re.match(signature)
+            if not sig_match:
+                continue  # Skip invalid signatures
+            return_type, method_name, params = sig_match.groups()
+            node.methods.append(CppMethod(return_type=return_type,
+                                         name=method_name,
+                                         params=params.strip(),
+                                         body=body))
+
         # Parse lifecycle settings
         lifecycle_match = re.search(r'lifecycle\s*\{([^}]*)\}', node_content, re.DOTALL)
         if lifecycle_match:
@@ -404,11 +440,12 @@ def parse_robodsl(content: str) -> RoboDSLConfig:
             period = float(timer.group(2))
             callback = timer.group(3).strip() if timer.lastindex == 3 else f'on_timer_{timer_name}'
             
-            node.timers.append({
-                'name': timer_name,
-                'period': period,
-                'callback': callback
-            })
+            node.timers.append(TimerConfig(
+                period=period,
+                callback=callback,
+                oneshot=False,
+                autostart=True
+            ))
 
         # Parse parameters
         param_matches = re.finditer(r'parameter\s+(\w+)\s*[:=]\s*([^\n]+)', node_content)
@@ -418,21 +455,34 @@ def parse_robodsl(content: str) -> RoboDSLConfig:
             
             # Try to evaluate the parameter value (handles numbers, lists, dicts, etc.)
             try:
-                node.parameters[param_name] = eval(param_value)
+                node.parameters.append(ParameterConfig(
+                    name=param_name,
+                    type='string',
+                    default=eval(param_value),
+                    description=""
+                ))
             except (NameError, SyntaxError):
                 # If evaluation fails, store as string
-                node.parameters[param_name] = param_value.strip('\'"')
+                node.parameters.append(ParameterConfig(
+                    name=param_name,
+                    type='string',
+                    default=param_value.strip('\'"'),
+                    description=""
+                ))
 
         # Lifecycle flag
         if re.search(r'lifecycle\s*[:=]\s*true', node_content, re.IGNORECASE):
-            node.lifecycle = True
+            node.lifecycle = LifecycleConfig(enabled=True)
 
         # Parameter callbacks flag
         if re.search(r'parameter_callbacks\s*[:=]\s*true', node_content, re.IGNORECASE):
             node.parameter_callbacks = True
 
-    # Parse CUDA kernels section if it exists
-    kernel_section = re.search(r'cuda_kernels\s*\{([^}]*)\}', content, re.DOTALL)
+        # Add the parsed node to the config
+        config.nodes.append(node)
+        
+        # Parse CUDA kernels section if it exists
+        kernel_section = re.search(r'cuda_kernels\s*\{([^}]*)\}', content, re.DOTALL)
     if kernel_section:
         kernel_blocks = re.finditer(r'kernel\s+(\w+)\s*\{([^}]*)\}', kernel_section.group(1), re.DOTALL)
         

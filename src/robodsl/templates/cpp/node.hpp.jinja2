@@ -97,6 +97,13 @@ public:
         const std::shared_ptr<rclcpp_action::ServerGoalHandle<{{ action.action_type }}>> goal_handle);
     {% endfor %}
 
+{% if methods %}
+    // User-defined C++ methods
+{% for m in methods %}
+    virtual {{ m.return_type }} {{ m.name }}({{ m.params }});
+{% endfor %}
+{% endif %}
+
     // CUDA kernels
     {% if cuda_kernels %}
     /**

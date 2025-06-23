@@ -125,32 +125,33 @@ install(TARGETS
   ARCHIVE DESTINATION lib
 )
 
-# Register components
-foreach(NODE_NAME ${NODE_NAMES})
-  get_target_property(TARGET_NAME ${NODE_NAME} OUTPUT_NAME)
-  if(TARGET_NAME)
-    rclcpp_components_register_nodes(${NODE_NAME} "${PROJECT_NAME}::${TARGET_NAME}")
-  endif()
-  
-  # Export node targets
-  ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
-  
-  # Export dependencies
-  ament_export_dependencies(
-    rclcpp
-    rclcpp_components
-    std_msgs
-    {% if has_lifecycle %}
-    rclcpp_lifecycle
-    lifecycle_msgs
-    {% endif %}
-    {% if has_qos %}
-    rmw_implementation
-    rcl
-    rmw
-    {% endif %}
-  )
-endforeach()
+  # Register components
+  foreach(NODE_NAME ${NODE_NAMES})
+    get_target_property(TARGET_NAME ${NODE_NAME} OUTPUT_NAME)
+    if(TARGET_NAME)
+      rclcpp_components_register_nodes(${NODE_NAME} "${PROJECT_NAME}::${TARGET_NAME}")
+    endif()
+    
+    # Export node targets
+    ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
+    
+    # Export dependencies
+    ament_export_dependencies(
+      rclcpp
+      rclcpp_components
+      std_msgs
+      {% if has_lifecycle %}
+      rclcpp_lifecycle
+      lifecycle_msgs
+      {% endif %}
+      {% if has_qos %}
+      rmw_implementation
+      rcl
+      rmw
+      {% endif %}
+    )
+  endforeach()
+{% endfor %}
 
 # Install include directories
 install(

@@ -850,6 +850,24 @@ std::vector<{{ kernel.output_type|default('float') }}>
 {% endfor %}
 {% endif %}
 
+{% if cpp_helpers %}
+// User-defined C++ helper code blocks
+{% for h in cpp_helpers %}
+{{ h }}
+{% endfor %}
+{% endif %}
+
+{% if methods %}
+// User-defined C++ method implementations
+{% for m in methods %}
+{{ m.return_type }} {{ class_name }}::{{ m.name }}({{ m.params }})
+{
+    {{ m.body | default('// TODO: implement') }}
+}
+
+{% endfor %}
+{% endif %}
+
 {% if namespace %}
 } // namespace {{ namespace }}
 {% endif %}
