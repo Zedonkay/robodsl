@@ -231,12 +231,12 @@ def test_parse_complete_example():
     assert kernel1.name == "process_image"
     assert len(kernel1.inputs) == 1
     assert kernel1.inputs[0]["type"] == "Image"
-    assert kernel1.inputs[0]["width"] == "640"
-    assert kernel1.inputs[0]["height"] == "480"
-    assert kernel1.inputs[0]["channels"] == "3"
+    assert kernel1.inputs[0]["width"] == 640
+    assert kernel1.inputs[0]["height"] == 480
+    assert kernel1.inputs[0]["channels"] == 3
     assert len(kernel1.outputs) == 1
     assert kernel1.outputs[0]["type"] == "Image"
-    assert kernel1.outputs[0]["channels"] == "1"
+    assert kernel1.outputs[0]["channels"] == 1
     assert kernel1.block_size == (16, 16, 1)
     
     # Second kernel

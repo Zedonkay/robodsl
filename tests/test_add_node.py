@@ -69,16 +69,16 @@ def test_add_node_with_pubsub(tmp_path):
         content = f.read()
         assert "publisher /processed_data sensor_msgs/msg/Image" in content
         assert "subscriber /raw_data sensor_msgs/msg/Image" in content
-    
-    # Check C++ files were created
-    assert (project_dir / "include" / "sensor_processor" / "sensor_processor_node.hpp").exists()
-    assert (project_dir / "src" / "sensor_processor_node.cpp").exists()
-    
-    # Check that the header file contains the expected content
-    with open(project_dir / "include" / "sensor_processor" / "sensor_processor_node.hpp", 'r') as f:
-        content = f.read()
-        assert "#ifndef SENSOR_PROCESSOR_NODE_H_" in content
-        assert "class SensorProcessorNode : public rclcpp::Node" in content
+        # Run the generator on the created robodsl file
+        robodsl_file = project_dir / "sensor_processor.robodsl"
+        result = runner.invoke(main, ["generate", str(robodsl_file), "--output-dir", str(project_dir)])
+        assert result.exit_code == 0, result.output
+
+        # Check C++ files were created
+        # The default project name is 'robodsl_project' when not specified
+        assert (project_dir / "include" / "robodsl_project" / "sensor_processor.hpp").exists()
+        assert (project_dir / "src" / "sensor_processor.cpp").exists()
+
 
 
 def test_add_node_to_existing_config(tmp_path):

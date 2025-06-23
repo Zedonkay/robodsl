@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <vector>
 #include <memory>
+#include <string>
 
 // Forward declarations for CUDA types
 struct cudaStream_t;
@@ -107,12 +108,11 @@ private:
 
 } // namespace {{ namespace }}
 
-#endif // {{ include_guard }}
-
-#else // !{{ include_guard }}
+{% else %}
 
 // Dummy implementation when CUDA is not enabled
 #include <vector>
+#include <string>
 
 namespace {{ namespace }} {
 
@@ -137,5 +137,7 @@ public:
 };
 
 } // namespace {{ namespace }}
+
+{% endif %}
 
 #endif // {{ include_guard }}

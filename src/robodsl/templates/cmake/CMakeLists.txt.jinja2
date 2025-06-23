@@ -115,6 +115,7 @@ set_target_properties(${PROJECT_NAME}_{{ node.name }}_node PROPERTIES
 target_link_libraries(${node.name}_node
   ${PROJECT_NAME}_lib
 )
+{% endfor %}
 
 # Install node executables
 install(TARGETS

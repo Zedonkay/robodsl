@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 # Add the src directory to the Python path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
-from robodsl.parser import CudaKernelConfig, RoboDSLConfig
+from robodsl.parser import CudaKernelConfig, RoboDSLConfig, KernelParameter
 from robodsl.generator import CodeGenerator
 
 class TestCudaGenerator(unittest.TestCase):
@@ -19,15 +19,18 @@ class TestCudaGenerator(unittest.TestCase):
         # Create a sample CUDA kernel configuration
         self.kernel = CudaKernelConfig(
             name="vector_add",
+            parameters=[
+                KernelParameter(name='a', type='float', direction='in', is_const=True),
+                KernelParameter(name='b', type='float', direction='in', is_const=True),
+                KernelParameter(name='c', type='float', direction='out'),
+            ],
             block_size=(256, 1, 1),
             grid_size=(1, 1, 1),
             shared_mem_bytes=0,
             use_thrust=False,
-            inputs=[{"name": "a", "type": "float"}, {"name": "b", "type": "float"}],
-            outputs=[{"name": "c", "type": "float"}],
             code="int idx = blockIdx.x * blockDim.x + threadIdx.x;\nif (idx < N) {\n    c[idx] = a[idx] + b[idx];\n}",
             includes=["<vector>", "<cuda_runtime.h>"],
-            defines=["N 1024"]
+            defines={"N": "1024"}
         )
         
         # Create a minimal config
@@ -46,7 +49,7 @@ class TestCudaGenerator(unittest.TestCase):
         self.generator._generate_cuda_kernel(self.kernel)
         
         # Check if the source file was created
-        source_file = self.test_dir / "cuda" / "vector_add_kernel.cu"
+        source_file = self.test_dir / "cuda" / "vector_add.cu"
         self.assertTrue(source_file.exists(), "CUDA source file was not created")
         
         # Check the content of the source file

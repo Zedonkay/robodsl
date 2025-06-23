@@ -84,6 +84,28 @@ node my_node {
     
     # One-shot timer
     timer oneshot_timer 2.0 on_oneshot_timer oneshot
+
+    # C++ methods
+    methods = [
+        {
+            name = "custom_logic"
+            return_type = "void"
+            parameters = [
+                "const std::string& log_message"
+            ]
+            implementation = """
+                RCLCPP_INFO(this->get_logger(), "Executing custom_logic: %s", log_message.c_str());
+            """
+        },
+        {
+            name = "get_status"
+            return_type = "std::string"
+            parameters = []
+            implementation = """
+                return "OK";
+            """
+        }
+    ]
 }
 
 # Another node with different configuration
