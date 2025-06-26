@@ -135,13 +135,20 @@ def get_node_file_paths(project_path: Path, node_name: str, language: str) -> tu
     include_dir = project_path / 'include'
     
     # Create source and header file paths
-    src_file = src_dir / f"{node_base_name}_node.cpp"
-    
-    # For C++ headers, create a subdirectory matching the node name
-    node_include_dir = include_dir / node_name
-    node_include_dir.mkdir(parents=True, exist_ok=True)
-    
-    header_file = node_include_dir / f"{node_base_name}_node.hpp"
+    if len(parts) > 1:
+        # For subnodes, create a nested directory structure
+        src_dir = src_dir / '/'.join(parts[:-1])
+        src_file = src_dir / f"{node_base_name}_node.cpp"
+        
+        # Create nested include directories
+        node_include_dir = include_dir / '/'.join(parts[:-1])
+        node_include_dir.mkdir(parents=True, exist_ok=True)
+        header_file = node_include_dir / f"{node_base_name}_node.hpp"
+    else:
+        # For top-level nodes
+        src_file = src_dir / f"{node_base_name}_node.cpp"
+        node_include_dir = include_dir
+        header_file = node_include_dir / f"{node_base_name}_node.hpp"
     
     return src_file, header_file
 
@@ -207,7 +214,7 @@ class {node_base_name.capitalize()}Node(Node):
         self.get_logger().info('{node_name} node started')
         self.get_logger().info('{node_name} node has been started')
 
-def main(args=None):
+def node_main(args=None):
     rclpy.init(args=args)
     node = {node_name.capitalize()}Node()
     rclpy.spin(node)
@@ -215,7 +222,7 @@ def main(args=None):
     rclpy.shutdown()
 
 if __name__ == '__main__':
-    main()
+    node_main()
 """)
         
         # Make the file executable
@@ -283,10 +290,11 @@ def _create_launch_file_impl(project_path: Path, node_name: str, language: str =
     
     # Create launch directory if it doesn't exist
     launch_dir = project_path / 'launch' / '/'.join(parts[:-1]) if len(parts) > 1 else project_path / 'launch'
+    launch_dir = Path(launch_dir)  # Ensure it's a Path object
     launch_dir.mkdir(parents=True, exist_ok=True)
     
     # For Python, the package is the first part of the node name or project name
-    package_name = parts[0] if len(parts) > 1 else project_path.name
+    package_name = parts[0] if len(parts) > 1 else str(project_path.name)
     
     # For C++, the executable is just the base name
     executable_name = node_base_name + ('_node' if language == 'python' else '')
@@ -311,9 +319,16 @@ def generate_launch_description():
 
 @click.group()
 @click.version_option()
-def main() -> None:
+@click.pass_context
+def main(ctx):
     """RoboDSL - A DSL for GPU-accelerated robotics applications with ROS2 and CUDA."""
-    pass
+    # Enable debug output if environment variable is set
+    debug = os.environ.get('ROBODSL_DEBUG', '').lower() in ('1', 'true', 'yes')
+    if debug:
+        import sys
+        print(f"DEBUG: Command: {' '.join(sys.argv)}", file=sys.stderr)
+        print(f"DEBUG: Context: {ctx}", file=sys.stderr)
+        print(f"DEBUG: Params: {ctx.params}", file=sys.stderr)
 
 @main.command()
 @click.argument('project_name')
@@ -449,6 +464,7 @@ def create_launch_file(node_name: str, language: str, project_dir: Path) -> None
         parts = node_name.split('.')
         node_base_name = parts[-1]
         launch_dir = project_path / 'launch' / '/'.join(parts[:-1]) if len(parts) > 1 else project_path / 'launch'
+        launch_dir = Path(launch_dir)  # Ensure it's a Path object
         launch_file = launch_dir / f"{node_base_name}.launch.py"
         
         click.echo(f"Created launch file: {launch_file.relative_to(project_path)}")
@@ -506,7 +522,7 @@ def generate(input_file: Path, output_dir: Optional[Path], force: bool) -> None:
             traceback.print_exc()
         sys.exit(1)
 
-@main.command()
+@main.command(name='add-node')
 @click.argument('node_name')
 @click.option('--publisher', '-p', multiple=True, nargs=2,
               help='Add a publisher with format: TOPIC MESSAGE_TYPE')
@@ -523,33 +539,122 @@ def add_node(node_name: str, publisher: List[tuple], subscriber: List[tuple],
     Node names can use dot notation for subdirectories, e.g., 'sensors.camera'.
     This will create the appropriate directory structure.
     """
-    project_path = project_dir
-    node_base_name = node_name.split('.')[-1]
+    # Debug output
+    debug = os.environ.get('ROBODSL_DEBUG', '').lower() in ('1', 'true', 'yes')
+    if debug:
+        import sys
+        print(f"DEBUG: add_node called with:", file=sys.stderr)
+        print(f"  node_name: {node_name}", file=sys.stderr)
+        print(f"  language: {language}", file=sys.stderr)
+        print(f"  project_dir: {project_dir} (type: {type(project_dir)})", file=sys.stderr)
+        print(f"  publisher: {publisher}", file=sys.stderr)
+        print(f"  subscriber: {subscriber}", file=sys.stderr)
+        print(f"  ctx.params: {ctx.params}", file=sys.stderr)
+    """Add a new node to an existing project.
     
-    # Validate node name
-    if not node_name.replace('.', '_').replace('-', '_').isidentifier():
-        raise click.BadParameter(
-            f"Invalid node name: '{node_name}'. "
-            "Node names must be valid Python/C++ identifiers"
+    Node names can use dot notation for subdirectories, e.g., 'sensors.camera'.
+    This will create the appropriate directory structure.
+    """
+    print(f"DEBUG: add_node called with node_name={node_name}, language={language}, project_dir={project_dir}")
+    print(f"DEBUG: publisher={publisher}, subscriber={subscriber}")
+    
+    try:
+        project_path = Path(project_dir).resolve()
+        node_base_name = node_name.split('.')[-1]
+        
+        # Validate node name
+        if not node_name.replace('.', '_').replace('-', '_').isidentifier():
+            raise click.BadParameter(
+                f"Invalid node name: '{node_name}'. "
+                "Node names must be valid Python/C++ identifiers"
+            )
+            
+        # Validate project directory exists
+        if not project_path.exists():
+            click.echo(f"Error: Directory '{project_dir}' does not exist", err=True)
+            sys.exit(1)
+            
+        print(f"DEBUG: Node base name: {node_base_name}")
+        print(f"DEBUG: Project path: {project_path} (type: {type(project_path)})")
+        
+        # Create necessary directories
+        src_dir = project_path / 'src'
+        include_dir = project_path / 'include'
+        launch_dir = project_path / 'launch'
+        config_dir = project_path / 'config'
+        
+        print(f"DEBUG: Creating directories: src={src_dir}, include={include_dir}, launch={launch_dir}, config={config_dir}")
+        
+        # Create include directory structure for C++
+        if language == 'cpp':
+            node_parts = node_name.split('.')
+            if len(node_parts) > 1:
+                include_node_dir = include_dir / '/'.join(node_parts[:-1])
+                print(f"DEBUG: Creating C++ include directory: {include_node_dir}")
+                include_node_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Ensure all required directories exist
+        for directory in [src_dir, include_dir, launch_dir, config_dir]:
+            print(f"DEBUG: Creating directory: {directory}")
+            directory.mkdir(parents=True, exist_ok=True)
+        
+        # Create default config YAML
+        config_file = config_dir / f"{node_base_name}.yaml"
+        print(f"DEBUG: Checking for config file: {config_file}")
+        if not config_file.exists():
+            print(f"DEBUG: Creating config file: {config_file}")
+            with open(str(config_file), 'w') as f:  # Explicitly convert to string for open()
+                f.write(f"# Configuration for {node_name} node\n")
+                f.write("# Add your node parameters here\n")
+                f.write(f"{node_base_name}:\n")
+                f.write("  ros__parameters:\n")
+                f.write("    param1: value1\n")
+        
+        # Create node files
+        print(f"DEBUG: Creating node files for {node_name}")
+        create_node_files(project_path, node_name, language, 
+                         [{'topic': p[0], 'msg_type': p[1]} for p in publisher],
+                         [{'topic': s[0], 'msg_type': s[1]} for s in subscriber])
+        
+        # Create launch file
+        print(f"DEBUG: Creating launch file for {node_name}")
+        create_launch_file(node_name, language, str(project_path))  # Convert to string for click
+        
+        # Create or update RoboDSL config
+        print(f"DEBUG: Creating RoboDSL config for {node_name}")
+        create_robodsl_config(
+            project_path,
+            node_name,
+            [{'topic': p[0], 'msg_type': p[1]} for p in publisher],
+            [{'topic': s[0], 'msg_type': s[1]} for s in subscriber]
         )
         
-    # Validate project directory exists
-    if not project_dir.exists():
-        click.echo(f"Error: Directory '{project_dir}' does not exist", err=True)
+        click.echo(f"Node '{node_name}' added successfully!")
+        click.echo(f"\nNext steps:")
+        click.echo(
+            f"1. Edit the node implementation in: {src_dir}/" +
+            "/".join(node_name.split('.')) +
+            f"_node.{'py' if language == 'python' else 'cpp'}"
+        )
+        click.echo(f"2. Update the configuration in: {project_path}/robodsl/nodes{'/' + '/'.join(node_name.split('.')[:-1]) if '.' in node_name else ''}/{node_name.split('.')[-1]}.robodsl")
+        click.echo(f"3. Launch the node with: ros2 launch {project_path.name} {node_name.split('.')[-1]}.launch.py")
+    except Exception as e:
+        print(f"DEBUG: Exception in add_node: {e}", file=sys.stderr)
+        click.echo(f"Error: Failed to create node: {str(e)}", err=True)
         sys.exit(1)
         
+    # Create necessary directories
+    src_dir = project_path / 'src'
+    include_dir = project_path / 'include'
+    launch_dir = project_path / 'launch'
+    config_dir = project_path / 'config'
+    
     # Create include directory structure for C++
     if language == 'cpp':
         node_parts = node_name.split('.')
         if len(node_parts) > 1:
             include_node_dir = include_dir / '/'.join(node_parts)
             include_node_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Create necessary directories
-    src_dir = project_path / 'src'
-    include_dir = project_path / 'include'
-    launch_dir = project_path / 'launch'
-    config_dir = project_path / 'config'
     
     # Ensure all required directories exist
     for directory in [src_dir, include_dir, launch_dir, config_dir]:
@@ -571,7 +676,7 @@ def add_node(node_name: str, publisher: List[tuple], subscriber: List[tuple],
                      [{'topic': s[0], 'msg_type': s[1]} for s in subscriber])
     
     # Create launch file
-    create_launch_file(project_path, node_name, language)
+    create_launch_file(node_name, language, project_dir)
     
     # Create or update RoboDSL config
     create_robodsl_config(

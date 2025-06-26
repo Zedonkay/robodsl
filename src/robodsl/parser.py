@@ -480,97 +480,134 @@ def parse_robodsl(content: str) -> RoboDSLConfig:
 
         # Add the parsed node to the config
         config.nodes.append(node)
+    
+    def find_balanced_braces(text, start_pos=0):
+        """Find the matching closing brace for an opening brace."""
+        if start_pos >= len(text) or text[start_pos] != '{':
+            return -1
         
-        # Parse CUDA kernels section if it exists
-        kernel_section = re.search(r'cuda_kernels\s*\{([^}]*)\}', content, re.DOTALL)
-    if kernel_section:
-        kernel_blocks = re.finditer(r'kernel\s+(\w+)\s*\{([^}]*)\}', kernel_section.group(1), re.DOTALL)
+        balance = 1
+        pos = start_pos + 1
         
-        for kernel_match in kernel_blocks:
-            kernel_name = kernel_match.group(1)
-            kernel_content = kernel_match.group(2)
+        while pos < len(text) and balance > 0:
+            if text[pos] == '{':
+                balance += 1
+            elif text[pos] == '}':
+                balance -= 1
+            pos += 1
+        
+        return pos if balance == 0 else -1
+
+    # Parse CUDA kernels section if it exists
+    print("\nDEBUG: Looking for cuda_kernels section")
+    kernel_section_start = content.find('cuda_kernels{')
+    if kernel_section_start == -1:
+        kernel_section_start = content.find('cuda_kernels {')
+    
+    if kernel_section_start != -1:
+        # Find the opening brace of cuda_kernels
+        kernel_section_start = content.find('{', kernel_section_start)
+        if kernel_section_start == -1:
+            print("DEBUG: Found 'cuda_kernels' but no opening brace")
+            return config
             
-            # Default values
+        # Find the matching closing brace
+        kernel_section_end = find_balanced_braces(content, kernel_section_start)
+        if kernel_section_end == -1:
+            print("DEBUG: Could not find matching closing brace for cuda_kernels")
+            return config
+            
+        section_content = content[kernel_section_start + 1:kernel_section_end - 1]
+        print(f"DEBUG: Kernel section content length: {len(section_content)} chars")
+        
+        # Find all kernel definitions
+        kernel_pos = 0
+        while True:
+            # Find the next 'kernel' keyword
+            kernel_match = re.search(r'kernel\s+(\w+)', section_content[kernel_pos:])
+            if not kernel_match:
+                break
+                
+            kernel_name = kernel_match.group(1)
+            kernel_start = kernel_match.start() + kernel_pos
+            content_start = kernel_match.end() + kernel_pos
+            
+            # Find the opening brace after the kernel name
+            brace_pos = section_content.find('{', content_start)
+            if brace_pos == -1:
+                print(f"DEBUG: No opening brace found for kernel {kernel_name}")
+                break
+                
+            # Find the matching closing brace
+            closing_brace = find_balanced_braces(section_content, brace_pos)
+            if closing_brace == -1:
+                print(f"DEBUG: No matching closing brace for kernel {kernel_name}")
+                break
+                
+            # Extract the kernel content
+            kernel_content = section_content[brace_pos + 1:closing_brace - 1].strip()
+            print(f"DEBUG: Found kernel: {kernel_name} with content length {len(kernel_content)}")
+            
+            # Process the kernel content
             block_size = (256, 1, 1)
             grid_size = None
             shared_mem_bytes = 0
             use_thrust = False
-            params = []
+            parameters = []
             code = ""
             includes = []
             defines = {}
-
+            
             # Parse block size
-            block_match = re.search(r'block_size\s*=\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)', kernel_content)
+            block_match = re.search(r'block_size\s*[:=]\s*[\(\[]?\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*[\)\]]?', kernel_content)
             if block_match:
                 block_size = (int(block_match.group(1)), 
                              int(block_match.group(2)), 
                              int(block_match.group(3)))
-
-            # Parse grid size
-            grid_match = re.search(r'grid_size\s*=\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)', kernel_content)
-            if grid_match:
-                grid_size = (int(grid_match.group(1)),
-                            int(grid_match.group(2)),
-                            int(grid_match.group(3)))
-
-            # Parse shared memory
-            shared_match = re.search(r'shared_memory\s*=\s*(\d+)', kernel_content)
-            if shared_match:
-                shared_mem_bytes = int(shared_match.group(1))
-
-            # Parse Thrust usage
-            use_thrust = 'use_thrust' in kernel_content
-
-            # Parse inputs
-            input_pattern = r'input\s+([\w:]+)\s+(\w+)(?:\s*\[\s*(\w*)\s*\])?'
-            for input_match in re.finditer(input_pattern, kernel_content):
-                param_name = input_match.group(2)
-                param_type = input_match.group(1)
-                size_expr = input_match.group(3) if input_match.lastindex == 3 else None
-                
-                params.append(KernelParameter(
-                    name=param_name,
-                    type=param_type,
-                    direction='in',
-                    is_const=True,
-                    is_pointer=True,
-                    size_expr=size_expr
-                ))
-
-            # Parse outputs
-            output_pattern = r'output\s+([\w:]+)\s+(\w+)(?:\s*\[\s*(\w*)\s*\])?'
-            for output_match in re.finditer(output_pattern, kernel_content):
-                param_name = output_match.group(2)
-                param_type = output_match.group(1)
-                size_expr = output_match.group(3) if output_match.lastindex == 3 else None
-                
-                params.append(KernelParameter(
-                    name=param_name,
-                    type=param_type,
-                    direction='out',
-                    is_const=False,
-                    is_pointer=True,
-                    size_expr=size_expr
-                ))
-
-            # Parse code block
-            code_match = re.search(r'code\s*\{([^}]*)\}', kernel_content, re.DOTALL)
-            if code_match:
-                code = code_match.group(1).strip()
-
-            # Parse includes
-            includes = re.findall(r'include\s+[<"]([^">]+)[">]', kernel_content)
-
-            # Parse defines
-            define_matches = re.finditer(r'define\s+(\w+)(?:\s+(.*?))?$', kernel_content, re.MULTILINE)
-            for define in define_matches:
-                defines[define.group(1)] = define.group(2) or ""
-
-            # Create and add the kernel config
-            kernel_config = CudaKernelConfig(
+            
+            # Parse inputs and outputs
+            for line in kernel_content.split('\n'):
+                line = line.strip()
+                if not line:
+                    continue
+                    
+                # Match input: Type (attributes)
+                input_match = re.match(r'input\s*:\s*(\w+)(?:\s*\(([^)]*)\))?', line)
+                if input_match:
+                    param_type = input_match.group(1)
+                    attributes = input_match.group(2) if input_match.lastindex == 2 else None
+                    param_name = f"input_{len([p for p in parameters if p.direction == 'in'])}"
+                    
+                    parameters.append(KernelParameter(
+                        name=param_name,
+                        type=param_type,
+                        direction='in',
+                        is_const=True,
+                        is_pointer=True,
+                        size_expr=attributes
+                    ))
+                    continue
+                    
+                # Match output: Type (attributes)
+                output_match = re.match(r'output\s*:\s*(\w+)(?:\s*\(([^)]*)\))?', line)
+                if output_match:
+                    param_type = output_match.group(1)
+                    attributes = output_match.group(2) if output_match.lastindex == 2 else None
+                    param_name = f"output_{len([p for p in parameters if p.direction == 'out'])}"
+                    
+                    parameters.append(KernelParameter(
+                        name=param_name,
+                        type=param_type,
+                        direction='out',
+                        is_const=False,
+                        is_pointer=True,
+                        size_expr=attributes
+                    ))
+            
+            # Create the kernel config
+            config.cuda_kernels.append(CudaKernelConfig(
                 name=kernel_name,
-                parameters=params,
+                parameters=parameters,
                 block_size=block_size,
                 grid_size=grid_size,
                 shared_mem_bytes=shared_mem_bytes,
@@ -578,9 +615,15 @@ def parse_robodsl(content: str) -> RoboDSLConfig:
                 code=code,
                 includes=includes,
                 defines=defines
-            )
-            config.cuda_kernels.append(kernel_config)
+            ))
+            
+            # Move past this kernel
+            kernel_pos = closing_brace
+        
+        print(f"DEBUG: Found {len(config.cuda_kernels)} kernels")
+    else:
+        print("DEBUG: No cuda_kernels section found")
 
     return config
-    
+
     return config

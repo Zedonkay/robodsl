@@ -1,0 +1,41 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.13.2, pytest-8.4.1, pluggy-1.6.0 -- /Users/ishayu/Documents/Random_projects/cuif/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/ishayu/Documents/Random_projects/cuif
+configfile: pytest.ini
+plugins: cov-6.2.1
+collecting ... collected 1 item
+
+tests/test_subnodes.py::test_add_subnode_basic FAILED
+
+=================================== FAILURES ===================================
+____________________________ test_add_subnode_basic ____________________________
+
+tmp_path = PosixPath('/private/var/folders/cq/t8wzz60x0416zygrcht5b6jw0000gn/T/pytest-of-ishayu/pytest-53/test_add_subnode_basic0')
+
+    def test_add_subnode_basic(tmp_path):
+        """Test adding a basic subnode to a project."""
+        runner = CliRunner()
+        project_dir = tmp_path / "test_project"
+        project_dir.mkdir()
+    
+        # Add a subnode
+        result = runner.invoke(
+            main,
+            [
+                "add-node",
+                "sensors.camera",
+                "--language", "python",
+                "--project-dir", str(project_dir)
+                # No publishers or subscribers for this test
+            ]
+        )
+    
+>       assert result.exit_code == 0
+E       assert 2 == 0
+E        +  where 2 = <Result SystemExit(2)>.exit_code
+
+tests/test_subnodes.py:29: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_subnodes.py::test_add_subnode_basic - assert 2 == 0
+============================== 1 failed in 0.03s ===============================

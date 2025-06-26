@@ -20,22 +20,27 @@ def test_qos_config_parsing():
     # Check publisher QoS
     assert len(node.publishers) == 1
     assert isinstance(node.publishers[0], PublisherConfig)
-    assert node.publishers[0].qos == {'reliability': 'reliable', 'depth': 10}
+    assert node.publishers[0].qos is not None
+    assert node.publishers[0].qos.reliability == 'reliable'
+    assert node.publishers[0].qos.depth == 10
     
     # Check subscriber QoS
     assert len(node.subscribers) == 1
     assert isinstance(node.subscribers[0], SubscriberConfig)
-    assert node.subscribers[0].qos == {'reliability': 'best_effort'}
+    assert node.subscribers[0].qos is not None
+    assert node.subscribers[0].qos.reliability == 'best_effort'
     
     # Check service QoS
     assert len(node.services) == 1
     assert isinstance(node.services[0], ServiceConfig)
-    assert node.services[0].qos == {'reliability': 'reliable'}
+    assert node.services[0].qos is not None
+    assert node.services[0].qos.reliability == 'reliable'
     
     # Check action QoS
     assert len(node.actions) == 1
     assert isinstance(node.actions[0], ActionConfig)
-    assert node.actions[0].qos == {'reliability': 'best_effort'}
+    assert node.actions[0].qos is not None
+    assert node.actions[0].qos.reliability == 'best_effort'
 
 def test_qos_config_structure():
     """Test the structure of QoS configuration objects."""
