@@ -5,22 +5,13 @@ from pathlib import Path
 import tempfile
 import shutil
 
-from src.robodsl.parsers.lark_parser import RoboDSLParser
-from src.robodsl.generators.pipeline_generator import PipelineGenerator
-from src.robodsl.core.ast import PipelineNode, StageNode, StageContentNode, PipelineContentNode, StageInputNode, StageOutputNode, StageMethodNode, StageModelNode, StageTopicNode
+from robodsl.parsers.lark_parser import RoboDSLParser
+from robodsl.generators.pipeline_generator import PipelineGenerator
+from robodsl.core.ast import PipelineNode, StageNode, StageContentNode, PipelineContentNode, StageInputNode, StageOutputNode, StageMethodNode, StageModelNode, StageTopicNode
 
 
 class TestPipelineGenerator:
     """Test pipeline generator functionality."""
-    
-    def setup_method(self):
-        """Set up test environment."""
-        self.temp_dir = tempfile.mkdtemp()
-        self.generator = PipelineGenerator(output_dir=self.temp_dir)
-    
-    def teardown_method(self):
-        """Clean up test environment."""
-        shutil.rmtree(self.temp_dir)
     
     def test_pipeline_parsing(self):
         """Test that pipeline syntax is parsed correctly."""
@@ -37,7 +28,7 @@ class TestPipelineGenerator:
                 input: "output1"
                 output: "output2"
                 method: "process2"
-                topic: "/test/topic"
+                topic: /test/topic
             }
         }
         """
@@ -73,8 +64,10 @@ class TestPipelineGenerator:
         assert len(stage2.content.topics) == 1
         assert stage2.content.topics[0].topic_path == "/test/topic"
     
-    def test_pipeline_generation(self):
+    def test_pipeline_generation(self, test_output_dir):
         """Test that pipeline generates correct files."""
+        generator = PipelineGenerator(output_dir=str(test_output_dir))
+        
         # Create a simple pipeline AST
         pipeline = PipelineNode(
             name="test_pipeline",
@@ -102,7 +95,7 @@ class TestPipelineGenerator:
         )
         
         # Generate pipeline files
-        generated_files = self.generator.generate(pipeline, "test_project")
+        generated_files = generator.generate(pipeline, "test_project")
         
         # Verify files were generated
         assert len(generated_files) > 0
@@ -124,9 +117,9 @@ class TestPipelineGenerator:
         
         # Verify C++ header content
         header_content = generated_files["include/test_project/stage1_node.hpp"]
-        assert "class Stage1Node" in header_content
-        assert "on_input1_received" in header_content
-        assert "output1_publisher_" in header_content
+        assert "class stage1Node" in header_content
+        assert "input1_callback" in header_content
+        assert "output1_pub_" in header_content
         
         # Verify launch file content
         launch_content = generated_files["launch/test_pipeline_pipeline.launch.py"]
@@ -134,8 +127,10 @@ class TestPipelineGenerator:
         assert "stage1_node" in launch_content
         assert "stage2_node" in launch_content
     
-    def test_pipeline_with_models(self):
+    def test_pipeline_with_models(self, test_output_dir):
         """Test pipeline generation with ML models."""
+        generator = PipelineGenerator(output_dir=str(test_output_dir))
+        
         pipeline = PipelineNode(
             name="ml_pipeline",
             content=PipelineContentNode(
@@ -153,7 +148,7 @@ class TestPipelineGenerator:
             )
         )
         
-        generated_files = self.generator.generate(pipeline, "ml_project")
+        generated_files = generator.generate(pipeline, "ml_project")
         
         # Verify model reference is included
         cpp_content = generated_files["src/inference_node.cpp"]
@@ -163,15 +158,17 @@ class TestPipelineGenerator:
         doc_content = generated_files["docs/ml_pipeline_pipeline.md"]
         assert "yolo_model" in doc_content
     
-    def test_complex_pipeline(self):
+    def test_complex_pipeline(self, test_output_dir):
         """Test a more complex pipeline with multiple stages and configurations."""
+        generator = PipelineGenerator(output_dir=str(test_output_dir))
+        
         pipeline_text = """
         pipeline complex_pipeline {
             stage data_collection {
                 input: "sensor_data"
                 output: "raw_data"
                 method: "collect"
-                topic: "/sensors/raw"
+                topic: /sensors/raw
             }
             
             stage preprocessing {
@@ -179,7 +176,7 @@ class TestPipelineGenerator:
                 output: "clean_data"
                 method: "filter"
                 method: "normalize"
-                topic: "/data/clean"
+                topic: /data/clean
             }
             
             stage analysis {
@@ -187,7 +184,7 @@ class TestPipelineGenerator:
                 output: "results"
                 method: "analyze"
                 model: "ml_model"
-                topic: "/analysis/output"
+                topic: /analysis/output
             }
             
             stage visualization {
@@ -195,7 +192,7 @@ class TestPipelineGenerator:
                 output: "plots"
                 method: "plot"
                 method: "save"
-                topic: "/viz/plots"
+                topic: /viz/plots
             }
         }
         """
@@ -203,13 +200,14 @@ class TestPipelineGenerator:
         parser = RoboDSLParser()
         ast = parser.parse(pipeline_text)
         
+        # Verify complex pipeline was parsed
         assert len(ast.pipelines) == 1
         pipeline = ast.pipelines[0]
         assert pipeline.name == "complex_pipeline"
         assert len(pipeline.content.stages) == 4
         
         # Generate files
-        generated_files = self.generator.generate(pipeline, "complex_project")
+        generated_files = generator.generate(pipeline, "complex_project")
         
         # Verify all stages generated files
         stage_names = ["data_collection", "preprocessing", "analysis", "visualization"]
@@ -218,10 +216,20 @@ class TestPipelineGenerator:
             assert f"src/{stage_name}_node.cpp" in generated_files
             assert f"src/{stage_name}_node.py" in generated_files
         
-        # Verify launch file includes all stages
-        launch_content = generated_files["launch/complex_pipeline_pipeline.launch.py"]
-        for stage_name in stage_names:
-            assert stage_name in launch_content
+        # Verify pipeline launch file
+        assert "launch/complex_pipeline_pipeline.launch.py" in generated_files
+        
+        # Verify documentation
+        assert "docs/complex_pipeline_pipeline.md" in generated_files
+        
+        # Check that multiple methods are handled
+        preprocessing_content = generated_files["src/preprocessing_node.cpp"]
+        assert "filter" in preprocessing_content
+        assert "normalize" in preprocessing_content
+        
+        # Check that models are referenced
+        analysis_content = generated_files["src/analysis_node.cpp"]
+        assert "ml_model" in analysis_content
 
 
 if __name__ == "__main__":

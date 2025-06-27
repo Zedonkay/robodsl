@@ -13,23 +13,26 @@ include_path: STRING | NAME ("/" NAME)* ("." NAME)?
 
 // Node definitions
 node_def: "node" NAME LBRACE node_content RBRACE
-node_content: (parameter | lifecycle | timer | remap | namespace | ros_primitive | flag | cpp_method | kernel_def | onnx_model_ref)*
+node_content: (parameter | lifecycle | timer | remap | namespace | ros_primitive | flag | cpp_method | kernel_def | onnx_model_ref | cuda_kernels_block)*
 
-// Pipeline definitions (Phase 4)
+// Pipeline definitions (Phase 4) - Enhanced with CUDA/ONNX integration
 pipeline_def: "pipeline" NAME LBRACE pipeline_content RBRACE
 pipeline_content: stage_def*
 stage_def: "stage" NAME LBRACE stage_content RBRACE
-stage_content: (stage_input | stage_output | stage_method | stage_model | stage_topic)*
+stage_content: (stage_input | stage_output | stage_method | stage_model | stage_topic | stage_cuda_kernel | stage_onnx_model)*
 stage_input: "input" ":" STRING
 stage_output: "output" ":" STRING
 stage_method: "method" ":" STRING
 stage_model: "model" ":" STRING
 stage_topic: "topic" ":" TOPIC_PATH
+stage_cuda_kernel: "cuda_kernel" ":" STRING
+stage_onnx_model: "onnx_model" ":" STRING
 
-// ONNX Model definitions (Phase 3)
-onnx_model: "onnx_model" STRING LBRACE model_config RBRACE
-onnx_model_ref: "onnx_model" STRING LBRACE model_config RBRACE
-model_config: (input_def | output_def | device | optimization)*
+// ONNX Model definitions (Phase 3) - Developer-friendly syntax
+onnx_model: "onnx_model" NAME LBRACE onnx_model_content RBRACE
+onnx_model_ref: "onnx_model" NAME LBRACE onnx_model_content RBRACE
+onnx_model_content: (config_block | input_def | output_def | device | optimization)*
+config_block: "config" LBRACE (input_def | output_def | device | optimization)* RBRACE
 input_def: "input" ":" STRING "->" STRING
 output_def: "output" ":" STRING "->" STRING
 device: "device" ":" device_type
@@ -38,7 +41,7 @@ optimization: "optimization" ":" optimization_type
 optimization_type: NAME
 
 // Parameters
-parameter: "parameter" NAME ":" value
+parameter: "parameter" TYPE NAME "=" value
 
 // Lifecycle configuration
 lifecycle: "lifecycle" LBRACE lifecycle_config RBRACE
@@ -48,10 +51,9 @@ lifecycle_setting: NAME ":" BOOLEAN
 // Timers
 // Allow negative numbers
 // Allow expressions in period
-// (for now, just allow number, but can extend to expr)
 timer: "timer" NAME ":" expr timer_config?
 timer_config: LBRACE timer_setting* RBRACE
-timer_setting: NAME ":" BOOLEAN
+timer_setting: NAME ":" (BOOLEAN | NAME)
 
 // Remaps
 remap: "remap" ("from:" TOPIC_PATH "to:" TOPIC_PATH | TOPIC_PATH ":" TOPIC_PATH)
@@ -61,23 +63,27 @@ namespace: "namespace" (":"? TOPIC_PATH)
 
 // ROS primitives
 ros_primitive: publisher | subscriber | service | client | action
-publisher: "publisher" topic_path ":" STRING publisher_config?
-subscriber: "subscriber" topic_path ":" STRING subscriber_config?
-service: "service" topic_path ":" STRING service_config?
-client: "client" topic_path ":" STRING client_config?
-action: "action" topic_path ":" STRING action_config?
-
+publisher: "publisher" topic_path ":" topic_type publisher_config?
 publisher_config: LBRACE publisher_setting* RBRACE
-subscriber_config: LBRACE subscriber_setting* RBRACE
-service_config: LBRACE service_setting* RBRACE
-client_config: LBRACE client_setting* RBRACE
-action_config: LBRACE action_setting* RBRACE
+publisher_setting: qos_config | (NAME ":" (value | topic_type | NAME))
 
-publisher_setting: qos_config
-subscriber_setting: qos_config
-service_setting: qos_config
-client_setting: qos_config
-action_setting: qos_config
+topic_type: TOPIC_TYPE_STRING | NAME ("/" NAME)+
+
+subscriber: "subscriber" topic_path ":" topic_type subscriber_config?
+subscriber_config: LBRACE subscriber_setting* RBRACE
+subscriber_setting: qos_config | (NAME ":" (value | topic_type | NAME))
+
+service: "service" topic_path ":" topic_type service_config?
+service_config: LBRACE service_setting* RBRACE
+service_setting: qos_config | (NAME ":" (value | topic_type | NAME))
+
+client: "client" topic_path ":" topic_type client_config?
+client_config: LBRACE client_setting* RBRACE
+client_setting: qos_config | (NAME ":" (value | topic_type | NAME))
+
+action: "action" topic_path ":" topic_type action_config?
+action_config: LBRACE action_setting* RBRACE
+action_setting: qos_config | (NAME ":" (value | topic_type | NAME))
 
 topic_path: "/" NAME ("/" NAME)*
 
@@ -94,7 +100,7 @@ output_param_size: LPAR method_param_size_list RPAR
 method_param_size_list: method_param_size_item (COMMA method_param_size_item)*
 method_param_size_item: SIGNED_NUMBER | NAME | STRING | dotted_name
 
-// CUDA kernels block
+// CUDA kernels block - Developer-friendly with comma-separated parameters
 cuda_kernels_block: "cuda_kernels" LBRACE kernel_def* RBRACE
 kernel_def: "kernel" NAME LBRACE kernel_content RBRACE
 kernel_content: (block_size | grid_size | shared_memory | use_thrust | kernel_input_param | kernel_output_param | code_block)*
@@ -103,8 +109,10 @@ block_size: "block_size" ":" LPAR expr COMMA expr COMMA expr RPAR
 grid_size: "grid_size" ":" LPAR expr COMMA expr COMMA expr RPAR
 shared_memory: "shared_memory" ":" expr
 use_thrust: "use_thrust" ":" BOOLEAN
-kernel_input_param: "input" ":" cpp_type NAME kernel_param_size?
-kernel_output_param: "output" ":" cpp_type NAME kernel_param_size?
+kernel_input_param: "input" ":" kernel_param_list
+kernel_output_param: "output" ":" kernel_param_list
+kernel_param_list: kernel_param (COMMA kernel_param)*
+kernel_param: cpp_type NAME kernel_param_size?
 cpp_type: cpp_type_name
 cpp_type_name: /[a-zA-Z_][a-zA-Z0-9_]*(\**|\:\:[a-zA-Z_][a-zA-Z0-9_]*(\**)?)*(\<[^>]*\>)?/
 kernel_param_size: LPAR kernel_param_size_list RPAR
@@ -119,9 +127,10 @@ balanced_braces: "{" balanced_content* "}"
 balanced_content: /[^{}]+/ | balanced_braces
 
 // Values
+// Note: SIGNED_NUMBER can be int or float; AST builder will parse as int if no decimal
 value: primitive | array | nested_dict
 
-primitive: BOOLEAN | STRING | expr
+primitive: BOOLEAN | STRING | SIGNED_NUMBER
 
 array: LSQB value_list RSQB
 value_list: (value (COMMA value)*)?
@@ -149,12 +158,12 @@ RSQB: "]"
 LBRACE: "{"
 RBRACE: "}"
 COMMA: ","
-LESSTHAN: "<"
+LESSTAN: "<"
 MORETHAN: ">"
 SIGNED_NUMBER: /-?[0-9]+(\.[0-9]+)?/
+BOOLEAN: "true" | "false"
 NAME: /[a-zA-Z_][a-zA-Z0-9_]*/
 STRING: /"([^"\\]|\\.)*"/
-BOOLEAN: "true" | "false"
 TYPE: /[a-zA-Z_][a-zA-Z0-9_]*(\[[0-9,]*\])?/
 
 // Block comments and line comments
@@ -167,5 +176,7 @@ _WS: /[ \t]+/
 
 // QoS configuration
 qos_config: "qos" LBRACE qos_setting* RBRACE
-qos_setting: NAME ":" qos_value
-qos_value: expr
+qos_setting: NAME ":" expr
+
+// Add this to the terminals section near STRING:
+TOPIC_TYPE_STRING: /"[a-zA-Z0-9_\/]+"/

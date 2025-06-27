@@ -130,7 +130,9 @@ Each stage can be configured through ROS2 parameters:
 
 ```bash
 # Set parameters for a specific stage
+{% for stage in pipeline.content.stages %}
 ros2 param set /{{ pipeline.name }}/{{ stage.name }}/{{ stage.name }}_node parameter_name value
+{% endfor %}
 ```
 
 ## Troubleshooting
@@ -145,13 +147,19 @@ ros2 param set /{{ pipeline.name }}/{{ stage.name }}/{{ stage.name }}_node param
 
 ```bash
 # Check node status
+{% for stage in pipeline.content.stages %}
 ros2 node info /{{ pipeline.name }}/{{ stage.name }}/{{ stage.name }}_node
+{% endfor %}
 
 # Check topic connections
+{% for stage in pipeline.content.stages %}
 ros2 topic info /{{ pipeline.name }}/{{ stage.content.outputs[0].output_name if stage.content.outputs else 'topic_name' }}
+{% endfor %}
 
 # View node logs
+{% for stage in pipeline.content.stages %}
 ros2 run {{ project_name }} {{ stage.name }}_node --ros-args --log-level debug
+{% endfor %}
 ```
 
 ## Development

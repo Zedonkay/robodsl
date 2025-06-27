@@ -8,10 +8,10 @@ from click.testing import CliRunner
 from robodsl.cli import main
 
 
-def test_add_subnode_basic(tmp_path):
+def test_add_subnode_basic(test_output_dir):
     """Test adding a basic subnode to a project."""
     runner = CliRunner()
-    project_dir = tmp_path / "test_project"
+    project_dir = test_output_dir / "test_project"
     project_dir.mkdir()
     
     # Add a subnode
@@ -43,10 +43,10 @@ def test_add_subnode_basic(tmp_path):
         assert "node camera" in content
 
 
-def test_add_nested_subnode(tmp_path):
+def test_add_nested_subnode(test_output_dir):
     """Test adding a deeply nested subnode."""
     runner = CliRunner()
-    project_dir = tmp_path / "test_project"
+    project_dir = test_output_dir / "test_project"
     project_dir.mkdir()
     
     # Add a deeply nested subnode
@@ -70,10 +70,10 @@ def test_add_nested_subnode(tmp_path):
     assert (project_dir / "launch" / "robot" / "sensors" / "camera" / "depth.launch.py").exists()
 
 
-def test_add_subnode_with_pubsub(tmp_path):
+def test_add_subnode_with_pubsub(test_output_dir):
     """Test adding a subnode with publishers and subscribers."""
     runner = CliRunner()
-    project_dir = tmp_path / "test_project"
+    project_dir = test_output_dir / "test_project"
     project_dir.mkdir()
     
     # Add a subnode with publishers and subscribers
@@ -94,14 +94,14 @@ def test_add_subnode_with_pubsub(tmp_path):
     # Check robodsl file content
     with open(project_dir / "robodsl" / "nodes" / "perception" / "object_detector.robodsl", 'r') as f:
         content = f.read()
-        assert "publisher /detections vision_msgs/msg/Detection3DArray" in content
-        assert "subscriber /image sensor_msgs/msg/Image" in content
+        assert 'publisher /detections: "vision_msgs/msg/Detection3DArray"' in content
+        assert 'subscriber /image: "sensor_msgs/msg/Image"' in content
 
 
-def test_invalid_node_name(tmp_path):
+def test_invalid_node_name(test_output_dir):
     """Test adding a node with an invalid name."""
     runner = CliRunner()
-    project_dir = tmp_path / "test_project"
+    project_dir = test_output_dir / "test_project"
     project_dir.mkdir()
     
     # Try to add a node with invalid characters

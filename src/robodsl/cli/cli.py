@@ -79,13 +79,13 @@ def create_robodsl_config(project_path: Path, node_name: str, publishers: List[D
     
     # Add publishers
     for pub in (publishers or []):
-        pub_line = f"    publisher {pub['topic']} {pub['msg_type']}"
+        pub_line = f"    publisher {pub['topic']}: \"{pub['msg_type']}\""
         if not any(pub_line in line for line in new_node_lines):
             new_node_lines.insert(-1, f"{pub_line}\n")
     
     # Add subscribers
     for sub in (subscribers or []):
-        sub_line = f"    subscriber {sub['topic']} {sub['msg_type']}"
+        sub_line = f"    subscriber {sub['topic']}: \"{sub['msg_type']}\""
         if not any(sub_line in line for line in new_node_lines):
             new_node_lines.insert(-1, f"{sub_line}\n")
     
