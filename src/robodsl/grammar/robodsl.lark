@@ -1,5 +1,4 @@
-// RoboDSL Grammar - Phase 1: Foundation
-// This grammar replaces the regex-based parser with a proper context-free grammar
+// RoboDSL Grammar - Phase 1.5+ (Enhanced)
 
 start: include_stmt* (node_def | cuda_kernels_block)*
 
@@ -8,20 +7,23 @@ include_stmt: "include" ("<" include_path ">" | STRING)
 include_path: STRING | NAME ("/" NAME)* ("." NAME)?
 
 // Node definitions
-node_def: "node" NAME "{" node_content "}"
+node_def: "node" NAME LBRACE node_content RBRACE
 node_content: (parameter | lifecycle | timer | remap | namespace | ros_primitive | flag | cpp_method | kernel_def)*
 
 // Parameters
 parameter: "parameter" NAME ":" value
 
 // Lifecycle configuration
-lifecycle: "lifecycle" "{" lifecycle_config "}"
+lifecycle: "lifecycle" LBRACE lifecycle_config RBRACE
 lifecycle_config: lifecycle_setting*
 lifecycle_setting: NAME ":" BOOLEAN
 
 // Timers
-timer: "timer" NAME ":" number timer_config?
-timer_config: "{" timer_setting* "}"
+// Allow negative numbers
+// Allow expressions in period
+// (for now, just allow number, but can extend to expr)
+timer: "timer" NAME ":" expr timer_config?
+timer_config: LBRACE timer_setting* RBRACE
 timer_setting: NAME ":" BOOLEAN
 
 // Remaps
@@ -38,11 +40,11 @@ service: "service" topic_path ":" STRING service_config?
 client: "client" topic_path ":" STRING client_config?
 action: "action" topic_path ":" STRING action_config?
 
-publisher_config: "{" publisher_setting* "}"
-subscriber_config: "{" subscriber_setting* "}"
-service_config: "{" service_setting* "}"
-client_config: "{" client_setting* "}"
-action_config: "{" action_setting* "}"
+publisher_config: LBRACE publisher_setting* RBRACE
+subscriber_config: LBRACE subscriber_setting* RBRACE
+service_config: LBRACE service_setting* RBRACE
+client_config: LBRACE client_setting* RBRACE
+action_config: LBRACE action_setting* RBRACE
 
 publisher_setting: qos_config
 subscriber_setting: qos_config
@@ -56,69 +58,91 @@ topic_path: "/" NAME ("/" NAME)*
 flag: "flag" NAME ":" BOOLEAN
 
 // Enhanced C++ methods (Phase 2)
-cpp_method: "method" NAME "{" method_content "}"
+cpp_method: "method" NAME LBRACE method_content RBRACE
 method_content: (input_param | output_param | code_block)*
 input_param: "input" ":" cpp_type NAME input_param_size?
 output_param: "output" ":" cpp_type NAME output_param_size?
-input_param_size: "(" method_param_size_list ")"
-output_param_size: "(" method_param_size_list ")"
-method_param_size_list: (NAME | STRING | number) ("," (NAME | STRING | number))*
+input_param_size: LPAR method_param_size_list RPAR
+output_param_size: LPAR method_param_size_list RPAR
+method_param_size_list: method_param_size_item (COMMA method_param_size_item)*
+method_param_size_item: SIGNED_NUMBER | NAME | STRING | dotted_name
 
 // CUDA kernels block
-cuda_kernels_block: "cuda_kernels" "{" kernel_def* "}"
-kernel_def: "kernel" NAME "{" kernel_content "}"
+cuda_kernels_block: "cuda_kernels" LBRACE kernel_def* RBRACE
+kernel_def: "kernel" NAME LBRACE kernel_content RBRACE
 kernel_content: (block_size | grid_size | shared_memory | use_thrust | kernel_param | code_block)*
 
-block_size: "block_size" ":" "(" number "," number "," number ")"
-grid_size: "grid_size" ":" "(" number "," number "," number ")"
-shared_memory: "shared_memory" ":" number
+block_size: "block_size" ":" LPAR expr COMMA expr COMMA expr RPAR
+grid_size: "grid_size" ":" LPAR expr COMMA expr COMMA expr RPAR
+shared_memory: "shared_memory" ":" expr
 use_thrust: "use_thrust" ":" BOOLEAN
 kernel_param: "param" DIRECTION cpp_type NAME kernel_param_size?
 DIRECTION: "in" | "out" | "inout"
 cpp_type: cpp_type_name STAR?
-cpp_type_name: NAME ("::" NAME)* ("<" cpp_type_list ">")?
-cpp_type_list: cpp_type_name ("," cpp_type_name)*
-kernel_param_size: "(" kernel_param_size_list ")"
-kernel_param_size_list: (NAME | STRING) ("," (NAME | STRING))*
+cpp_type_name: NAME ("::" NAME)* (LESSTHAN cpp_type_list MORETHAN)?
+cpp_type_list: cpp_type_name (COMMA cpp_type_name)*
+kernel_param_size: LPAR kernel_param_size_list RPAR
+kernel_param_size_list: kernel_param_size_item (COMMA kernel_param_size_item)*
+kernel_param_size_item: SIGNED_NUMBER | NAME | STRING
 
-// Code blocks as quoted strings
-code_block: "code" ":"? STRING
+dotted_name: NAME (DOT NAME | LPAR (dotted_name (COMMA dotted_name)*)? RPAR)+
+
+// Code blocks as quoted strings or raw blocks (triple quotes)
+code_block: "code" ":"? (STRING | RAW_STRING)
+RAW_STRING: /"""([\s\S]*?)"""/
 
 // Values
 value: primitive | array | nested_dict
 
-primitive: BOOLEAN | STRING | number
+primitive: BOOLEAN | STRING | expr
 
-array: "[" value_list "]"
-value_list: (value ("," value)*)?
+array: LSQB value_list RSQB
+value_list: (value (COMMA value)*)?
 
-nested_dict: "{" dict_list "}"
-dict_list: (dict_item (dict_sep dict_item)* dict_sep?)?
+nested_dict: LBRACE dict_list RBRACE
+dict_list: (dict_item (dict_sep? dict_item)*)?
 dict_item: NAME ":" value
-dict_sep: "," | _NL
+dict_sep: COMMA | _NL
 
-// Numbers
-number: NUMBER
+// Expressions for block/grid size and parameter sizes
+expr: signed_atom (binop signed_atom)*
+signed_atom: SIGNED_NUMBER | NAME | dotted_name | LPAR expr RPAR
+binop: "+" | "-" | "*" | "/" | "%" | "^"
 
 // Topics must start with /
-TOPIC_PATH: /\/[a-zA-Z_][a-zA-Z0-9_\/]*/
+TOPIC_PATH: /\/[a-zA-Z_][a-zA-Z0-9_\/\.]*/
 
 // Terminals
 STAR: "*"
+DOT: "."
+LPAR: "("
+RPAR: ")"
+LSQB: "["
+RSQB: "]"
+LBRACE: "{"
+RBRACE: "}"
+COMMA: ","
+LESSTHAN: "<"
+MORETHAN: ">"
+SIGNED_NUMBER: /-?[0-9]+(\.[0-9]+)?/
 NAME: /[a-zA-Z_][a-zA-Z0-9_]*/
-NUMBER: /[0-9]+(\.[0-9]+)?/
-STRING: /"[^"]*"/
+STRING: /"([^"\\]|\\.)*"/
 BOOLEAN: "true" | "false"
+
+// Block comments and line comments
+BLOCK_COMMENT: /\/\*[\s\S]*?\*\//
+COMMENT: /\/\/[^\n]*/
 
 // Ignore whitespace and comments
 _NL: /(\r?\n)+\s*/
 _WS: /[ \t]+/
-COMMENT: /\/\/.*/
-
-// QoS configuration
-qos_config: "qos" "{" qos_setting* "}"
-qos_setting: NAME ":" (number | NAME)
 
 %ignore _WS
 %ignore COMMENT
+%ignore BLOCK_COMMENT
 %ignore _NL
+
+// QoS configuration
+qos_config: "qos" LBRACE qos_setting* RBRACE
+qos_setting: NAME ":" qos_value
+qos_value: expr

@@ -230,8 +230,8 @@ def test_parse_complex_config():
 
 def test_cross_reference_validation():
     """Test cross-reference validation with various scenarios."""
-    from src.robodsl.parser.semantic_analyzer import SemanticAnalyzer, SemanticError
-    from src.robodsl.parser.lark_parser import parse_robodsl
+    from robodsl.parser.semantic_analyzer import SemanticAnalyzer, SemanticError
+    from robodsl.parser.lark_parser import parse_robodsl
     
     # Test 1: Valid configuration with matching publisher/subscriber
     valid_config = """

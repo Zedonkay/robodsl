@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 from typing import Optional
 from lark import Lark, ParseError
+import re
 
 from .ast_builder import ASTBuilder
 from .semantic_analyzer import SemanticAnalyzer, SemanticError
@@ -42,9 +43,15 @@ class RoboDSLParser:
             SemanticError: If semantic errors are found
         """
         try:
+            # Preprocess content to remove comments
+            # Remove line comments
+            content = re.sub(r'//.*$', '', content, flags=re.MULTILINE)
+            # Remove block comments
+            content = re.sub(r'/\*[\s\S]*?\*/', '', content)
+            
             # Parse with Lark
             parse_tree = self.parser.parse(content)
-            
+
             # Build AST
             ast = self.ast_builder.build(parse_tree)
             

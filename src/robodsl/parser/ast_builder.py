@@ -165,8 +165,8 @@ class ASTBuilder:
         for child in tree.children:
             if isinstance(child, Token) and child.type == 'NAME':
                 timer_name = child.value
-            elif isinstance(child, Tree) and child.data == 'number':
-                period = self._extract_number(child)
+            elif isinstance(child, Tree) and child.data == 'expr':
+                period = self._extract_expr(child)
             elif isinstance(child, Tree) and child.data == 'timer_config':
                 for setting in child.children:
                     if isinstance(setting, Tree) and setting.data == 'timer_setting':
@@ -223,21 +223,19 @@ class ASTBuilder:
         topic = None
         msg_type = None
         qos_config = None
-        
         for child in tree.children:
             if isinstance(child, Tree) and child.data == 'topic_path':
                 topic = self._extract_topic_path(child)
             elif isinstance(child, Token) and child.type == 'STRING':
                 msg_type = child.value.strip('"')
             elif isinstance(child, Tree) and child.data == 'publisher_config':
-                # Look for publisher_setting -> qos_config
+                # Find the first qos_config node
                 for setting in child.children:
                     if isinstance(setting, Tree) and setting.data == 'publisher_setting':
                         for config_child in setting.children:
                             if isinstance(config_child, Tree) and config_child.data == 'qos_config':
                                 qos_config = self._handle_qos_config(config_child)
                                 break
-        
         return PublisherNode(
             topic=topic or "",
             msg_type=msg_type or "",
@@ -346,8 +344,10 @@ class ASTBuilder:
     
     def _handle_qos_config(self, tree: Tree) -> QoSNode:
         """Handle QoS configuration."""
+        print('DEBUG: _handle_qos_config children:', tree.children)
         settings = []
         for child in tree.children:
+            print('DEBUG: child type:', type(child), 'data:', getattr(child, 'data', None))
             if isinstance(child, Tree) and child.data == 'qos_setting':
                 name, value = self._extract_qos_setting(child)
                 if name is not None and value is not None:
@@ -356,23 +356,19 @@ class ASTBuilder:
     
     def _extract_qos_setting(self, tree: Tree) -> tuple[str, Any]:
         """Extract QoS setting name and value."""
+        # print('DEBUG: _extract_qos_setting children:', tree.children)
         name = None
         value = None
         for child in tree.children:
             if isinstance(child, Token):
                 if child.type == 'NAME' and name is None:
                     name = child.value
-                elif child.type == 'NAME' and name is not None:
-                    # Second NAME token is the value (e.g., 'reliable', 'best_effort')
-                    value = child.value
-                elif child.type == 'NUMBER':
-                    value = int(child.value) if '.' not in child.value else float(child.value)
-                elif child.type == 'BOOLEAN':
-                    value = child.value.lower() == 'true'
-                elif child.type == 'STRING':
-                    value = child.value.strip('"')
-            elif isinstance(child, Tree) and child.data == 'number':
-                value = self._extract_number(child)
+            elif isinstance(child, Tree) and child.data == 'qos_value':
+                # Find expr child
+                for vchild in child.children:
+                    if isinstance(vchild, Tree) and vchild.data == 'expr':
+                        value = self._extract_expr(vchild)
+        # print('DEBUG: extracted name:', name, 'value:', value)
         return name or "", value
     
     def _handle_cuda_kernels(self, tree: Tree) -> CudaKernelsNode:
@@ -412,7 +408,7 @@ class ASTBuilder:
                 elif child.data == 'grid_size':
                     content.grid_size = self._extract_tuple(child, 3)
                 elif child.data == 'shared_memory':
-                    content.shared_memory = self._extract_number(child.children[0])
+                    content.shared_memory = self._extract_expr(child.children[0])
                 elif child.data == 'use_thrust':
                     # Set use_thrust based on the boolean value in the tree
                     for token in child.children:
@@ -432,26 +428,26 @@ class ASTBuilder:
         param_name = None
         size_expr = None
         
-        for child in tree.children:
-            if isinstance(child, Token):
-                if child.type == 'DIRECTION':
-                    direction = KernelParameterDirection(child.value)
-                elif child.type == 'NAME':
-                    # First NAME is the type, second is the parameter name
-                    if param_type is None:
-                        param_type = child.value
-                    elif param_name is None:
-                        param_name = child.value
-            elif isinstance(child, Tree) and child.data == 'cpp_type':
-                # Handle cpp_type which can be NAME or NAME "*"
-                type_parts = []
-                for token in child.children:
-                    if isinstance(token, Token):
-                        type_parts.append(token.value)
-                param_type = ''.join(type_parts)
-            elif isinstance(child, Tree) and child.data == 'kernel_param_size':
-                # kernel_param_size_list is the first child
-                size_expr = [tok.value for tok in child.children[0].children if isinstance(tok, Token)]
+        # The structure is: "param" DIRECTION cpp_type NAME kernel_param_size?
+        # So children should be: [DIRECTION, cpp_type_tree, NAME, kernel_param_size_tree?]
+        children = list(tree.children)
+        
+        if len(children) >= 3:
+            # First child should be DIRECTION
+            if isinstance(children[0], Token) and children[0].type == 'DIRECTION':
+                direction = KernelParameterDirection(children[0].value)
+            
+            # Second child should be cpp_type
+            if isinstance(children[1], Tree) and children[1].data == 'cpp_type':
+                param_type = self._extract_cpp_type(children[1])
+            
+            # Third child should be NAME (parameter name)
+            if isinstance(children[2], Token) and children[2].type == 'NAME':
+                param_name = children[2].value
+            
+            # Fourth child (if exists) should be kernel_param_size
+            if len(children) > 3 and isinstance(children[3], Tree) and children[3].data == 'kernel_param_size':
+                size_expr = self._extract_kernel_param_size(children[3])
         
         return KernelParamNode(direction=direction, param_type=param_type, param_name=param_name, size_expr=size_expr)
     
@@ -474,14 +470,16 @@ class ASTBuilder:
             if isinstance(child, Token):
                 if child.type == 'BOOLEAN':
                     return child.value.lower() == 'true'
-                elif child.type == 'INTEGER':
-                    return int(child.value)
-                elif child.type == 'FLOAT':
-                    return float(child.value)
+                elif child.type == 'SIGNED_NUMBER':
+                    value = child.value
+                    if '.' in value:
+                        return float(value)
+                    else:
+                        return int(value)
                 elif child.type == 'STRING':
                     return child.value.strip('"')
-            elif isinstance(child, Tree) and child.data == 'number':
-                return self._extract_number(child)
+            elif isinstance(child, Tree) and child.data == 'expr':
+                return self._extract_expr(child)
         return None
     
     def _extract_array(self, tree: Tree) -> list:
@@ -526,8 +524,8 @@ class ASTBuilder:
         """Extract tuple of numbers from tree."""
         numbers = []
         for child in tree.children:
-            if isinstance(child, Tree) and child.data == 'number':
-                numbers.append(self._extract_number(child))
+            if isinstance(child, Tree) and child.data == 'expr':
+                numbers.append(self._extract_expr(child))
         return tuple(numbers[:size])
     
     def _extract_string(self, tree: Tree) -> str:
@@ -590,7 +588,6 @@ class ASTBuilder:
         return CppMethodNode(name=method_name or '', inputs=inputs, outputs=outputs, code=code)
 
     def _handle_method_param(self, tree: Tree) -> MethodParamNode:
-        print('DEBUG _handle_method_param:', tree.pretty(), file=sys.stderr)
         param_type = None
         param_name = None
         size_expr = None
@@ -600,16 +597,85 @@ class ASTBuilder:
                 param_type = self._extract_cpp_type(child)
             elif isinstance(child, Token) and child.type == 'NAME':
                 param_name = child.value
-            elif isinstance(child, Tree) and (child.data == 'input_param_size' or child.data == 'output_param_size'):
-                # Extract size expression from the method_param_size_list
-                if child.children and isinstance(child.children[0], Tree) and child.children[0].data == 'method_param_size_list':
-                    size_parts = []
-                    for token in child.children[0].children:
-                        if isinstance(token, Token):
-                            size_parts.append(token.value)
-                    size_expr = ', '.join(size_parts)
+            elif isinstance(child, Tree):
+                if child.data == 'input_param_size' or child.data == 'output_param_size':
+                    # Extract size expression from the method_param_size_list
+                    if child.children and isinstance(child.children[1], Tree) and child.children[1].data == 'method_param_size_list':
+                        size_parts = []
+                        for item in child.children[1].children:
+                            if isinstance(item, Tree) and item.data == 'method_param_size_item':
+                                # Extract the value from the item
+                                for item_child in item.children:
+                                    if isinstance(item_child, Token):
+                                        if item_child.type in ('SIGNED_NUMBER', 'NAME', 'STRING'):
+                                            size_parts.append(item_child.value)
+                                    elif isinstance(item_child, Tree):
+                                        # Handle nested expressions
+                                        if item_child.data == 'expr':
+                                            size_parts.append(str(self._extract_expr(item_child)))
+                            elif isinstance(item, Token):
+                                # method_param_size_item is a direct token
+                                if item.type in ('SIGNED_NUMBER', 'NAME', 'STRING'):
+                                    size_parts.append(item.value)
+                        size_expr = ', '.join(size_parts)
         
         return MethodParamNode(param_type=param_type or '', param_name=param_name or '', size_expr=size_expr)
+
+    def _extract_expr(self, tree: Tree) -> Any:
+        # If the expr is a single signed_atom, extract it
+        if len(tree.children) == 1:
+            child = tree.children[0]
+            if isinstance(child, Tree) and child.data == 'signed_atom':
+                return self._extract_signed_atom(child)
+        # Otherwise, reconstruct the expression as a string
+        return self._expr_to_str(tree)
+    
+    def _expr_to_str(self, tree: Tree) -> str:
+        """Convert expression tree to string representation."""
+        parts = []
+        for child in tree.children:
+            if isinstance(child, Token):
+                parts.append(child.value)
+            elif isinstance(child, Tree):
+                if child.data == 'signed_atom':
+                    parts.append(str(self._extract_signed_atom(child)))
+                elif child.data == 'binop':
+                    parts.append(child.children[0].value if child.children else '')
+                else:
+                    parts.append(self._expr_to_str(child))
+        return ' '.join(parts)
+    
+    def _extract_signed_atom(self, tree: Tree) -> Any:
+        """Extract signed atom value from tree."""
+        for child in tree.children:
+            if isinstance(child, Token):
+                if child.type == 'SIGNED_NUMBER':
+                    value = child.value
+                    if '.' in value:
+                        return float(value)
+                    else:
+                        return int(value)
+                elif child.type == 'NAME':
+                    # Check if it's a boolean value
+                    if child.value.lower() == 'true':
+                        return True
+                    elif child.value.lower() == 'false':
+                        return False
+                    return child.value
+            elif isinstance(child, Tree) and child.data == 'dotted_name':
+                # For dotted names, return as string for now
+                return self._extract_dotted_name(child)
+        return None
+    
+    def _extract_dotted_name(self, tree: Tree) -> str:
+        """Extract dotted name as string."""
+        parts = []
+        for child in tree.children:
+            if isinstance(child, Token) and child.type == 'NAME':
+                parts.append(child.value)
+            elif isinstance(child, Token) and child.type == 'DOT':
+                parts.append('.')
+        return ''.join(parts)
 
     def _extract_number(self, tree: Tree) -> float:
         """Extract number from tree."""
@@ -674,26 +740,43 @@ class ASTBuilder:
             type_str += template_str
         return [type_str]
 
-    def _extract_kernel_param_size(self, tree: Tree) -> str:
+    def _extract_kernel_param_size(self, tree: Tree) -> List[str]:
+        """Extract kernel parameter size expression from tree."""
+        size_parts = []
         for child in tree.children:
-            if isinstance(child, Token) and child.type in ('NAME', 'STRING', 'NUMBER'):
-                return child.value.strip('"')
-        return ""
+            if isinstance(child, Tree) and child.data == 'kernel_param_size_list':
+                for item in child.children:
+                    if isinstance(item, Tree) and item.data == 'kernel_param_size_item':
+                        # Extract the value from the item
+                        for item_child in item.children:
+                            if isinstance(item_child, Token):
+                                if item_child.type in ('SIGNED_NUMBER', 'NAME', 'STRING'):
+                                    size_parts.append(item_child.value)
+                            elif isinstance(item_child, Tree):
+                                # Handle nested expressions
+                                if item_child.data == 'expr':
+                                    size_parts.append(str(self._extract_expr(item_child)))
+                    elif isinstance(item, Token):
+                        # kernel_param_size_item is a direct token
+                        if item.type in ('SIGNED_NUMBER', 'NAME', 'STRING'):
+                            size_parts.append(item.value)
+        return size_parts if size_parts else None
 
     def _extract_code_block(self, tree: Tree) -> str:
-        """Extract code block content from tree (STRING)."""
+        """Extract code block from tree."""
         for child in tree.children:
             if isinstance(child, Token) and child.type == 'STRING':
                 return child.value.strip('"')
         return ""
 
     def _extract_topic_path(self, tree: Tree) -> str:
-        """Extract topic path from topic_path rule."""
-        parts = []
+        """Extract topic path from tree."""
+        path_parts = []
         for child in tree.children:
             if isinstance(child, Token) and child.type == 'NAME':
-                parts.append(child.value)
-        return '/' + '/'.join(parts) if parts else ''
+                path_parts.append(child.value)
+        return '/' + '/'.join(path_parts)
 
     def _handle_kernel_def(self, tree: Tree) -> KernelNode:
+        """Handle kernel definition inside nodes."""
         return self._parse_kernel(tree) 

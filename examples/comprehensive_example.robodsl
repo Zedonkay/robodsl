@@ -5,9 +5,9 @@
 project_name: comprehensive_robodsl_example
 
 # Global includes (will be added to all nodes)
-#include <rclcpp/rclcpp.hpp>
-#include <std_msgs/msg/string.hpp>
-#include <sensor_msgs/msg/image.hpp>
+include <rclcpp/rclcpp.hpp>
+include <std_msgs/msg/string.hpp>
+include <sensor_msgs/msg/image.hpp>
 
 # Define a node with all possible configurations
 node my_node {
@@ -161,7 +161,6 @@ node timer_node {
     # Timer with sub-second period
     timer fast_timer 0.1 fast_timer_callback
 }
-
 # Node demonstrating all parameter types
 node param_types_node {
     # Scalar types

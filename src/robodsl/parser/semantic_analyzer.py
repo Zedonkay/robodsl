@@ -94,7 +94,13 @@ class SemanticAnalyzer:
         
         # Analyze CUDA kernels
         if ast.cuda_kernels:
+            kernel_names = set()
             for kernel in ast.cuda_kernels.kernels:
+                # Check for duplicate kernel names
+                if kernel.name in kernel_names:
+                    self.errors.append(f"Duplicate kernel name: {kernel.name}")
+                kernel_names.add(kernel.name)
+                
                 self.symbol_table.add_kernel(kernel.name)
                 self._analyze_cuda_kernel(kernel)
         
@@ -143,6 +149,12 @@ class SemanticAnalyzer:
         
         # Check actions
         self._analyze_actions(content.actions)
+        
+        # Check clients
+        self._analyze_clients(content.clients)
+        
+        # Check flags
+        self._analyze_flags(content.flags)
         
         # Check timers
         self._analyze_timers(content.timers)
@@ -327,6 +339,53 @@ class SemanticAnalyzer:
             if not self._is_valid_ros_type(act.action_type):
                 self.errors.append(f"Action '{act.name}' has invalid action type '{act.action_type}'")
     
+    def _analyze_clients(self, clients: List[ServiceNode]):
+        """Analyze service client configurations."""
+        client_names = set()
+        
+        for client in clients:
+            # Check for duplicate client names
+            if client.service in client_names:
+                self.errors.append(f"Duplicate client name: {client.service}")
+            client_names.add(client.service)
+            
+            # Check client name
+            if not client.service or client.service.strip() == "":
+                self.errors.append("Client name cannot be empty")
+            
+            # Check service type
+            if not client.srv_type or client.srv_type.strip() == "":
+                self.errors.append(f"Service type cannot be empty for client {client.service}")
+            
+            # Add to symbol table
+            self.symbol_table.add_service(client.service)
+            
+            # Type check: srv_type is a valid ROS type (basic check)
+            if not self._is_valid_ros_type(client.srv_type):
+                self.errors.append(f"Client '{client.service}' has invalid service type '{client.srv_type}'")
+    
+    def _analyze_flags(self, flags: List[FlagNode]):
+        """Analyze flag configurations."""
+        flag_names = set()
+        
+        for flag in flags:
+            # Check for duplicate flag names
+            if flag.name in flag_names:
+                self.errors.append(f"Duplicate flag name: {flag.name}")
+            flag_names.add(flag.name)
+            
+            # Check flag name
+            if not flag.name or flag.name.strip() == "":
+                self.errors.append("Flag name cannot be empty")
+            
+            # Check flag value
+            if flag.value is None:
+                self.errors.append(f"Flag '{flag.name}' has no value")
+            
+            # Type check: flag value should be boolean
+            if not isinstance(flag.value, bool):
+                self.errors.append(f"Flag '{flag.name}' value must be a boolean")
+    
     def _analyze_timers(self, timers: List[TimerNode]):
         """Analyze timer configurations."""
         timer_names = set()
@@ -340,6 +399,10 @@ class SemanticAnalyzer:
             # Check timer period
             if timer.period <= 0:
                 self.errors.append(f"Timer {timer.name} period must be positive")
+            
+            # Check for negative timer periods
+            if isinstance(timer.period, (int, float)) and timer.period < 0:
+                self.errors.append(f"Timer {timer.name} period cannot be negative")
             
             # Check callback name
             if not timer.name or timer.name.strip() == "":
@@ -503,6 +566,8 @@ class SemanticAnalyzer:
             for i, size in enumerate(content.block_size):
                 if not isinstance(size, int) or size <= 0:
                     self.errors.append(f"CUDA kernel '{kernel.name}' block size dimension {i} must be a positive integer")
+                if size == 0:
+                    self.errors.append(f"CUDA kernel '{kernel.name}' block size dimension {i} cannot be zero")
                 if size > 1024:  # CUDA limit
                     self.errors.append(f"CUDA kernel '{kernel.name}' block size dimension {i} exceeds CUDA limit of 1024")
         
@@ -511,8 +576,16 @@ class SemanticAnalyzer:
             if len(content.grid_size) != 3:
                 self.errors.append(f"CUDA kernel '{kernel.name}' grid size must have exactly 3 dimensions")
             for i, size in enumerate(content.grid_size):
-                if not isinstance(size, int) or size <= 0:
-                    self.errors.append(f"CUDA kernel '{kernel.name}' grid size dimension {i} must be a positive integer")
+                # Allow both integers and expressions (strings)
+                if isinstance(size, int):
+                    if size <= 0:
+                        self.errors.append(f"CUDA kernel '{kernel.name}' grid size dimension {i} must be a positive integer")
+                elif isinstance(size, str):
+                    # Expression - validate that it's not empty
+                    if not size.strip():
+                        self.errors.append(f"CUDA kernel '{kernel.name}' grid size dimension {i} expression cannot be empty")
+                else:
+                    self.errors.append(f"CUDA kernel '{kernel.name}' grid size dimension {i} must be an integer or expression")
         
         # Check shared memory
         if content.shared_memory is not None:
