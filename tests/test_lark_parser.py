@@ -4,6 +4,7 @@ import pytest
 from robodsl.parsers.lark_parser import parse_robodsl
 from robodsl.parsers.semantic_analyzer import SemanticError
 from lark import ParseError
+from robodsl.core.ast import RoboDSLAST, NodeNode, KernelNode
 
 
 def test_basic_node_parsing():

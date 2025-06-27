@@ -481,7 +481,7 @@ def generate(input_file: Path, output_dir: Optional[Path], force: bool) -> None:
     """
     try:
         from robodsl.parser import parse_robodsl
-        from robodsl.generator import CodeGenerator
+        from robodsl.generators.main_generator import MainGenerator
         
         # Set default output directory if not specified
         if output_dir is None:
@@ -496,7 +496,7 @@ def generate(input_file: Path, output_dir: Optional[Path], force: bool) -> None:
         config = parse_robodsl(input_file.read_text())
         
         # Generate code
-        generator = CodeGenerator(output_dir=output_dir)
+        generator = MainGenerator(output_dir=str(output_dir))
         generated_files = generator.generate(config)
         
         click.echo(f"Generated {len(generated_files)} files in {output_dir}:")
