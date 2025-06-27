@@ -4,10 +4,10 @@ This generator creates CMakeLists.txt files for building ROS2 packages.
 """
 
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import List, Dict, Any
 
 from .base_generator import BaseGenerator
-from ..core.ast import RoboDSLAST, NodeNode, KernelNode
+from ..core.ast import RoboDSLAST
 
 
 class CMakeGenerator(BaseGenerator):
@@ -218,8 +218,8 @@ set(CMAKE_INSTALL_PREFIX "/opt/ros/humble")
             'package_name': package_name,
             'version': '0.1.0',
             'description': 'Generated ROS2 package from RoboDSL',
-            'maintainer': 'robodsl',
-            'maintainer_email': 'robodsl@example.com',
+            'maintainer': 'Ishayu Shikhare',
+            'maintainer_email': 'ishikhar@andrew.cmu.edu',
             'license': 'Apache-2.0',
             'dependencies': sorted(list(dependencies)),
             'message_dependencies': sorted(list(message_dependencies)),
@@ -335,7 +335,7 @@ ament_package()
   <name>{package_name}</name>
   <version>0.1.0</version>
   <description>Generated ROS2 package from RoboDSL</description>
-  <maintainer email="robodsl@example.com">robodsl</maintainer>
+  <maintainer email="ishikhar@andrew.cmu.edu">Ishayu Shikhare</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>

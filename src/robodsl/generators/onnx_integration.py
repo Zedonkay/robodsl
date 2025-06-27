@@ -4,12 +4,11 @@ This module generates pure C++/CUDA ONNX Runtime integration code for ROS2 nodes
 ensuring all inference is compiled and not interpreted.
 """
 
-import os
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Dict
 from jinja2 import Template, Environment, FileSystemLoader
 
-from ..core.ast import OnnxModelNode, ModelConfigNode, InputDefNode, OutputDefNode
+from ..core.ast import OnnxModelNode
 
 
 class OnnxIntegrationGenerator:

@@ -17,7 +17,7 @@ A DSL for building GPU-accelerated robotics applications with ROS2 and CUDA.
 
 ### Install
 ```bash
-git clone https://github.com/yourusername/robodsl.git
+git clone https://github.com/Zedonkay/robodsl.git
 cd robodsl
 # Choose one:
 ./build-deb-direct.sh && sudo dpkg -i robodsl_0.1.0_all.deb  # Debian
@@ -46,7 +46,7 @@ pip install -e .  # Development
 ## Development
 
 ```bash
-git clone https://github.com/yourusername/robodsl.git
+git clone https://github.com/Zedonkay/robodsl.git
 cd robodsl
 pip install -e .  # Development install
 ```
@@ -81,7 +81,7 @@ pip install robodsl
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/robodsl.git
+   git clone https://github.com/Zedonkay/robodsl.git
    cd robodsl
    ```
 
@@ -308,7 +308,7 @@ pip install robodsl
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/robodsl.git
+git clone https://github.com/Zedonkay/robodsl.git
 cd robodsl
 ```
 
@@ -326,7 +326,7 @@ robodsl --version
 
 A Docker image is available for development and testing:
 ```bash
-docker pull yourusername/robodsl:latest
+docker pull Zedonkay/robodsl:latest
 ```
 
 ## Quick Start
@@ -500,7 +500,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 For questions and support, please:
 1. Check the [documentation](#documentation)
-2. Search the [issue tracker](https://github.com/yourusername/robodsl/issues)
+2. Search the [issue tracker](https://github.com/Zedonkay/robodsl/issues)
 3. Open a new issue if your question hasn't been answered
 
 ## Acknowledgements

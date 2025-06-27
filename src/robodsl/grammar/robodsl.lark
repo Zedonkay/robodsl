@@ -5,7 +5,7 @@
 %ignore BLOCK_COMMENT
 %ignore _NL
 
-start: include_stmt* (node_def | cuda_kernels_block | onnx_model)*
+start: include_stmt* (node_def | cuda_kernels_block | onnx_model | pipeline_def)*
 
 // Include statements
 include_stmt: "include" ("<" include_path ">" | STRING)
@@ -14,6 +14,17 @@ include_path: STRING | NAME ("/" NAME)* ("." NAME)?
 // Node definitions
 node_def: "node" NAME LBRACE node_content RBRACE
 node_content: (parameter | lifecycle | timer | remap | namespace | ros_primitive | flag | cpp_method | kernel_def | onnx_model_ref)*
+
+// Pipeline definitions (Phase 4)
+pipeline_def: "pipeline" NAME LBRACE pipeline_content RBRACE
+pipeline_content: stage_def*
+stage_def: "stage" NAME LBRACE stage_content RBRACE
+stage_content: (stage_input | stage_output | stage_method | stage_model | stage_topic)*
+stage_input: "input" ":" STRING
+stage_output: "output" ":" STRING
+stage_method: "method" ":" STRING
+stage_model: "model" ":" STRING
+stage_topic: "topic" ":" TOPIC_PATH
 
 // ONNX Model definitions (Phase 3)
 onnx_model: "onnx_model" STRING LBRACE model_config RBRACE

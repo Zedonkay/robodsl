@@ -1,0 +1,180 @@
+# {{ pipeline.name | title }} Pipeline Documentation
+
+## Overview
+
+The {{ pipeline.name }} pipeline is a data processing pipeline consisting of {{ pipeline.content.stages | length }} stages. Each stage is implemented as a separate ROS2 node that processes data and passes it to the next stage.
+
+## Pipeline Structure
+
+```
+{% for stage in pipeline.content.stages %}
+Stage {{ loop.index }}: {{ stage.name | title }}
+{% if stage.content.inputs %}
+  Inputs: {% for input in stage.content.inputs %}{{ input.input_name }}{% if not loop.last %}, {% endif %}{% endfor %}
+{% endif %}
+{% if stage.content.outputs %}
+  Outputs: {% for output in stage.content.outputs %}{{ output.output_name }}{% if not loop.last %}, {% endif %}{% endfor %}
+{% endif %}
+{% if stage.content.methods %}
+  Methods: {% for method in stage.content.methods %}{{ method.method_name }}{% if not loop.last %}, {% endif %}{% endfor %}
+{% endif %}
+{% if stage.content.models %}
+  Models: {% for model in stage.content.models %}{{ model.model_name }}{% if not loop.last %}, {% endif %}{% endfor %}
+{% endif %}
+{% if stage.content.topics %}
+  Topics: {% for topic in stage.content.topics %}{{ topic.topic_path }}{% if not loop.last %}, {% endif %}{% endfor %}
+{% endif %}
+
+{% endfor %}
+```
+
+## Stage Details
+
+{% for stage in pipeline.content.stages %}
+### {{ stage.name | title }} Stage
+
+**Node Name**: `{{ stage.name }}_node`  
+**Namespace**: `/{{ pipeline.name }}/{{ stage.name }}`
+
+{% if stage.content.inputs %}
+#### Inputs
+{% for input in stage.content.inputs %}
+- **{{ input.input_name }}**: Input data for this stage
+{% endfor %}
+{% endif %}
+
+{% if stage.content.outputs %}
+#### Outputs
+{% for output in stage.content.outputs %}
+- **{{ output.output_name }}**: Output data from this stage
+{% endfor %}
+{% endif %}
+
+{% if stage.content.methods %}
+#### Processing Methods
+{% for method in stage.content.methods %}
+- **{{ method.method_name }}()**: Processing method for this stage
+{% endfor %}
+{% endif %}
+
+{% if stage.content.models %}
+#### Models
+{% for model in stage.content.models %}
+- **{{ model.model_name }}**: ML model used by this stage
+{% endfor %}
+{% endif %}
+
+{% if stage.content.topics %}
+#### Topics
+{% for topic in stage.content.topics %}
+- **{{ topic.topic_path }}**: ROS topic for this stage
+{% endfor %}
+{% endif %}
+
+{% endfor %}
+
+## Usage
+
+### Building the Pipeline
+
+```bash
+# Build the project
+colcon build --packages-select {{ project_name }}
+
+# Source the workspace
+source install/setup.bash
+```
+
+### Running the Pipeline
+
+```bash
+# Launch the entire pipeline
+ros2 launch {{ project_name }} {{ pipeline.name }}_pipeline.launch.py
+
+# Or launch individual stages
+{% for stage in pipeline.content.stages %}
+ros2 run {{ project_name }} {{ stage.name }}_node
+{% endfor %}
+```
+
+### Monitoring the Pipeline
+
+```bash
+# List all nodes
+ros2 node list
+
+# List all topics
+ros2 topic list
+
+# Monitor specific topics
+{% for stage in pipeline.content.stages %}
+{% for output in stage.content.outputs %}
+ros2 topic echo /{{ pipeline.name }}/{{ output.output_name }}
+{% endfor %}
+{% endfor %}
+```
+
+## Data Flow
+
+The pipeline processes data in the following sequence:
+
+{% for stage in pipeline.content.stages %}
+{{ loop.index }}. **{{ stage.name | title }}**: 
+   {% if stage.content.inputs %}Receives {% for input in stage.content.inputs %}{{ input.input_name }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}
+   {% if stage.content.outputs %}Produces {% for output in stage.content.outputs %}{{ output.output_name }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}
+{% endfor %}
+
+## Configuration
+
+Each stage can be configured through ROS2 parameters:
+
+```bash
+# Set parameters for a specific stage
+ros2 param set /{{ pipeline.name }}/{{ stage.name }}/{{ stage.name }}_node parameter_name value
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Nodes not starting**: Check that all dependencies are installed
+2. **Topics not connecting**: Verify topic names and namespaces
+3. **Data not flowing**: Check that input topics are being published
+
+### Debug Commands
+
+```bash
+# Check node status
+ros2 node info /{{ pipeline.name }}/{{ stage.name }}/{{ stage.name }}_node
+
+# Check topic connections
+ros2 topic info /{{ pipeline.name }}/{{ stage.content.outputs[0].output_name if stage.content.outputs else 'topic_name' }}
+
+# View node logs
+ros2 run {{ project_name }} {{ stage.name }}_node --ros-args --log-level debug
+```
+
+## Development
+
+### Adding New Stages
+
+To add a new stage to the pipeline:
+
+1. Define the stage in your `.robodsl` file
+2. Implement the processing logic in the generated node
+3. Update the launch file if needed
+4. Test the new stage
+
+### Modifying Existing Stages
+
+1. Update the stage definition in your `.robodsl` file
+2. Regenerate the code
+3. Implement any new methods or modify existing ones
+4. Test the changes
+
+## Performance Considerations
+
+- Each stage runs as a separate ROS2 node
+- Use appropriate QoS settings for real-time requirements
+- Monitor CPU and memory usage across stages
+- Consider using shared memory for high-bandwidth data 

@@ -416,6 +416,7 @@ class RoboDSLAST(ASTNode):
     nodes: List[NodeNode] = field(default_factory=list)
     cuda_kernels: Optional[CudaKernelsNode] = None  # Standalone kernels outside nodes 
     onnx_models: List['OnnxModelNode'] = field(default_factory=list)  # ONNX models
+    pipelines: List['PipelineNode'] = field(default_factory=list)  # Pipeline definitions
 
 
 # ONNX Model AST Nodes (Phase 3)
@@ -459,3 +460,64 @@ class OnnxModelNode(ASTNode):
     """ONNX model node."""
     name: str
     config: ModelConfigNode 
+
+
+# Pipeline AST Nodes (Phase 4)
+@dataclass
+class StageInputNode(ASTNode):
+    """Pipeline stage input node."""
+    input_name: str
+
+
+@dataclass
+class StageOutputNode(ASTNode):
+    """Pipeline stage output node."""
+    output_name: str
+
+
+@dataclass
+class StageMethodNode(ASTNode):
+    """Pipeline stage method node."""
+    method_name: str
+
+
+@dataclass
+class StageModelNode(ASTNode):
+    """Pipeline stage model node."""
+    model_name: str
+
+
+@dataclass
+class StageTopicNode(ASTNode):
+    """Pipeline stage topic node."""
+    topic_path: str
+
+
+@dataclass
+class StageContentNode(ASTNode):
+    """Pipeline stage content node."""
+    inputs: List[StageInputNode] = field(default_factory=list)
+    outputs: List[StageOutputNode] = field(default_factory=list)
+    methods: List[StageMethodNode] = field(default_factory=list)
+    models: List[StageModelNode] = field(default_factory=list)
+    topics: List[StageTopicNode] = field(default_factory=list)
+
+
+@dataclass
+class StageNode(ASTNode):
+    """Pipeline stage node."""
+    name: str
+    content: StageContentNode
+
+
+@dataclass
+class PipelineContentNode(ASTNode):
+    """Pipeline content node."""
+    stages: List[StageNode] = field(default_factory=list)
+
+
+@dataclass
+class PipelineNode(ASTNode):
+    """Pipeline definition node."""
+    name: str
+    content: PipelineContentNode 

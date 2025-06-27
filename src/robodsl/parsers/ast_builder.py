@@ -17,7 +17,8 @@ from ..core.ast import (
     CudaKernelsNode, KernelNode, KernelContentNode, KernelParamNode,
     QoSReliability, QoSDurability, QoSHistory, QoSLiveliness, KernelParameterDirection,
     CppMethodNode, ClientNode, MethodParamNode,
-    OnnxModelNode, ModelConfigNode, InputDefNode, OutputDefNode, DeviceNode, OptimizationNode
+    OnnxModelNode, ModelConfigNode, InputDefNode, OutputDefNode, DeviceNode, OptimizationNode,
+    PipelineNode, PipelineContentNode, StageNode, StageContentNode, StageInputNode, StageOutputNode, StageMethodNode, StageModelNode, StageTopicNode
 )
 
 
@@ -44,6 +45,9 @@ class ASTBuilder:
                 elif child.data == 'onnx_model':
                     onnx_model_node = self._handle_onnx_model(child)
                     self.ast.onnx_models.append(onnx_model_node)
+                elif child.data == 'pipeline_def':
+                    pipeline_node = self._handle_pipeline(child)
+                    self.ast.pipelines.append(pipeline_node)
         
         return self.ast
     
@@ -934,4 +938,100 @@ class ASTBuilder:
                     # method_param_size_item is a direct token
                     if item.type in ('SIGNED_NUMBER', 'NAME', 'STRING'):
                         size_parts.append(item.value)
-        return ', '.join(size_parts) 
+        return ', '.join(size_parts)
+
+    def _handle_pipeline(self, tree: Tree) -> PipelineNode:
+        """Handle pipeline definition."""
+        pipeline_name = None
+        pipeline_content = None
+        
+        for child in tree.children:
+            if isinstance(child, Token) and child.type == 'NAME':
+                pipeline_name = child.value
+            elif isinstance(child, Tree) and child.data == 'pipeline_content':
+                pipeline_content = self._parse_pipeline_content(child)
+        
+        return PipelineNode(name=pipeline_name or "", content=pipeline_content or PipelineContentNode())
+
+    def _parse_pipeline_content(self, content_tree: Tree) -> PipelineContentNode:
+        """Parse pipeline content and return PipelineContentNode."""
+        content = PipelineContentNode()
+        
+        for child in content_tree.children:
+            if isinstance(child, Tree):
+                if child.data == 'stage_def':
+                    content.stages.append(self._handle_stage(child))
+        
+        return content
+
+    def _handle_stage(self, tree: Tree) -> StageNode:
+        """Handle stage definition."""
+        stage_name = None
+        stage_content = None
+        
+        for child in tree.children:
+            if isinstance(child, Token) and child.type == 'NAME':
+                stage_name = child.value
+            elif isinstance(child, Tree) and child.data == 'stage_content':
+                stage_content = self._parse_stage_content(child)
+        
+        return StageNode(name=stage_name or "", content=stage_content or StageContentNode())
+
+    def _parse_stage_content(self, content_tree: Tree) -> StageContentNode:
+        """Parse stage content and return StageContentNode."""
+        content = StageContentNode()
+        
+        for child in content_tree.children:
+            if isinstance(child, Tree):
+                if child.data == 'stage_input':
+                    content.inputs.append(self._handle_stage_input(child))
+                elif child.data == 'stage_output':
+                    content.outputs.append(self._handle_stage_output(child))
+                elif child.data == 'stage_method':
+                    content.methods.append(self._handle_stage_method(child))
+                elif child.data == 'stage_model':
+                    content.models.append(self._handle_stage_model(child))
+                elif child.data == 'stage_topic':
+                    content.topics.append(self._handle_stage_topic(child))
+        
+        return content
+
+    def _handle_stage_input(self, tree: Tree) -> StageInputNode:
+        """Handle stage input definition."""
+        input_name = ""
+        for child in tree.children:
+            if isinstance(child, Token) and child.type == 'STRING':
+                input_name = child.value.strip('"')
+        return StageInputNode(input_name=input_name)
+
+    def _handle_stage_output(self, tree: Tree) -> StageOutputNode:
+        """Handle stage output definition."""
+        output_name = ""
+        for child in tree.children:
+            if isinstance(child, Token) and child.type == 'STRING':
+                output_name = child.value.strip('"')
+        return StageOutputNode(output_name=output_name)
+
+    def _handle_stage_method(self, tree: Tree) -> StageMethodNode:
+        """Handle stage method definition."""
+        method_name = ""
+        for child in tree.children:
+            if isinstance(child, Token) and child.type == 'STRING':
+                method_name = child.value.strip('"')
+        return StageMethodNode(method_name=method_name)
+
+    def _handle_stage_model(self, tree: Tree) -> StageModelNode:
+        """Handle stage model definition."""
+        model_name = ""
+        for child in tree.children:
+            if isinstance(child, Token) and child.type == 'STRING':
+                model_name = child.value.strip('"')
+        return StageModelNode(model_name=model_name)
+
+    def _handle_stage_topic(self, tree: Tree) -> StageTopicNode:
+        """Handle stage topic definition."""
+        topic_path = ""
+        for child in tree.children:
+            if isinstance(child, Token) and child.type == 'TOPIC_PATH':
+                topic_path = child.value
+        return StageTopicNode(topic_path=topic_path) 
