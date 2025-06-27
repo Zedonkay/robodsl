@@ -143,7 +143,6 @@ def test_parse_cuda_kernels():
     assert len(ast.cuda_kernels.kernels) == 1
     kernel = ast.cuda_kernels.kernels[0]
     assert kernel.name == "image_processor"
-    # Use correct attribute for kernel parameters
     assert len(kernel.content.parameters) == 2
     
     input_param = kernel.content.parameters[0]
