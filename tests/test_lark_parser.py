@@ -37,7 +37,12 @@ def test_cuda_kernel_parsing():
             param in float* input_data (N)
             param out float* output_data (N)
             block_size: (256, 1, 1)
-            code: "int idx = blockIdx.x * blockDim.x + threadIdx.x;\nif (idx < N) {\n    output_data[idx] = input_data[idx] * 2.0f;\n}"
+            code: {
+                int idx = blockIdx.x * blockDim.x + threadIdx.x;
+                if (idx < N) {
+                    output_data[idx] = input_data[idx] * 2.0f;
+                }
+            }
         }
     }
     """
@@ -281,7 +286,10 @@ def test_cpp_method_parsing():
     content = """
 node test_node {
     method do_something {
-        code: "int x = 42;\nstd::cout << x << std::endl;"
+        code: {
+            int x = 42;
+            std::cout << x << std::endl;
+        }
     }
 }
 """
@@ -372,14 +380,22 @@ node test_node {
         input: int data_size
         input: float * input_data (data_size)
         output: float * output_data (data_size)
-        code: "for (int i = 0; i < data_size; i++) { output_data[i] = input_data[i] * 2.0f; }"
+        code: {
+            for (int i = 0; i < data_size; i++) { 
+                output_data[i] = input_data[i] * 2.0f; 
+            }
+        }
     }
     
     method calculate_stats {
         input: std::vector<float> values
         output: float mean
         output: float variance
-        code: "float sum = 0.0f; for (auto v : values) sum += v; mean = sum / values.size();"
+        code: {
+            float sum = 0.0f; 
+            for (auto v : values) sum += v; 
+            mean = sum / values.size();
+        }
     }
 }
 """
@@ -447,20 +463,26 @@ node test_node {
     method valid_method {
         input: int data_size
         output: float result
-        code: "result = data_size * 2.0f;"
+        code: {
+            result = data_size * 2.0f;
+        }
     }
     
     method duplicate_input {
         input: int data_size
         input: int data_size  // Duplicate name
         output: float result
-        code: "result = data_size * 2.0f;"
+        code: {
+            result = data_size * 2.0f;
+        }
     }
     
     method input_output_conflict {
         input: int data_size
         output: int data_size  // Conflict with input
-        code: "data_size = 42;"
+        code: {
+            data_size = 42;
+        }
     }
 }
 """

@@ -524,6 +524,10 @@ class SemanticAnalyzer:
 
     def _is_valid_cpp_type(self, type_name: str) -> bool:
         """Check if a type is valid for C++ method parameters."""
+        # Strip const if present
+        if type_name.strip().startswith("const "):
+            type_name = type_name.strip()[6:].strip()
+        
         # Basic C++ types
         cpp_types = {
             "int", "unsigned int", "long", "unsigned long", "long long", "unsigned long long",
@@ -627,6 +631,10 @@ class SemanticAnalyzer:
     
     def _is_valid_cuda_type(self, type_name: str) -> bool:
         """Check if a type is valid for CUDA kernel parameters."""
+        # Strip const if present
+        if type_name.strip().startswith("const "):
+            type_name = type_name.strip()[6:].strip()
+        
         # Basic CUDA types
         cuda_types = {
             "int", "unsigned int", "long", "unsigned long", "long long", "unsigned long long",

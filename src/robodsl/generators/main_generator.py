@@ -13,6 +13,7 @@ from .python_node_generator import PythonNodeGenerator
 from .cmake_generator import CMakeGenerator
 from .launch_generator import LaunchGenerator
 from .package_generator import PackageGenerator
+from .onnx_integration import OnnxIntegrationGenerator
 from ..ast import RoboDSLAST
 
 
@@ -35,6 +36,7 @@ class MainGenerator(BaseGenerator):
         self.cmake_generator = CMakeGenerator(output_dir, template_dirs)
         self.launch_generator = LaunchGenerator(output_dir, template_dirs)
         self.package_generator = PackageGenerator(output_dir, template_dirs)
+        self.onnx_generator = OnnxIntegrationGenerator(output_dir)
     
     def generate(self, ast: RoboDSLAST) -> List[Path]:
         """Generate all files from the AST.
@@ -82,6 +84,12 @@ class MainGenerator(BaseGenerator):
         package_files = self.package_generator.generate(ast)
         all_generated_files.extend(package_files)
         print(f"Generated {len(package_files)} package files")
+        
+        # Generate ONNX integration files
+        print("Generating ONNX integration files...")
+        onnx_files = self._generate_onnx_integration(ast)
+        all_generated_files.extend(onnx_files)
+        print(f"Generated {len(onnx_files)} ONNX integration files")
         
         # Generate README
         readme_path = self._generate_readme(ast)
@@ -227,3 +235,57 @@ Apache-2.0
 """
         
         return content 
+    
+    def _generate_onnx_integration(self, ast: RoboDSLAST) -> List[Path]:
+        """Generate ONNX integration files for all models."""
+        generated_files = []
+        
+        # Handle standalone ONNX models
+        for model in ast.onnx_models:
+            try:
+                # Generate ONNX integration files
+                onnx_files = self.onnx_generator.generate_onnx_integration(model, model.name)
+                
+                # Write files to disk
+                for file_path, content in onnx_files.items():
+                    path = Path(file_path)
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text(content)
+                    generated_files.append(path)
+                
+                # Generate CMake integration
+                cmake_content = self.onnx_generator.generate_cmake_integration(model, model.name)
+                cmake_path = self.get_output_path(f"{model.name}_onnx.cmake")
+                generated_files.append(self.write_file(cmake_path, cmake_content))
+                
+            except Exception as e:
+                print(f"Error generating ONNX integration for standalone model {model.name}: {e}")
+        
+        # Handle ONNX models within nodes
+        for node in ast.nodes:
+            for model in node.content.onnx_models:
+                try:
+                    # Generate ONNX integration files for the node
+                    onnx_files = self.onnx_generator.generate_onnx_integration(model, node.name)
+                    
+                    # Write files to disk
+                    for file_path, content in onnx_files.items():
+                        path = Path(file_path)
+                        path.parent.mkdir(parents=True, exist_ok=True)
+                        path.write_text(content)
+                        generated_files.append(path)
+                    
+                    # Generate CMake integration for the node
+                    cmake_content = self.onnx_generator.generate_cmake_integration(model, node.name)
+                    cmake_path = self.get_output_path(f"{node.name}_onnx.cmake")
+                    generated_files.append(self.write_file(cmake_path, cmake_content))
+                    
+                    # Generate node integration code
+                    node_integration = self.onnx_generator.generate_node_integration(model, node.name)
+                    node_path = self.get_output_path(f"{node.name}_main.cpp")
+                    generated_files.append(self.write_file(node_path, node_integration))
+                    
+                except Exception as e:
+                    print(f"Error generating ONNX integration for model {model.name} in node {node.name}: {e}")
+        
+        return generated_files 

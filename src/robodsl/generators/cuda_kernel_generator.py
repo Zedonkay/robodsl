@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Dict, List, Any
 
 from .base_generator import BaseGenerator
-from ..ast import RoboDSLAST, KernelNode
+from ..ast import RoboDSLAST, KernelNode, KernelParameterDirection
 
 
 class CudaKernelGenerator(BaseGenerator):
@@ -113,13 +113,14 @@ class CudaKernelGenerator(BaseGenerator):
                     'name': param.param_name or f"param_{len(kernel_parameters)}",
                     'type': param.param_type,
                     'direction': param.direction,
-                    'size_expr': param.size_expr
+                    'size_expr': param.size_expr,
+                    'device_name': f"d_{param.param_name or f'param_{len(kernel_parameters)}'}_" if param.param_name else f"d_param_{len(kernel_parameters)}_"
                 }
                 kernel_parameters.append(param_info)
                 
-                if param.direction == "in":
+                if param.direction == KernelParameterDirection.IN:
                     input_params.append(param_info)
-                elif param.direction == "out":
+                elif param.direction == KernelParameterDirection.OUT:
                     output_params.append(param_info)
         
         # Determine input and output types
@@ -131,8 +132,9 @@ class CudaKernelGenerator(BaseGenerator):
         members = []
         for param in kernel_parameters:
             members.append({
-                'name': param['name'],
-                'type': param['type']
+                'name': param['device_name'],
+                'type': f"{param['type']}*",
+                'original_name': param['name']
             })
         
         return {
@@ -141,6 +143,8 @@ class CudaKernelGenerator(BaseGenerator):
             'include_guard': f"{kernel.name.upper()}_KERNEL_HPP",
             'include_path': f"{kernel.name}_kernel.cuh",
             'kernel_parameters': kernel_parameters,
+            'input_params': input_params,
+            'output_params': output_params,
             'input_type': input_type,
             'output_type': output_type,
             'param_type': param_type,

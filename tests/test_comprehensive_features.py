@@ -104,22 +104,23 @@ class TestComprehensiveNodeFeatures:
             
             // C++ methods
             method process_data {
-                input: int data_size
-                input: float* input_data (data_size)
-                output: float* result (data_size)
-                code: "
-                    for (int i = 0; i < data_size; i++) {
-                        result[i] = input_data[i] * 2.0f;
+                input: std::vector<float> input_data
+                output: std::vector<float> output_data
+                code: {
+                    // Process input data
+                    output_data.resize(input_data.size());
+                    for (size_t i = 0; i < input_data.size(); ++i) {
+                        output_data[i] = input_data[i] * 2.0f;
                     }
-                "
+                }
             }
             
             method validate_input {
                 input: std::string input_string
                 output: bool is_valid
-                code: "
+                code: {
                     is_valid = !input_string.empty() && input_string.length() > 0;
-                "
+                }
             }
             
             // CUDA kernels
@@ -132,14 +133,14 @@ class TestComprehensiveNodeFeatures:
                 grid_size: ((N + 255) / 256, 1, 1)
                 shared_memory: 0
                 use_thrust: false
-                code: "
+                code: {
                     __global__ void vector_add(const float* a, const float* b, float* c, int n) {
                         int i = blockIdx.x * blockDim.x + threadIdx.x;
                         if (i < n) {
                             c[i] = a[i] + b[i];
                         }
                     }
-                "
+                }
             }
             
             kernel matrix_multiply {
@@ -153,7 +154,7 @@ class TestComprehensiveNodeFeatures:
                 grid_size: ((M + 15) / 16, (K + 15) / 16, 1)
                 shared_memory: 1024
                 use_thrust: true
-                code: "
+                code: {
                     __global__ void matrix_multiply(const float* A, const float* B, float* C, int M, int N, int K) {
                         __shared__ float sA[16][16];
                         __shared__ float sB[16][16];
@@ -188,7 +189,7 @@ class TestComprehensiveNodeFeatures:
                             C[row * K + col] = sum;
                         }
                     }
-                "
+                }
             }
         }
         """
@@ -276,7 +277,7 @@ class TestAdvancedCppMethodFeatures:
                 output: float* result (data_size)
                 output: std::vector<int> indices (data_size)
                 output: bool success
-                code: "
+                code: {
                     try {
                         success = true;
                         for (int i = 0; i < data_size; i++) {
@@ -290,18 +291,18 @@ class TestAdvancedCppMethodFeatures:
                     } catch (const std::exception& e) {
                         success = false;
                     }
-                "
+                }
             }
             
             method template_method {
                 input: std::vector<int> input_vector (input_vector.size())
                 output: std::vector<float> output_vector (input_vector.size())
-                code: "
+                code: {
                     output_vector.resize(input_vector.size());
                     for (size_t i = 0; i < input_vector.size(); i++) {
                         output_vector[i] = static_cast<float>(input_vector[i]) * 1.5f;
                     }
-                "
+                }
             }
         }
         """
@@ -356,7 +357,7 @@ class TestAdvancedCudaKernelFeatures:
                 grid_size: ((width + 31) / 32, (height + 31) / 32, 1)
                 shared_memory: 4096
                 use_thrust: false
-                code: "
+                code: {
                     __global__ void convolution_2d(const float* input, const float* kernel, float* output,
                                                  int width, int height, int channels, int kernel_size) {
                         __shared__ float shared_input[34][34];  // 32 + 2 for padding
@@ -402,7 +403,7 @@ class TestAdvancedCudaKernelFeatures:
                             output[y * width + x] = sum;
                         }
                     }
-                "
+                }
             }
             
             kernel reduce_sum {
@@ -413,7 +414,7 @@ class TestAdvancedCudaKernelFeatures:
                 grid_size: (1, 1, 1)
                 shared_memory: 1024
                 use_thrust: true
-                code: "
+                code: {
                     __global__ void reduce_sum(const float* input, float* result, int n) {
                         __shared__ float shared_data[256];
                         
@@ -434,7 +435,7 @@ class TestAdvancedCudaKernelFeatures:
                             atomicAdd(result, shared_data[0]);
                         }
                     }
-                "
+                }
             }
         }
         """
@@ -581,11 +582,15 @@ class TestSemanticValidation:
         node test_node {
             method test_method {
                 input: int x
-                code: "return x * 2;"
+                code: {
+                    return x * 2;
+                }
             }
             method test_method {
                 input: float y
-                code: "return y * 3;"
+                code: {
+                    return y * 3;
+                }
             }
         }
         """
@@ -602,12 +607,16 @@ class TestSemanticValidation:
             kernel test_kernel {
                 param in float* input (N)
                 param out float* output (N)
-                code: "printf('hello');"
+                code: {
+                    printf('hello');
+                }
             }
             kernel test_kernel {
                 param in int* input (N)
                 param out int* output (N)
-                code: "printf('world');"
+                code: {
+                    printf('world');
+                }
             }
         }
         """
@@ -657,7 +666,9 @@ class TestSemanticValidation:
                 param in float* input (N)
                 param out float* output (N)
                 block_size: (0, 1, 1)  // Invalid zero block size
-                code: "printf('hello');"
+                code: {
+                    printf('hello');
+                }
             }
         }
         """
@@ -776,7 +787,9 @@ class TestEdgeCases:
         content = """
         node test_node {
             method no_params {
-                code: "std::cout << 'Hello, World!' << std::endl;"
+                code: {
+                    std::cout << 'Hello, World!' << std::endl;
+                }
             }
         }
         """
@@ -795,7 +808,9 @@ class TestEdgeCases:
         cuda_kernels {
             kernel no_params {
                 block_size: (256, 1, 1)
-                code: "printf('Hello from GPU!');"
+                code: {
+                    printf('Hello from GPU!');
+                }
             }
         }
         """
@@ -882,12 +897,14 @@ class TestPerformance:
     
     def test_large_code_blocks(self):
         """Test parsing with large code blocks."""
-        large_code = '"' + "int x = 0;\\n" * 1000 + '"'
+        large_code = "int x = 0;\\n" * 1000
         content = f"""
         node test_node {{
             method large_method {{
                 input: int size
-                code: {large_code}
+                code: {{
+                    {large_code}
+                }}
             }}
         }}
         """

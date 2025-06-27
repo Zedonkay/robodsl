@@ -108,8 +108,16 @@ class CppNodeGenerator(BaseGenerator):
             for method in node.content.cpp_methods:
                 method_info = {
                     'name': method.name,
-                    'inputs': [{'type': param.param_type, 'name': param.param_name, 'size_expr': param.size_expr} for param in method.inputs],
-                    'outputs': [{'type': param.param_type, 'name': param.param_name, 'size_expr': param.size_expr} for param in method.outputs],
+                    'inputs': [{
+                        'type': f"const {param.param_type}" if getattr(param, 'is_const', False) else param.param_type, 
+                        'name': param.param_name, 
+                        'size_expr': param.size_expr
+                    } for param in method.inputs],
+                    'outputs': [{
+                        'type': f"const {param.param_type}" if getattr(param, 'is_const', False) else param.param_type, 
+                        'name': param.param_name, 
+                        'size_expr': param.size_expr
+                    } for param in method.outputs],
                     'code': method.code
                 }
                 cpp_methods.append(method_info)
@@ -142,17 +150,21 @@ class CppNodeGenerator(BaseGenerator):
         kernel_parameters = []
         input_params = []
         output_params = []
+        param_signature = []
         
         if kernel.content.parameters:
             for param in kernel.content.parameters:
+                param_type = param.param_type
+                if getattr(param, 'is_const', False):
+                    param_type = f"const {param_type}"
                 param_info = {
                     'name': param.param_name or f"param_{len(kernel_parameters)}",
-                    'type': param.param_type,
+                    'type': param_type,
                     'direction': param.direction,
                     'size_expr': param.size_expr
                 }
                 kernel_parameters.append(param_info)
-                
+                param_signature.append(f"{param_type} {param.param_name}")
                 if param.direction == "in":
                     input_params.append(param_info)
                 elif param.direction == "out":
@@ -177,6 +189,8 @@ class CppNodeGenerator(BaseGenerator):
             'include_guard': f"{kernel.name.upper()}_KERNEL_HPP",
             'include_path': f"{kernel.name}_kernel.cuh",
             'kernel_parameters': kernel_parameters,
+            'parameters': kernel_parameters,  # For template
+            'signature': ', '.join(param_signature),
             'input_type': input_type,
             'output_type': output_type,
             'param_type': param_type,

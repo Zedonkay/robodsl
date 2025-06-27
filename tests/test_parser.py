@@ -154,6 +154,38 @@ def test_parse_cuda_kernels():
     assert output_param.param_name == "output"
     assert output_param.size_expr == ["width"]
 
+def test_parse_cuda_kernels_new_syntax():
+    """Test parsing CUDA kernels with new input: and output: syntax."""
+    ast = parse_robodsl("""
+    cuda_kernels {
+        kernel image_processor {
+            input: Image input_data (width, height)
+            output: Image output_data (width, height)
+            block_size: (256, 1, 1)
+            grid_size: (1, 1, 1)
+        }
+    }
+    """)
+    
+    assert ast.cuda_kernels is not None
+    assert len(ast.cuda_kernels.kernels) == 1
+    kernel = ast.cuda_kernels.kernels[0]
+    assert kernel.name == "image_processor"
+    # Use correct attribute for kernel parameters
+    assert len(kernel.content.parameters) == 2
+    
+    input_param = kernel.content.parameters[0]
+    assert input_param.direction.value == "in"
+    assert input_param.param_type == "Image"
+    assert input_param.param_name == "input_data"
+    assert input_param.size_expr == ["width", "height"]
+    
+    output_param = kernel.content.parameters[1]
+    assert output_param.direction.value == "out"
+    assert output_param.param_type == "Image"
+    assert output_param.param_name == "output_data"
+    assert output_param.size_expr == ["width", "height"]
+
 def test_parse_include():
     """Test parsing include statements."""
     ast = parse_robodsl("""

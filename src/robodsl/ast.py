@@ -344,6 +344,7 @@ class MethodParamNode(ASTNode):
     param_type: str
     param_name: str
     size_expr: Optional[str] = None
+    is_const: bool = False
 
 
 @dataclass
@@ -362,6 +363,7 @@ class NodeContentNode(ASTNode):
     actions: List[ActionNode] = field(default_factory=list)
     cpp_methods: List[CppMethodNode] = field(default_factory=list)
     cuda_kernels: List['KernelNode'] = field(default_factory=list)
+    onnx_models: List['OnnxModelNode'] = field(default_factory=list)  # ONNX models within nodes
 
 
 @dataclass
@@ -378,6 +380,7 @@ class KernelParamNode(ASTNode):
     param_type: str
     param_name: Optional[str]
     size_expr: Optional[str]
+    is_const: bool = False
 
 
 @dataclass
@@ -412,3 +415,47 @@ class RoboDSLAST(ASTNode):
     includes: List[IncludeNode] = field(default_factory=list)
     nodes: List[NodeNode] = field(default_factory=list)
     cuda_kernels: Optional[CudaKernelsNode] = None  # Standalone kernels outside nodes 
+    onnx_models: List['OnnxModelNode'] = field(default_factory=list)  # ONNX models
+
+
+# ONNX Model AST Nodes (Phase 3)
+@dataclass
+class InputDefNode(ASTNode):
+    """ONNX model input definition node."""
+    name: str
+    type: str
+
+
+@dataclass
+class OutputDefNode(ASTNode):
+    """ONNX model output definition node."""
+    name: str
+    type: str
+
+
+@dataclass
+class DeviceNode(ASTNode):
+    """ONNX model device configuration node."""
+    device: str  # "cpu" or "cuda"
+
+
+@dataclass
+class OptimizationNode(ASTNode):
+    """ONNX model optimization configuration node."""
+    optimization: str  # "tensorrt" or "openvino"
+
+
+@dataclass
+class ModelConfigNode(ASTNode):
+    """ONNX model configuration node."""
+    inputs: List[InputDefNode] = field(default_factory=list)
+    outputs: List[OutputDefNode] = field(default_factory=list)
+    device: Optional[DeviceNode] = None
+    optimizations: List[OptimizationNode] = field(default_factory=list)
+
+
+@dataclass
+class OnnxModelNode(ASTNode):
+    """ONNX model node."""
+    name: str
+    config: ModelConfigNode 
