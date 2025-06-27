@@ -8,32 +8,7 @@ import jinja2
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Set
 
-from .parser import RoboDSLConfig, NodeConfig, CudaKernelConfig
-
-# Set up Jinja2 environment with template directories
-template_dirs = [
-    Path(__file__).parent / 'templates/cpp',
-    Path(__file__).parent / 'templates/py',
-    Path(__file__).parent / 'templates/cmake',
-    Path(__file__).parent / 'templates/launch',
-    Path(__file__).parent / 'templates',  # For backward compatibility
-]
-
-# Filter out non-existent directories
-template_loaders = [
-    jinja2.FileSystemLoader(str(d)) for d in template_dirs if d.exists()
-]
-
-if template_loaders:
-    env = jinja2.Environment(
-        loader=jinja2.ChoiceLoader(template_loaders),
-        trim_blocks=True,
-        lstrip_blocks=True,
-        keep_trailing_newline=True
-    )
-    env.filters['indent'] = lambda text, n: '\n'.join(' ' * n + line if line.strip() else line 
-                                                     for line in text.split('\n'))
-
+from .parser import RoboDSLConfig, NodeConfig, CudaKernelConfig, QoSConfig
 
 class CodeGenerator:
     """Generates C++ and CUDA source code from RoboDSL configuration."""
@@ -48,6 +23,29 @@ class CodeGenerator:
         self.config = config
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Set up Jinja2 environment with template directories
+        template_dirs = [
+            Path(__file__).parent / 'templates/cpp',
+            Path(__file__).parent / 'templates/py',
+            Path(__file__).parent / 'templates/cmake',
+            Path(__file__).parent / 'templates/launch',
+            Path(__file__).parent / 'templates',  # For backward compatibility
+        ]
+        template_loaders = [
+            jinja2.FileSystemLoader(str(d)) for d in template_dirs if d.exists()
+        ]
+        if template_loaders:
+            self.env = jinja2.Environment(
+                loader=jinja2.ChoiceLoader(template_loaders),
+                trim_blocks=True,
+                lstrip_blocks=True,
+                keep_trailing_newline=True
+            )
+            self.env.filters['indent'] = lambda text, n: '\n'.join(' ' * n + line if line.strip() else line \
+                                                         for line in text.split('\n'))
+        else:
+            self.env = None
         
     def generate(self) -> List[Path]:
         """Generate all source files from the DSL configuration.
@@ -104,14 +102,14 @@ class CodeGenerator:
         # Collect unique message/service types referenced by the node
         msg_headers: Set[str] = set()
         for pub in node.publishers:
-            msg_headers.add(pub["msg_type"].replace(".", "/"))
+            msg_headers.add(pub.msg_type.replace(".", "/"))
         for sub in node.subscribers:
-            msg_headers.add(sub["msg_type"].replace(".", "/"))
+            msg_headers.add(sub.msg_type.replace(".", "/"))
         for srv in node.services:
-            msg_headers.add(srv["srv_type"].replace(".", "/"))
+            msg_headers.add(srv.srv_type.replace(".", "/"))
 
         if msg_headers:
-            # Wrap real includes in ENABLE_ROS2 so host-only builds don’t see them
+            # Wrap real includes in ENABLE_ROS2 so host-only builds don't see them
             includes.append('#if ENABLE_ROS2')
             for header in sorted(msg_headers):
                 includes.append(f'#include "{header}.hpp"')
@@ -176,7 +174,7 @@ class CodeGenerator:
             'node_name': node.name,
             'base_class': 'rclcpp_lifecycle::LifecycleNode' if getattr(node, 'lifecycle', False) else 'rclcpp::Node',
             'is_lifecycle': getattr(node, 'lifecycle', False),
-            'namespace': node.get('namespace', ''),
+            'namespace': getattr(node, 'namespace', ''),
             'includes': [
                 '#include <memory>',
                 '#include <string>',
@@ -213,50 +211,49 @@ class CodeGenerator:
         # Add publishers if they exist
         if hasattr(node, 'publishers') and node.publishers:
             context['publishers'] = [{
-                'name': pub['topic'].lstrip('/').replace('/', '_'),
-                'msg_type': pub['msg_type'].replace('.', '::'),
-                'qos': pub.get('qos', {})
+                'name': pub.topic.lstrip('/').replace('/', '_'),
+                'msg_type': pub.msg_type.replace('.', '::'),
+                'qos': getattr(pub, 'qos', {})
             } for pub in node.publishers]
             
         # Add subscribers if they exist
         if hasattr(node, 'subscribers') and node.subscribers:
             context['subscribers'] = [{
-                'name': sub['topic'].lstrip('/').replace('/', '_'),
-                'msg_type': sub['msg_type'].replace('.', '::'),
-                'callback_name': f"{sub['topic'].lstrip('/').replace('/', '_')}_callback",
-                'qos': sub.get('qos', {})
+                'name': sub.topic.lstrip('/').replace('/', '_'),
+                'msg_type': sub.msg_type.replace('.', '::'),
+                'callback_name': f"{sub.topic.lstrip('/').replace('/', '_')}_callback",
+                'qos': getattr(sub, 'qos', {})
             } for sub in node.subscribers]
             
         # Add services if they exist
         if hasattr(node, 'services') and node.services:
             context['services'] = [{
-                'name': srv['service'].lstrip('/').replace('/', '_'),
-                'srv_type': srv['srv_type'].replace('.', '::'),
-                'callback_name': f"{srv['service'].lstrip('/').replace('/', '_')}_callback"
+                'name': srv.service.lstrip('/').replace('/', '_'),
+                'srv_type': srv.srv_type.replace('.', '::'),
+                'callback_name': f"{srv.service.lstrip('/').replace('/', '_')}_callback"
             } for srv in node.services]
             
         # Add timers if they exist
         if hasattr(node, 'timers') and node.timers:
             context['timers'] = [{
-                'name': timer['name'],
-                'callback_name': timer['callback'],
-                'period': timer['period'],
-                'autostart': timer.get('autostart', True)
+                'name': timer.name,
+                'callback_name': getattr(timer, 'callback', f"on_timer_{timer.name}"),
+                'period': timer.period,
+                'autostart': getattr(timer, 'autostart', True)
             } for timer in node.timers]
             
         # Add parameters if they exist
         if hasattr(node, 'parameters') and node.parameters:
             context['parameters'] = [{
-                'name': param['name'],
-                'type': self._map_parameter_type(param['type']),
-                'default_value': param.get('default', 
-                    '0' if param['type'] in ['int', 'float', 'double'] else 'false')
+                'name': param.name,
+                'type': self._map_parameter_type(param.type),
+                'default_value': getattr(param, 'default', '0' if param.type in ['int', 'float', 'double'] else 'false')
             } for param in node.parameters]
             
         # Add CUDA kernels if they exist
         if hasattr(node, 'cuda_kernels') and node.cuda_kernels:
             context['cuda_kernels'] = [{
-                'name': kernel['name'],
+                'name': kernel.name,
                 'return_type': 'void',
                 'params': ', '.join([f'{p["type"]} {p["name"]}' for p in kernel.get('parameters', [])]),
                 'members': [{'type': 'void*', 'name': f'{kernel["name"]}_dev_ptr'}]
@@ -266,11 +263,12 @@ class CodeGenerator:
         context['includes'].extend(self._generate_message_includes(node))
         
         # Render template
-        template = env.get_template('node.hpp.jinja2')
+        template = self.env.get_template('node.hpp.jinja2')
         header_content = template.render(**context)
         
         # Create output directory if it doesn't exist
-        header_path = self.output_dir / 'include' / 'robodsl' / f"{node.name}_node.hpp"
+        node_path = node.name.replace('.', '/')
+        header_path = self.output_dir / 'include' / f"{node_path}_node.hpp"
         header_path.parent.mkdir(parents=True, exist_ok=True)
         
         # Write the generated content to file
@@ -529,9 +527,11 @@ class CodeGenerator:
             launch_content = template.render(**context)
             
             # Ensure output directory exists
-            launch_dir = self.output_dir / 'launch'
+            parts = node.name.split('.')
+            node_base_name = parts[-1]
+            launch_dir = self.output_dir / 'launch' / '/'.join(parts[:-1]) if len(parts) > 1 else self.output_dir / 'launch'
             launch_dir.mkdir(parents=True, exist_ok=True)
-            launch_path = launch_dir / f"{node.name}.launch.py"
+            launch_path = launch_dir / f"{node_base_name}.launch.py"
             
             # Write the launch file
             with open(launch_path, 'w', encoding='utf-8') as f:
@@ -614,16 +614,17 @@ class CodeGenerator:
         
         # Add node-specific information
         for node in self.config.nodes:
+            node_path = node.name.replace('.', '/')
             node_info = {
                 'name': node.name,
                 'type': 'lifecycle' if hasattr(node, 'is_lifecycle') and node.is_lifecycle else 'regular',
                 'has_cuda': hasattr(node, 'cuda_kernels') and bool(node.cuda_kernels),
-                'sources': [f'src/{node.name}_node.cpp']
+                'sources': [f'src/{node_path}_node.cpp']
             }
             context['nodes'].append(node_info)
         
         # Render the template
-        template = self.jinja_env.get_template('cmake/CMakeLists.txt.jinja2')
+        template = self.env.get_template('cmake/CMakeLists.txt.jinja2')
         cmake_content = template.render(**context)
         
         # Ensure output directory exists
@@ -655,7 +656,7 @@ class CodeGenerator:
         }
         
         # Render the template
-        template = self.jinja_env.get_template('cmake/package.xml.jinja2')
+        template = self.env.get_template('cmake/package.xml.jinja2')
         package_content = template.render(**context)
         
         # Ensure output directory exists
@@ -741,7 +742,7 @@ class CodeGenerator:
             "include_directories(${CUDA_INCLUDE_DIRS})",
             "",
             "# Add CUDA flags",
-            "set(CMAKE_CUDA_FLAGS \"${CMAKE_CUDA_FLAGS} -O3 --use_fast_math -Xcompiler -fPIC\")",
+            "set(CMAKE_CUDA_FLAGS \"${{CMAKE_CUDA_FLAGS}} -O3 --use_fast_math -Xcompiler -fPIC\")",
             ""
         ]
         
@@ -1146,44 +1147,52 @@ endif()
         
         # Prepare context for templates
         context = {
-            'node': {
-                'name': getattr(kernel, 'node', 'unnamed'),
-                'namespace': self.config.project_name.lower(),
-                'cuda_kernels': [{
-                    'name': kernel.name,
-                    'description': getattr(kernel, 'description', ''),
-                    'parameters': [{
-                        'name': p.name,
-                        'type': p.type,
-                        'description': getattr(p, 'description', ''),
-                        'is_const': getattr(p, 'is_const', False),
-                        'is_pointer': getattr(p, 'is_pointer', False),
-                        'size_expr': getattr(p, 'size_expr', '')
-                    } for p in getattr(kernel, 'parameters', [])]
-                }]
-            },
-            'kernel': {
-                'name': kernel.name,
-                'use_thrust': getattr(kernel, 'use_thrust', False),
-                'includes': getattr(kernel, 'includes', []),
-                'code': getattr(kernel, 'code', '// TODO: Implement kernel logic')
-            },
-            'inputs': [{
-                'name': p.name,
-                'type': p.type
-            } for p in getattr(kernel, 'inputs', [])],
-            'outputs': [{
-                'name': p.name,
-                'type': p.type
-            } for p in getattr(kernel, 'outputs', [])]
+            'include_guard': f"{self.config.project_name.upper()}_{kernel.name.upper()}_KERNEL_HPP",
+            'include_path': f"{kernel.name}_kernel.hpp",
+            'namespace': self.config.project_name.lower(),
+            'kernel_name': kernel.name,
+            'cuda_enabled': True,
+            'input_type': 'float',  # Default, could be made configurable
+            'output_type': 'float',  # Default, could be made configurable
+            'param_type': 'float',   # Default, could be made configurable
+            'block_size': getattr(kernel, 'block_size', (256, 1, 1))[0] if hasattr(kernel, 'block_size') else 256,
+            'use_thrust': getattr(kernel, 'use_thrust', False),
+            'includes': getattr(kernel, 'includes', []),
+            'code': getattr(kernel, 'code', '// TODO: Implement kernel logic'),
+            'members': [
+                {'name': 'input', 'type': 'float'},
+                {'name': 'output', 'type': 'float'},
+                {'name': 'parameters', 'type': 'float'}
+            ]
         }
         
+        # Add kernel parameters to context with proper formatting
+        kernel_parameters = []
+        for p in getattr(kernel, 'parameters', []):
+            # Build the parameter type with const and pointer qualifiers
+            param_type = p.type
+            if getattr(p, 'is_const', False):
+                param_type = f"const {param_type}"
+            if getattr(p, 'is_pointer', False):
+                param_type = f"{param_type}*"
+            
+            param_info = {
+                'name': p.name,
+                'type': param_type,
+                'description': getattr(p, 'description', ''),
+                'is_const': getattr(p, 'is_const', False),
+                'is_pointer': getattr(p, 'is_pointer', False),
+                'size_expr': getattr(p, 'size_expr', '')
+            }
+            kernel_parameters.append(param_info)
+        context['kernel_parameters'] = kernel_parameters
+        
         try:
-            # Generate header file
-            header_template = self.env.get_template('cuda/kernel.hpp.jinja2')
+            # Generate header file using the correct template
+            header_template = self.env.get_template('cuda/kernel.cuh.jinja2')
             header_content = header_template.render(**context)
             
-            header_path = include_dir / f"{kernel.name}_kernels.hpp"
+            header_path = include_dir / f"{kernel.name}_kernel.hpp"
             with open(header_path, 'w', encoding='utf-8') as f:
                 f.write(header_content)
             generated_files.append(header_path)
@@ -1192,7 +1201,7 @@ endif()
             source_template = self.env.get_template('cuda/kernel.cu.jinja2')
             source_content = source_template.render(**context)
             
-            source_path = src_dir / f"{kernel.name}_kernels.cu"
+            source_path = src_dir / f"{kernel.name}_kernel.cu"
             with open(source_path, 'w', encoding='utf-8') as f:
                 f.write(source_content)
             generated_files.append(source_path)
@@ -1321,7 +1330,7 @@ endif()
         # Prepare the template context
         context = {
             'include_path': f'robodsl/{node.name}_node.hpp',
-            'namespace': '',  # Can be customized if needed
+            'namespace': getattr(node, 'namespace', ''),
             'class_name': class_name,
             'base_class': 'rclcpp_lifecycle::LifecycleNode' if node.lifecycle else 'rclcpp::Node',
             'node_name': node.name,
@@ -1345,7 +1354,7 @@ endif()
         # Add publishers to context
         for pub in node.publishers:
             pub_config = {
-                'name': pub.name,
+                'name': pub.topic.lstrip('/').replace('/', '_'),
                 'msg_type': pub.msg_type.replace('.', '::'),
                 'topic': pub.topic,
                 'qos': {}
@@ -1361,10 +1370,10 @@ endif()
         # Add subscribers to context
         for sub in node.subscribers:
             sub_config = {
-                'name': sub.name,
+                'name': sub.topic.lstrip('/').replace('/', '_'),
                 'msg_type': sub.msg_type.replace('.', '::'),
                 'topic': sub.topic,
-                'callback_name': f"{sub.name}_callback",
+                'callback_name': f"{sub.topic.lstrip('/').replace('/', '_')}_callback",
                 'qos': {}
             }
             if hasattr(sub, 'qos') and sub.qos:
@@ -1378,10 +1387,10 @@ endif()
         # Add services to context
         for srv in node.services:
             context['services'].append({
-                'name': srv.name,
+                'name': srv.service.lstrip('/').replace('/', '_'),
                 'srv_type': srv.srv_type.replace('.', '::'),
                 'service': srv.service,
-                'callback_name': f"{srv.name}_callback"
+                'callback_name': f"{srv.service.lstrip('/').replace('/', '_')}_callback"
             })
             
         # Add timers to context

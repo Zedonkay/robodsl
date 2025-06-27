@@ -107,9 +107,7 @@ private:
 
 } // namespace {{ namespace }}
 
-#endif // {{ include_guard }}
-
-#else // !{{ include_guard }}
+{% else %}
 
 // Dummy implementation when CUDA is not enabled
 #include <vector>
@@ -137,5 +135,7 @@ public:
 };
 
 } // namespace {{ namespace }}
+
+{% endif %}
 
 #endif // {{ include_guard }}

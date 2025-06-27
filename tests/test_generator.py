@@ -11,7 +11,7 @@ from pathlib import Path
 # Add the src directory to the Python path
 sys.path.insert(0, str(Path(__file__).parent / 'src'))
 
-from robodsl.parser import RoboDSLConfig, NodeConfig, CudaKernelConfig
+from robodsl.parser import RoboDSLConfig, NodeConfig, CudaKernelConfig, PublisherConfig, SubscriberConfig, ServiceConfig, ParameterConfig
 from robodsl.generator import CodeGenerator
 
 def create_test_config(ros2_enabled=True):
@@ -22,19 +22,19 @@ def create_test_config(ros2_enabled=True):
     node = NodeConfig(
         name="test_node",
         publishers=[
-            {"topic": "/test_topic", "msg_type": "std_msgs.msg.Float32MultiArray"},
-            {"topic": "/test_topic2", "msg_type": "std_msgs.msg.String"}
+            PublisherConfig(topic="/test_topic", msg_type="std_msgs.msg.Float32MultiArray"),
+            PublisherConfig(topic="/test_topic2", msg_type="std_msgs.msg.String")
         ],
         subscribers=[
-            {"topic": "/test_sub", "msg_type": "sensor_msgs.msg.Image"}
+            SubscriberConfig(topic="/test_sub", msg_type="sensor_msgs.msg.Image")
         ],
         services=[
-            {"service": "/test_service", "srv_type": "example_interfaces.srv.AddTwoInts"}
+            ServiceConfig(service="/test_service", srv_type="example_interfaces.srv.AddTwoInts")
         ],
-        parameters={
-            "param1": "int",
-            "param2": "string"
-        }
+        parameters=[
+            ParameterConfig(name="param1", type="int", default=0),
+            ParameterConfig(name="param2", type="string", default="")
+        ]
     )
     
     config.nodes = [node]

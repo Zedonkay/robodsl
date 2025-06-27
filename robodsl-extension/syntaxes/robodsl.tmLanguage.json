@@ -22,7 +22,7 @@
             "include": "#qos-settings"
         },
         {
-            "include": "#cuda-kernel"
+            "include": "#cuda_kernels"
         },
         {
             "include": "#strings"
