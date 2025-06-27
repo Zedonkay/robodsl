@@ -51,7 +51,11 @@
       "grammars": [{
         "language": "robodsl",
         "scopeName": "source.robodsl",
-        "path": "./syntaxes/robodsl.tmLanguage.json"
+        "path": "./syntaxes/robodsl.tmLanguage.json",
+        "embeddedLanguages": {
+          "source.cpp": "cpp",
+          "source.cuda-c++": "cuda-cpp"
+        }
       }],
       "iconThemes": [{
         "id": "robodsl-icon-theme",

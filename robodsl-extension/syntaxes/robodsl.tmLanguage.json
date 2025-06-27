@@ -13,6 +13,9 @@
             "include": "#cuda-kernels-block"
         },
         {
+            "include": "#onnx-model"
+        },
+        {
             "include": "#comments"
         },
         {
@@ -178,25 +181,27 @@
                 "2": { "name": "entity.name.function.robodsl" }
             },
             "patterns": [
-                {
-                    "include": "#method-content"
-                },
-                {
-                    "include": "#comments"
-                }
+                { "include": "#comments" },
+                { "include": "#method-content" }
             ]
         },
         "method-content": {
             "patterns": [
-                {
-                    "include": "#input-param"
-                },
-                {
-                    "include": "#output-param"
-                },
-                {
-                    "include": "#code-block"
-                }
+                { "include": "#comments" },
+                { "include": "#input-param" },
+                { "include": "#output-param" },
+                { "include": "#code-block-cpp" }
+            ]
+        },
+        "code-block-cpp": {
+            "name": "meta.code-block.cpp.robodsl",
+            "begin": "\\b(code)\\s*:?\\s*\\{",
+            "end": "\\}",
+            "beginCaptures": {
+                "1": { "name": "keyword.control.robodsl" }
+            },
+            "patterns": [
+                { "name": "source.cpp.embedded.robodsl", "begin": "", "end": "", "patterns": [ { "include": "source.cpp" } ] }
             ]
         },
         "input-param": {
@@ -306,34 +311,30 @@
                 "2": { "name": "entity.name.function.robodsl" }
             },
             "patterns": [
-                {
-                    "include": "#kernel-content"
-                },
-                {
-                    "include": "#comments"
-                }
+                { "include": "#comments" },
+                { "include": "#kernel-content" }
             ]
         },
         "kernel-content": {
             "patterns": [
-                {
-                    "include": "#kernel-param"
-                },
-                {
-                    "include": "#block-size"
-                },
-                {
-                    "include": "#grid-size"
-                },
-                {
-                    "include": "#shared-memory"
-                },
-                {
-                    "include": "#use-thrust"
-                },
-                {
-                    "include": "#code-block"
-                }
+                { "include": "#comments" },
+                { "include": "#kernel-param" },
+                { "include": "#block-size" },
+                { "include": "#grid-size" },
+                { "include": "#shared-memory" },
+                { "include": "#use-thrust" },
+                { "include": "#code-block-cuda" }
+            ]
+        },
+        "code-block-cuda": {
+            "name": "meta.code-block.cuda.robodsl",
+            "begin": "\\b(code)\\s*:?\\s*\\{",
+            "end": "\\}",
+            "beginCaptures": {
+                "1": { "name": "keyword.control.robodsl" }
+            },
+            "patterns": [
+                { "name": "source.cuda-c++.embedded.robodsl", "begin": "", "end": "", "patterns": [ { "include": "source.cuda-c++" } ] }
             ]
         },
         "kernel-param": {
@@ -377,10 +378,23 @@
         },
         "code-block": {
             "name": "meta.code-block.robodsl",
-            "match": "\\b(code)\\s*:?\\s*\\\"[^\"]*\\\"",
-            "captures": {
+            "begin": "\\b(code)\\s*:?\\s*\\{",
+            "end": "\\}",
+            "beginCaptures": {
                 "1": { "name": "keyword.control.robodsl" }
-            }
+            },
+            "patterns": [
+                {
+                    "name": "source.cpp",
+                    "begin": "\\{",
+                    "end": "\\}",
+                    "patterns": [
+                        {
+                            "include": "source.cpp"
+                        }
+                    ]
+                }
+            ]
         },
         "comments": {
             "patterns": [
@@ -399,7 +413,7 @@
             "patterns": [
                 {
                     "name": "keyword.control.robodsl",
-                    "match": "\\b(node|cuda_kernels|kernel|method|param|remap|namespace|flag|lifecycle|timer|client|publisher|subscriber|service|action|parameter|include|input|output|code|in|out|inout|block_size|grid_size|shared_memory|use_thrust|qos)\\b"
+                    "match": "\\b(node|cuda_kernels|kernel|method|param|remap|namespace|flag|lifecycle|timer|client|publisher|subscriber|service|action|parameter|include|input|output|code|in|out|inout|block_size|grid_size|shared_memory|use_thrust|qos|onnx_model|device|optimization)\\b"
                 },
                 {
                     "name": "constant.language.boolean.robodsl",
@@ -505,6 +519,73 @@
         "operators": {
             "name": "keyword.operator.robodsl",
             "match": "[=:;{}\\[\\]()<>.,+\\-*/%&|^!~]"
+        },
+        "onnx-model": {
+            "name": "meta.onnx-model.robodsl",
+            "begin": "\\b(onnx_model)\\s+\\\"([^\"]+)\\\"\\s*\\{",
+            "end": "\\}",
+            "beginCaptures": {
+                "1": { "name": "keyword.control.robodsl" },
+                "2": { "name": "string.quoted.double.robodsl" }
+            },
+            "patterns": [
+                {
+                    "include": "#onnx-model-config"
+                },
+                {
+                    "include": "#comments"
+                }
+            ]
+        },
+        "onnx-model-config": {
+            "patterns": [
+                {
+                    "include": "#onnx-input-def"
+                },
+                {
+                    "include": "#onnx-output-def"
+                },
+                {
+                    "include": "#onnx-device"
+                },
+                {
+                    "include": "#onnx-optimization"
+                }
+            ]
+        },
+        "onnx-input-def": {
+            "name": "meta.onnx-input-def.robodsl",
+            "match": "\\b(input)\\s*:\\s*\\\"([^\"]+)\\\"\\s*->\\s*\\\"([^\"]+)\\\"",
+            "captures": {
+                "1": { "name": "keyword.control.robodsl" },
+                "2": { "name": "string.quoted.double.robodsl" },
+                "3": { "name": "string.quoted.double.robodsl" }
+            }
+        },
+        "onnx-output-def": {
+            "name": "meta.onnx-output-def.robodsl",
+            "match": "\\b(output)\\s*:\\s*\\\"([^\"]+)\\\"\\s*->\\s*\\\"([^\"]+)\\\"",
+            "captures": {
+                "1": { "name": "keyword.control.robodsl" },
+                "2": { "name": "string.quoted.double.robodsl" },
+                "3": { "name": "string.quoted.double.robodsl" }
+            }
+        },
+        "onnx-device": {
+            "name": "meta.onnx-device.robodsl",
+            "match": "\\b(device)\\s*:\\s*(cpu|cuda)\\b",
+            "captures": {
+                "1": { "name": "keyword.control.robodsl" },
+                "2": { "name": "constant.language.robodsl" }
+            }
+        },
+        "onnx-optimization": {
+            "name": "meta.onnx-optimization.robodsl",
+            "match": "\\b(optimization)\\s*:\\s*(tensorrt|openvino)\\b",
+            "captures": {
+                "1": { "name": "keyword.control.robodsl" },
+                "2": { "name": "constant.language.robodsl" }
+            }
         }
     }
 }
