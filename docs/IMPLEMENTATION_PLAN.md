@@ -1,0 +1,633 @@
+# RoboDSL & CUIF Implementation Plan
+
+## Overview
+This document outlines the implementation plan for RoboDSL and CUIF, combining the original RoboDSL roadmap with new CUIF DSL features. The plan maintains all existing functionality while adding powerful new development tools.
+
+## Current State
+- Regex-based parser in `src/robodsl/parser.py`
+- Basic ROS 2 node generation
+- CUDA kernel support
+- Simple QoS configuration
+- Basic VSCode extension infrastructure
+
+## Target State
+- Lark-based grammar parser
+- C++ method integration within nodes
+- ONNX model integration
+- Pipeline system with branching
+- Real-time constraints
+- Enhanced VSCode tooling:
+  - Inline completions
+  - Hover documentation
+  - AI-assisted code generation
+  - RAG-based contextual help
+- Visualization and documentation generation
+- Training integration
+
+## Overview
+This document outlines the step-by-step plan to transform RoboDSL from a regex-based parser to a comprehensive general-purpose ML/Robotics/AI language using Lark parsing.
+
+## Current State
+- Regex-based parser in `src/robodsl/parser.py`
+- Basic ROS 2 node generation
+- CUDA kernel support
+- Simple QoS configuration
+
+## Target State
+- Lark-based grammar parser
+- C++ method integration within nodes
+- ONNX model integration
+- Pipeline system with branching
+- Real-time constraints
+- Visualization and documentation generation
+- Training integration
+
+## Implementation Phases
+
+### Phase 0: Foundation & VSCode Integration
+**Priority**: 0 (Parallel Track)  
+**Estimated Time**: 2-3 weeks  
+**Goal**: Establish core RoboDSL functionality with VSCode integration
+
+#### Project Overview
+RoboDSL is a Domain-Specific Language (DSL) and compiler designed to simplify the development of GPU-accelerated robotics applications using ROS2 and CUDA. The goal is to abstract away the complexity of ROS2 and CUDA integration, allowing developers to focus on their application logic.
+
+#### Current Status
+- [x] Project setup and single-source CLI (Click)
+- [x] Advanced DSL parser implementation with ROS2 features
+- [x] ROS2 node generation with lifecycle support
+- [x] CUDA kernel management with Thrust integration
+- [x] Build system integration with CMake
+- [x] Comprehensive documentation
+- [x] ROS2 features implementation
+- [ ] Comprehensive test coverage (in progress)
+- [ ] Performance benchmarking and optimization
+
+#### VSCode Integration Tasks
+1. **Extension Setup**
+   - Initialize VSCode extension project
+   - Configure language support for `.cuif` files
+   - Add syntax highlighting using TextMate grammar
+   - Set up extension packaging and distribution
+   - Implement file icon support
+   - Add basic syntax validation
+   - Set up language configuration (brackets, comments, etc.)
+
+2. **Core Functionality**
+   - Implement Lark-based grammar parser
+   - Generate ROS2 node templates with lifecycle support
+   - CUDA kernel generation and management
+   - CMake build system integration
+   - Project scaffolding tools
+
+3. **Documentation**
+   - DSL specification
+   - Developer guide
+   - Examples and tutorials
+   - API reference
+   - Troubleshooting and FAQ
+
+#### Files to Create/Modify
+- VSCode Extension:
+  - `package.json` - VSCode extension manifest
+  - `syntaxes/cuif.tmLanguage.json` - TextMate grammar
+  - `language-configuration.json` - Language settings
+  - `src/extension.ts` - Main extension code
+- Core Functionality:
+  - `src/robodsl/grammar/robodsl.lark` - Main grammar file
+  - `src/robodsl/parser/ast_builder.py` - AST construction
+  - `src/robodsl/generators/` - Code generation modules
+  - `templates/` - Template files for code generation
+
+#### Deliverables
+- Working VSCode extension with `.cuif` file support
+- Complete RoboDSL core functionality
+- Comprehensive documentation
+- Example projects and templates
+- Build system integration
+- Basic testing framework
+
+#### Success Criteria
+- All existing `.robodsl` files parse correctly with new grammar
+- VSCode extension provides syntax highlighting and basic language features
+- Core functionality matches or exceeds existing implementation
+- Documentation is comprehensive and up-to-date
+
+---
+
+### Phase 1: Foundation - Lark Parser Migration & VSCode Integration
+**Priority**: 1  
+**Estimated Time**: 2-3 days  
+**Goal**: Replace regex parsing with proper grammar-based parsing
+
+#### Tasks
+1. **Design Core Grammar** (Lark)
+   - Basic syntax: includes, nodes, parameters, ROS primitives
+   - Structured QoS format
+   - Comments (`//`) and flexible whitespace
+   - Value types: primitives, arrays, nested dicts (ROS-compatible)
+
+2. **Migrate Existing Parser**
+   - Convert current regex-based parsing to Lark grammar
+   - Update parser tests
+   - Remove backward compatibility constraints
+
+3. **CUDA Kernel Grammar**
+   - Formalize CUDA kernel syntax
+   - Structured parameter definitions
+   - Code block handling
+
+#### Files to Create/Modify
+- `src/robodsl/grammar/robodsl.lark` - Main grammar file
+- `src/robodsl/parser/ast_builder.py` - Build AST from Lark parse tree
+- `src/robodsl/parser/semantic_analyzer.py` - Validate semantics
+- Update `src/robodsl/parser.py` to use new Lark parser
+
+#### Deliverables
+- Working Lark grammar file
+- Updated parser that passes all existing tests
+- Grammar documentation
+- VSCode integration with language server
+
+---
+
+### Phase 1.5: Enhanced Editor Features
+**Priority**: 1 (Parallel Track)  
+**Estimated Time**: 4-5 days  
+**Goal**: Add intelligent code completion and documentation
+
+#### Tasks
+1. **Inline Completions**
+   - Implement `CompletionItemProvider` for `.cuif` files
+   - Add context-aware suggestions based on cursor position
+   - Create rich snippets for common blocks (kernel, node, type, implementation)
+   - Support type-based completions
+
+2. **Hover Documentation**
+   - Implement `HoverProvider` for inline documentation
+   - Create documentation mapping for built-in types and functions
+   - Add support for custom documentation in comments
+   - Implement quick info tooltips
+
+3. **Schema Validation**
+   - Define JSON schema for CUIF files
+   - Add real-time validation
+   - Provide quick fixes for common errors
+
+#### Files to Create/Modify
+- `src/providers/completionProvider.ts`
+- `src/providers/hoverProvider.ts`
+- `schema/cuif.schema.json`
+- `docs/dsl-reference.json`
+
+#### Deliverables
+- Intelligent code completion in VSCode
+- Inline documentation on hover
+- Real-time schema validation
+- Quick fixes for common issues
+
+---
+
+### Phase 2: C++ Method Integration
+**Priority**: 2  
+**Estimated Time**: 3-4 days  
+**Goal**: Allow inline C++ methods within nodes
+
+#### Tasks
+1. **Method Grammar**
+   ```lark
+   method_def: "method" NAME "{" method_content "}"
+   method_content: (input_param | output_param | code_block)*
+   input_param: "input" ":" TYPE NAME
+   output_param: "output" ":" TYPE NAME
+   code_block: "code" "{" CCODE "}"
+   ```
+
+2. **Code Generation**
+   - Generate C++ method declarations in header files
+   - Generate method implementations in source files
+   - Handle method calls within node logic
+
+3. **Type System**
+   - Basic C++ types (int, float, string, etc.)
+   - ROS message types
+   - Custom type definitions
+
+#### Files to Create/Modify
+- Update `src/robodsl/grammar/robodsl.lark` to include method grammar
+- `src/robodsl/generators/cpp_method.py` - C++ method generation
+- `src/robodsl/templates/cpp_method/` - C++ method templates
+- Update existing node generators to handle methods
+
+#### Deliverables
+- C++ method parsing and code generation
+- Integration with existing node generation
+- Example with C++ methods in nodes
+
+#### Success Criteria
+- Nodes can define inline C++ methods
+- Methods are properly generated in header and source files
+- Method calls work within node logic
+
+---
+
+### Phase 3: ONNX Integration
+**Priority**: 3  
+**Estimated Time**: 4-5 days  
+**Goal**: Seamless ONNX model integration
+
+#### Tasks
+1. **ONNX Model Grammar**
+   ```lark
+   onnx_model: "onnx_model" STRING "{" model_config "}"
+   model_config: (input_def | output_def | device | optimization)*
+   input_def: "input" ":" STRING "->" TYPE
+   output_def: "output" ":" STRING "->" TYPE
+   device: "device" ":" ("cpu" | "cuda")
+   optimization: "optimization" ":" ("tensorrt" | "openvino")
+   ```
+
+2. **Code Generation**
+   - Generate ONNX Runtime integration code
+   - Handle input/output tensor management
+   - Memory management and optimization
+
+3. **Integration with Nodes**
+   - Allow nodes to reference ONNX models
+   - Generate inference methods automatically
+
+#### Files to Create/Modify
+- Update `src/robodsl/grammar/robodsl.lark` to include ONNX grammar
+- `src/robodsl/generators/onnx_integration.py` - ONNX code generation
+- `src/robodsl/templates/onnx/` - ONNX integration templates
+- Update node generators to handle ONNX models
+
+#### Deliverables
+- ONNX model parsing and code generation
+- Integration with ROS 2 nodes
+- Example inference pipeline
+
+#### Success Criteria
+- ONNX models can be defined and referenced
+- Inference code is automatically generated
+- Models integrate seamlessly with ROS 2 nodes
+
+---
+
+### Phase 4: Simple Pipeline System
+**Priority**: 4  
+**Estimated Time**: 5-6 days  
+**Goal**: Basic data flow pipelines
+
+#### Tasks
+1. **Pipeline Grammar**
+   ```lark
+   pipeline: "pipeline" NAME "{" stage* "}"
+   stage: "stage" NAME "{" stage_config "}"
+   stage_config: (input | output | method | model | topic)*
+   ```
+
+2. **Pipeline Generation**
+   - Generate ROS 2 nodes for each stage
+   - Create topic connections between stages
+   - Handle data flow between stages
+
+3. **Basic Branching**
+   - Conditional stages (if/else)
+   - Simple routing logic
+
+#### Files to Create/Modify
+- Update `src/robodsl/grammar/robodsl.lark` to include pipeline grammar
+- `src/robodsl/generators/pipeline.py` - Pipeline generation
+- `src/robodsl/templates/pipeline/` - Pipeline templates
+- Update main generator to handle pipelines
+
+#### Deliverables
+- Pipeline parsing and code generation
+- Multi-stage ROS 2 node networks
+- Example image processing pipeline
+
+#### Success Criteria
+- Pipelines can be defined and generated
+- Stages connect properly via ROS topics
+- Basic branching works correctly
+
+---
+
+### Phase 5: AI-Powered Development Tools
+**Priority**: 5  
+**Estimated Time**: 5-6 days  
+**Goal**: Integrate AI-assisted development features
+
+#### Tasks
+1. **AI Code Generation**
+   - Implement `cuif.generateFromPrompt` command
+   - Create input box for natural language descriptions
+   - Integrate with GPT-4 for code generation
+   - Add output preview and insertion
+
+2. **Retrieval-Augmented Generation (RAG)**
+   - Set up local vector DB (ChromaDB/FAISS)
+   - Create document corpus (grammar, examples, docs)
+   - Implement semantic search for relevant documentation
+   - Integrate with LLM for contextual help
+
+3. **AI-Powered Features**
+   - `cuif explain`: Document generation from code
+   - `cuif lint`: Style and structure suggestions
+   - `cuif doc`: Auto-generate API documentation
+
+#### Files to Create/Modify
+- `src/commands/aiGenerate.ts`
+- `src/services/ragService.ts`
+- `src/commands/explainCommand.ts`
+- `src/commands/lintCommand.ts`
+- `src/commands/docCommand.ts`
+
+#### Deliverables
+- AI-powered code generation from natural language
+- Contextual help using RAG
+- Documentation generation tools
+- Code quality suggestions
+
+---
+
+### Phase 6: Real-time Constraints
+**Priority**: 5  
+**Estimated Time**: 4-5 days  
+**Goal**: Real-time guarantees and monitoring
+
+#### Tasks
+1. **Real-time Grammar**
+   ```lark
+   realtime_config: "realtime" "{" rt_settings "}"
+   rt_settings: (priority | deadline | cpu_affinity | memory_policy)*
+   priority: "priority" ":" NUMBER
+   deadline: "deadline" ":" TIME
+   ```
+
+2. **Code Generation**
+   - Generate real-time thread configurations
+   - Deadline monitoring code
+   - Priority scheduling setup
+
+3. **Runtime Monitoring**
+   - Generate performance monitoring code
+   - Deadline violation detection
+   - Resource usage tracking
+
+#### Files to Create/Modify
+- Update `src/robodsl/grammar/robodsl.lark` to include real-time grammar
+- `src/robodsl/generators/realtime.py` - Real-time code generation
+- `src/robodsl/templates/realtime/` - Real-time templates
+
+#### Deliverables
+- Real-time constraint parsing and generation
+- Performance monitoring integration
+- Example real-time pipeline
+
+#### Success Criteria
+- Real-time constraints can be defined
+- Generated code includes monitoring
+- Performance metrics are tracked
+
+---
+
+### Phase 6: Visualization
+**Priority**: 6  
+**Estimated Time**: 3-4 days  
+**Goal**: Generate diagrams and visual representations
+
+#### Tasks
+1. **Graph Generation**
+   - Parse pipeline structure into graph representation
+   - Generate DOT files for Graphviz
+   - Create Mermaid diagrams
+
+2. **Documentation Generation**
+   - Auto-generate pipeline documentation
+   - Create deployment guides
+   - Generate API documentation
+
+3. **Web Interface** (Optional)
+   - Simple web-based pipeline visualizer
+   - Real-time monitoring dashboard
+
+#### Files to Create/Modify
+- `src/robodsl/generators/visualization.py` - Diagram generation
+- `src/robodsl/templates/visualization/` - Visualization templates
+- `docs/` - Auto-generated documentation
+
+#### Deliverables
+- Pipeline visualization tools
+- Auto-generated documentation
+- Web-based monitoring interface
+
+#### Success Criteria
+- Pipelines can be visualized as diagrams
+- Documentation is automatically generated
+- Visual representations are clear and useful
+
+---
+
+### Phase 7: Training Integration
+**Priority**: 7  
+**Estimated Time**: 3-4 days  
+**Goal**: Framework-agnostic training configuration
+
+#### Tasks
+1. **Training Grammar**
+   ```lark
+   training_config: "training" NAME "{" train_settings "}"
+   train_settings: (dataset | model | epochs | optimizer | export)*
+   ```
+
+2. **Code Generation**
+   - Generate training scripts
+   - Handle model export to ONNX
+   - Integration with existing pipeline
+
+#### Files to Create/Modify
+- Update `src/robodsl/grammar/robodsl.lark` to include training grammar
+- `src/robodsl/generators/training.py` - Training script generation
+- `src/robodsl/templates/training/` - Training templates
+
+#### Deliverables
+- Training configuration parsing
+- PyTorch training script generation
+- ONNX export integration
+
+#### Success Criteria
+- Training configurations can be defined
+- Training scripts are generated automatically
+- Models export to ONNX format
+
+---
+
+### Phase 8: Advanced Features
+**Priority**: 8  
+**Estimated Time**: 5-7 days  
+**Goal**: Enhanced functionality
+
+#### Tasks
+1. **Hardware Abstraction**
+   - Minimal hardware configuration
+   - Device-specific optimizations
+
+2. **Docker Integration**
+   - Container generation
+   - Multi-stage builds
+
+3. **Advanced Pipeline Features**
+   - Loops and complex branching
+   - Error handling and recovery
+   - Dynamic pipeline modification
+
+#### Files to Create/Modify
+- Update grammar for advanced features
+- `src/robodsl/generators/docker.py` - Docker generation
+- `src/robodsl/generators/hardware.py` - Hardware abstraction
+
+#### Deliverables
+- Docker container generation
+- Hardware abstraction layer
+- Advanced pipeline features
+
+#### Success Criteria
+- Containers can be generated automatically
+- Hardware configurations are abstracted
+- Complex pipelines work correctly
+
+## File Structure Changes
+
+### New Directory Structure
+```
+src/robodsl/
+├── grammar/
+│   ├── robodsl.lark          # Main grammar file
+│   └── grammar_tests.py      # Grammar validation tests
+├── parser/
+│   ├── __init__.py
+│   ├── ast_builder.py        # Build AST from Lark parse tree
+│   └── semantic_analyzer.py  # Validate semantics
+├── generators/
+│   ├── cpp_method.py         # C++ method generation
+│   ├── onnx_integration.py   # ONNX code generation
+│   ├── pipeline.py           # Pipeline generation
+│   ├── realtime.py           # Real-time code generation
+│   ├── visualization.py      # Diagram generation
+│   ├── training.py           # Training script generation
+│   ├── docker.py             # Docker generation
+│   └── hardware.py           # Hardware abstraction
+└── templates/
+    ├── cpp_method/           # C++ method templates
+    ├── onnx/                 # ONNX integration templates
+    ├── pipeline/             # Pipeline templates
+    ├── realtime/             # Real-time templates
+    ├── visualization/        # Visualization templates
+    ├── training/             # Training templates
+    └── docker/               # Docker templates
+```
+
+### Existing Files to Modify
+- `src/robodsl/parser.py` - Replace with Lark-based parser
+- `src/robodsl/generator.py` - Update to handle new features
+- `src/robodsl/cli.py` - Add new command-line options
+- `tests/` - Update and add new tests
+
+## Testing Strategy
+
+### Test Types
+1. **Grammar Tests**: Validate syntax parsing
+2. **Integration Tests**: End-to-end code generation
+3. **Performance Tests**: Real-time constraint validation
+4. **Documentation Tests**: Ensure docs are generated correctly
+
+### Test Organization
+```
+tests/
+├── grammar/                  # Grammar validation tests
+├── integration/              # End-to-end tests
+├── generators/               # Individual generator tests
+├── examples/                 # Example-based tests
+└── performance/              # Performance and real-time tests
+```
+
+## Documentation Strategy
+
+### Documentation Types
+1. **User Documentation**: How to use the language
+2. **Developer Documentation**: How to extend the language
+3. **API Documentation**: Generated from code
+4. **Examples**: Complete working examples
+
+### Documentation Organization
+```
+docs/
+├── user-guide/               # User documentation
+├── developer-guide/          # Developer documentation
+├── api/                      # API documentation
+├── examples/                 # Working examples
+└── grammar/                  # Grammar documentation
+```
+
+## Migration Strategy
+
+### No Backward Compatibility
+- Start fresh with new grammar
+- No need to support old `.robodsl` files
+- Clean break from regex-based parsing
+
+### Implementation Order
+1. Start with Phase 1 (Lark migration)
+2. Add new features incrementally
+3. Create documentation alongside implementation
+4. Add tests as features are implemented
+
+## Success Metrics
+
+### Phase 1 Success
+- [ ] All existing functionality works with new parser
+- [ ] No regex parsing remains in codebase
+- [ ] Grammar is well-documented
+
+### Overall Success
+- [ ] Language supports all planned features
+- [ ] Documentation is comprehensive
+- [ ] Tests provide good coverage
+- [ ] Examples demonstrate all capabilities
+
+## Notes for Future Implementation
+
+### Key Decisions Made
+1. **No backward compatibility** - Clean break from old syntax
+2. **Inline C++ methods** - Methods defined within nodes
+3. **ONNX-first approach** - Start with ONNX, expand later
+4. **Simple pipelines first** - Add complexity incrementally
+5. **Real-time constraints** - Support for real-time systems
+6. **Visualization** - Auto-generated diagrams and docs
+
+### Technology Choices
+- **Lark** for parsing (modern, Python-native)
+- **ONNX Runtime** for inference (framework-agnostic)
+- **Graphviz/Mermaid** for visualization
+- **PyTorch** for training (easiest integration)
+
+### Future Considerations
+- Support for other ML frameworks (TensorFlow, etc.)
+- More advanced pipeline features
+- Cloud deployment integration
+- Hardware-specific optimizations
+
+## Getting Started
+
+To begin implementation:
+
+1. **Start with Phase 1**: Create the Lark grammar file
+2. **Set up development environment**: Install Lark and dependencies
+3. **Create basic structure**: Set up new directory structure
+4. **Implement incrementally**: One phase at a time
+5. **Document as you go**: Keep documentation updated
+6. **Test thoroughly**: Add tests for each feature
+
+This plan provides a clear roadmap for transforming RoboDSL into a comprehensive ML/Robotics/AI language while maintaining the ability to pick up development at any point. 

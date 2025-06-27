@@ -1,0 +1,114 @@
+// RoboDSL Grammar - Phase 1: Foundation
+// This grammar replaces the regex-based parser with a proper context-free grammar
+
+start: include_stmt* (node_def | cuda_kernels_block)*
+
+// Include statements
+include_stmt: "include" ("<" include_path ">" | STRING)
+include_path: STRING | NAME ("/" NAME)* ("." NAME)?
+
+// Node definitions
+node_def: "node" NAME "{" node_content "}"
+node_content: (parameter | lifecycle | timer | remap | namespace | ros_primitive | flag | cpp_method)*
+
+// Parameters
+parameter: "parameter" NAME ":" value
+
+// Lifecycle configuration
+lifecycle: "lifecycle" "{" lifecycle_config "}"
+lifecycle_config: lifecycle_setting*
+lifecycle_setting: NAME ":" BOOLEAN
+
+// Timers
+timer: "timer" NAME ":" number timer_config?
+timer_config: "{" timer_setting* "}"
+timer_setting: NAME ":" BOOLEAN
+
+// Remaps
+remap: "remap" ("from:" TOPIC_PATH "to:" TOPIC_PATH | TOPIC_PATH ":" TOPIC_PATH)
+
+// Namespaces
+namespace: "namespace" (":"? TOPIC_PATH)
+
+// ROS primitives
+ros_primitive: publisher | subscriber | service | client | action
+publisher: "publisher" topic_path ":" STRING publisher_config?
+subscriber: "subscriber" topic_path ":" STRING subscriber_config?
+service: "service" topic_path ":" STRING service_config?
+client: "client" topic_path ":" STRING client_config?
+action: "action" topic_path ":" STRING action_config?
+
+publisher_config: "{" publisher_setting* "}"
+subscriber_config: "{" subscriber_setting* "}"
+service_config: "{" service_setting* "}"
+client_config: "{" client_setting* "}"
+action_config: "{" action_setting* "}"
+
+publisher_setting: qos_config
+subscriber_setting: qos_config
+service_setting: qos_config
+client_setting: qos_config
+action_setting: qos_config
+
+topic_path: "/" NAME ("/" NAME)*
+
+// Flags
+flag: "flag" NAME ":" BOOLEAN
+
+// C++ methods
+cpp_method: "cpp_method" NAME ":"? "code" ":"? STRING
+
+// CUDA kernels block
+cuda_kernels_block: "cuda_kernels" "{" kernel_def* "}"
+kernel_def: "kernel" NAME "{" kernel_content "}"
+kernel_content: (block_size | grid_size | shared_memory | use_thrust | kernel_param | code_block)*
+
+block_size: "block_size" ":" "(" number "," number "," number ")"
+grid_size: "grid_size" ":" "(" number "," number "," number ")"
+shared_memory: "shared_memory" ":" number
+use_thrust: "use_thrust" ":" BOOLEAN
+kernel_param: "param" DIRECTION cpp_type NAME kernel_param_size?
+DIRECTION: "in" | "out" | "inout"
+cpp_type: NAME ("*")?
+kernel_param_size: "(" (NAME | STRING) ")"
+
+// Code blocks as quoted strings
+code_block: "code" ":"? STRING
+
+// Values
+value: primitive | array | nested_dict
+
+primitive: BOOLEAN | STRING | number
+
+array: "[" value_list "]"
+value_list: (value ("," value)*)?
+
+nested_dict: "{" dict_list "}"
+dict_list: (dict_item (dict_sep dict_item)* dict_sep?)?
+dict_item: NAME ":" value
+dict_sep: "," | _NL
+
+// Numbers
+number: NUMBER
+
+// Topics must start with /
+TOPIC_PATH: /\/[a-zA-Z_][a-zA-Z0-9_\/]*/
+
+// Terminals
+NAME: /[a-zA-Z_][a-zA-Z0-9_]*/
+NUMBER: /[0-9]+(\.[0-9]+)?/
+STRING: /"[^"]*"/
+BOOLEAN: "true" | "false"
+
+// Ignore whitespace and comments
+_NL: /(\r?\n)+\s*/
+_WS: /[ \t]+/
+COMMENT: /\/\/.*/
+
+// QoS configuration
+qos_config: "qos" "{" qos_setting* "}"
+qos_setting: NAME ":" (number | NAME)
+
+%ignore _WS
+%ignore COMMENT
+%ignore _NL
