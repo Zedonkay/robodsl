@@ -84,37 +84,21 @@ class RoboDSLValidator:
     def validate_string(self, content: str) -> List[ValidationIssue]:
         """Validate RoboDSL content string."""
         issues = []
-        
-        # Parse and semantic validation
-        try:
-            ast = self.parser.parse(content)
-        except ParseError as e:
+        ast, parse_issues = self.parser.parse_with_issues(content)
+        # Map parse/semantic issues to ValidationIssue
+        for issue in parse_issues:
+            level = ValidationLevel.ERROR if issue['level'] == 'error' else ValidationLevel.WARNING
             issues.append(ValidationIssue(
-                level=ValidationLevel.ERROR,
-                message=f"Parse error: {str(e)}",
-                rule_id="parse_error"
+                level=level,
+                message=issue['message'],
+                rule_id=issue.get('rule_id')
             ))
-            return issues
-        except SemanticError as e:
-            issues.append(ValidationIssue(
-                level=ValidationLevel.ERROR,
-                message=f"Semantic error: {str(e)}",
-                rule_id="semantic_error"
-            ))
-            return issues
-        
-        # Style validation
-        issues.extend(self._validate_style(content))
-        
-        # Naming convention validation
-        issues.extend(self._validate_naming_conventions(ast))
-        
-        # Best practices validation
-        issues.extend(self._validate_best_practices(ast))
-        
-        # Performance validation
-        issues.extend(self._validate_performance(ast))
-        
+        # Continue with other validations if AST is available
+        if ast:
+            issues.extend(self._validate_style(content))
+            issues.extend(self._validate_naming_conventions(ast))
+            issues.extend(self._validate_best_practices(ast))
+            issues.extend(self._validate_performance(ast))
         return issues
     
     def _validate_style(self, content: str) -> List[ValidationIssue]:

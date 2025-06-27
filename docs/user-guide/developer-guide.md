@@ -26,7 +26,7 @@ robodsl/
 
 ```bash
 # Clone and setup
-$ git clone https://github.com/yourusername/robodsl.git
+$ git clone https://github.com/Zedonkay/robodsl.git
 $ cd robodsl
 $ python -m venv venv
 $ source venv/bin/activate  # or `venv\Scripts\activate` on Windows

@@ -1,0 +1,176 @@
+#include "{{ project_name }}/{{ stage.name }}_node.hpp"
+#include <chrono>
+#include <iostream>
+
+using namespace std::chrono_literals;
+
+namespace {{ project_name }} {
+
+{{ stage.name }}Node::{{ stage.name }}Node() 
+    : Node("{{ stage.name }}_node", "{{ stage_namespace }}") {
+    
+    RCLCPP_INFO(this->get_logger(), "Initializing {{ stage.name }} stage node");
+    
+    // Initialize ROS components
+    initialize_ros_components();
+    
+    {% if has_cuda %}
+    // Initialize CUDA integration
+    if (!initialize_cuda()) {
+        RCLCPP_ERROR(this->get_logger(), "Failed to initialize CUDA integration");
+    }
+    {% endif %}
+    
+    {% if has_onnx %}
+    // Initialize ONNX integration
+    if (!initialize_onnx()) {
+        RCLCPP_ERROR(this->get_logger(), "Failed to initialize ONNX integration");
+    }
+    {% endif %}
+    
+    RCLCPP_INFO(this->get_logger(), "{{ stage.name }} stage node initialized successfully");
+}
+
+{{ stage.name }}Node::~{{ stage.name }}Node() {
+    {% if has_cuda %}
+    if (cuda_manager_) {
+        cuda_manager_->cleanup();
+    }
+    {% endif %}
+    
+    {% if has_onnx %}
+    if (onnx_manager_) {
+        onnx_manager_->cleanup();
+    }
+    {% endif %}
+}
+
+void {{ stage.name }}Node::initialize_ros_components() {
+    // Initialize subscribers
+    {% for input in stage.content.inputs %}
+    {{ input.input_name }}_sub_ = this->create_subscription<std_msgs::msg::String>(
+        "{{ stage_namespace }}/{{ input.input_name }}", 10,
+        std::bind(&{{ stage.name }}Node::{{ input.input_name }}_callback, this, std::placeholders::_1)
+    );
+    {% endfor %}
+    
+    // Initialize publishers
+    {% for output in stage.content.outputs %}
+    {{ output.output_name }}_pub_ = this->create_publisher<std_msgs::msg::String>(
+        "{{ stage_namespace }}/{{ output.output_name }}", 10
+    );
+    {% endfor %}
+    
+    // Initialize timer for periodic processing
+    timer_ = this->create_wall_timer(
+        std::chrono::milliseconds(100),
+        std::bind(&{{ stage.name }}Node::timer_callback, this)
+    );
+}
+
+{% if has_cuda %}
+bool {{ stage.name }}Node::initialize_cuda() {
+    cuda_manager_ = std::make_unique<{{ stage.name }}CudaManager>();
+    return cuda_manager_->initialize();
+}
+{% endif %}
+
+{% if has_onnx %}
+bool {{ stage.name }}Node::initialize_onnx() {
+    onnx_manager_ = std::make_unique<{{ stage.name }}OnnxManager>();
+    return onnx_manager_->initialize();
+}
+{% endif %}
+
+// Callback methods
+{% for input in stage.content.inputs %}
+void {{ stage.name }}Node::{{ input.input_name }}_callback(const std_msgs::msg::String::SharedPtr msg) {
+    RCLCPP_INFO(this->get_logger(), "Received {{ input.input_name }}: %s", msg->data.c_str());
+    
+    // Process the received data
+    {% if has_cuda or has_onnx %}
+    std::vector<float> input_data;
+    // TODO: Convert msg->data to input_data vector
+    // For now, create dummy data
+    input_data = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f};
+    
+    std::vector<float> output_data;
+    
+    {% if has_cuda %}
+    // Process with CUDA kernels
+    if (cuda_manager_) {
+        if (cuda_manager_->process_data(input_data, output_data)) {
+            RCLCPP_INFO(this->get_logger(), "CUDA processing completed");
+        } else {
+            RCLCPP_ERROR(this->get_logger(), "CUDA processing failed");
+            return;
+        }
+    }
+    {% endif %}
+    
+    {% if has_onnx %}
+    // Process with ONNX models
+    if (onnx_manager_) {
+        if (onnx_manager_->run_inference(output_data.empty() ? input_data : output_data, output_data)) {
+            RCLCPP_INFO(this->get_logger(), "ONNX inference completed");
+        } else {
+            RCLCPP_ERROR(this->get_logger(), "ONNX inference failed");
+            return;
+        }
+    }
+    {% endif %}
+    
+    // Publish results
+    {% for output in stage.content.outputs %}
+    auto output_msg = std_msgs::msg::String();
+    // TODO: Convert output_data to string format
+    output_msg.data = "Processed data from {{ input.input_name }}";
+    {{ output.output_name }}_pub_->publish(output_msg);
+    {% endfor %}
+    {% else %}
+    // Simple processing without CUDA/ONNX
+    {% for output in stage.content.outputs %}
+    auto output_msg = std_msgs::msg::String();
+    output_msg.data = "Processed: " + msg->data;
+    {{ output.output_name }}_pub_->publish(output_msg);
+    {% endfor %}
+    {% endif %}
+}
+{% endfor %}
+
+void {{ stage.name }}Node::timer_callback() {
+    // Periodic processing tasks
+    {% for method in stage.content.methods %}
+    {{ method.method_name }}();
+    {% endfor %}
+    
+    {% for model in stage.content.models %}
+    process_{{ model.model_name }}_model();
+    {% endfor %}
+}
+
+// Processing methods
+{% for method in stage.content.methods %}
+void {{ stage.name }}Node::{{ method.method_name }}() {
+    RCLCPP_DEBUG(this->get_logger(), "Executing {{ method.method_name }}");
+    // TODO: Implement {{ method.method_name }} logic
+}
+{% endfor %}
+
+// Model processing methods
+{% for model in stage.content.models %}
+void {{ stage.name }}Node::process_{{ model.model_name }}_model() {
+    RCLCPP_DEBUG(this->get_logger(), "Processing {{ model.model_name }} model");
+    // TODO: Implement {{ model.model_name }} model processing
+    {% if has_onnx %}
+    if (onnx_manager_) {
+        // Model processing logic here
+    }
+    {% endif %}
+}
+{% endfor %}
+
+} // namespace {{ project_name }}
+
+#include "rclcpp_components/register_node_macro.hpp"
+RCLCPP_COMPONENTS_REGISTER_NODE({{ project_name }}::{{ stage.name }}Node) 

@@ -70,9 +70,9 @@ def test_parse_node_with_parameters():
     """Test parsing a node with parameters."""
     ast = parse_robodsl("""
     node test_node {
-        parameter camera_fps: 30
-        parameter camera_resolution: "640x480"
-        parameter enable_debug: true
+        parameter int camera_fps = 30
+        parameter string camera_resolution = "640x480"
+        parameter bool enable_debug = true
     }
     """)
     
@@ -81,17 +81,19 @@ def test_parse_node_with_parameters():
     assert node.name == "test_node"
     assert len(node.content.parameters) == 3
     
-    fps_param = get_param(node, "camera_fps")
-    assert fps_param is not None
-    assert fps_param.value.value == 30
+    # Check parameters
+    params = {p.name: p for p in node.content.parameters}
+    assert "camera_fps" in params
+    assert params["camera_fps"].type == "int"
+    assert params["camera_fps"].value.value == 30
     
-    res_param = get_param(node, "camera_resolution")
-    assert res_param is not None
-    assert res_param.value.value == "640x480"
+    assert "camera_resolution" in params
+    assert params["camera_resolution"].type == "string"
+    assert params["camera_resolution"].value.value == "640x480"
     
-    debug_param = get_param(node, "enable_debug")
-    assert debug_param is not None
-    assert debug_param.value.value is True
+    assert "enable_debug" in params
+    assert params["enable_debug"].type == "bool"
+    assert params["enable_debug"].value.value is True
 
 def test_parse_node_with_qos():
     """Test parsing a node with QoS configuration."""
@@ -141,7 +143,6 @@ def test_parse_cuda_kernels():
     assert len(ast.cuda_kernels.kernels) == 1
     kernel = ast.cuda_kernels.kernels[0]
     assert kernel.name == "image_processor"
-    # Use correct attribute for kernel parameters
     assert len(kernel.content.parameters) == 2
     
     input_param = kernel.content.parameters[0]
@@ -209,7 +210,7 @@ def test_parse_complex_config():
     """Test parsing a complex configuration with multiple nodes and features."""
     ast = parse_robodsl("""
     include "common.robodsl"
-    
+
     node camera_node {
         publisher /camera/image_raw: "sensor_msgs/msg/Image" {
             qos {
@@ -217,17 +218,17 @@ def test_parse_complex_config():
                 depth: 5
             }
         }
-        parameter fps: 30
-        parameter resolution: "1920x1080"
+        parameter int fps = 30
+        parameter string resolution = "1920x1080"
     }
-    
+
     node processor_node {
         subscriber /camera/image_raw: "sensor_msgs/msg/Image"
         publisher /processed/image: "sensor_msgs/msg/Image"
         service /process_image: "image_processing/srv/ProcessImage"
-        parameter algorithm: "gaussian_blur"
+        parameter string algorithm = "gaussian_blur"
     }
-    
+
     cuda_kernels {
         kernel image_filter {
             input: float* input (width)

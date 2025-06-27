@@ -140,6 +140,7 @@ log/
 test_project/
 sensor_processor*/
 new_node*/
+test_output/
 
 # IDE specific files
 .idea/

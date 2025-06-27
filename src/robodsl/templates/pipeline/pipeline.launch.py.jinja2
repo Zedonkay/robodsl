@@ -1,0 +1,61 @@
+#!/usr/bin/env python3
+
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument, LogInfo
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch_ros.actions import Node
+from launch_ros.substitutions import FindPackageShare
+
+
+def generate_launch_description():
+    """Generate launch description for {{ pipeline.name }} pipeline."""
+    
+    # Launch arguments
+    use_sim_time_arg = DeclareLaunchArgument(
+        'use_sim_time',
+        default_value='false',
+        description='Use simulation (Gazebo) clock if true'
+    )
+    
+    # Get package share directory
+    pkg_share = FindPackageShare('{{ project_name }}')
+    
+    # Launch all pipeline stages
+    stage_nodes = []
+    
+    {% for stage in pipeline.content.stages %}
+    # {{ stage.name | title }} stage
+    {{ stage.name }}_node = Node(
+        package='{{ project_name }}',
+        executable='{{ stage.name }}_node',
+        name='{{ stage.name }}_node',
+        namespace='{{ pipeline.name }}/{{ stage.name }}',
+        output='screen',
+        parameters=[{
+            'use_sim_time': LaunchConfiguration('use_sim_time'),
+            {% for topic in stage.content.topics %}
+            '{{ topic.topic_path.split('/')[-1] }}_topic': '{{ topic.topic_path }}',
+            {% endfor %}
+        }],
+        remappings=[
+            {% for input in stage.content.inputs %}
+            ('{{ input.input_name }}', '/{{ pipeline.name }}/{{ input.input_name }}'),
+            {% endfor %}
+            {% for output in stage.content.outputs %}
+            ('{{ output.output_name }}', '/{{ pipeline.name }}/{{ output.output_name }}'),
+            {% endfor %}
+        ]
+    )
+    stage_nodes.append({{ stage.name }}_node)
+    {% endfor %}
+    
+    # Log pipeline startup
+    pipeline_info = LogInfo(
+        msg=f'Starting {{ pipeline.name }} pipeline with {len(stage_nodes)} stages'
+    )
+    
+    return LaunchDescription([
+        use_sim_time_arg,
+        pipeline_info,
+        *stage_nodes
+    ]) 

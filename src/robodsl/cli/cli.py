@@ -79,13 +79,13 @@ def create_robodsl_config(project_path: Path, node_name: str, publishers: List[D
     
     # Add publishers
     for pub in (publishers or []):
-        pub_line = f"    publisher {pub['topic']} {pub['msg_type']}"
+        pub_line = f"    publisher {pub['topic']}: \"{pub['msg_type']}\""
         if not any(pub_line in line for line in new_node_lines):
             new_node_lines.insert(-1, f"{pub_line}\n")
     
     # Add subscribers
     for sub in (subscribers or []):
-        sub_line = f"    subscriber {sub['topic']} {sub['msg_type']}"
+        sub_line = f"    subscriber {sub['topic']}: \"{sub['msg_type']}\""
         if not any(sub_line in line for line in new_node_lines):
             new_node_lines.insert(-1, f"{sub_line}\n")
     
@@ -481,7 +481,7 @@ def generate(input_file: Path, output_dir: Optional[Path], force: bool) -> None:
     """
     try:
         from robodsl.parser import parse_robodsl
-        from robodsl.generator import CodeGenerator
+        from robodsl.generators.main_generator import MainGenerator
         
         # Set default output directory if not specified
         if output_dir is None:
@@ -496,7 +496,7 @@ def generate(input_file: Path, output_dir: Optional[Path], force: bool) -> None:
         config = parse_robodsl(input_file.read_text())
         
         # Generate code
-        generator = CodeGenerator(output_dir=output_dir)
+        generator = MainGenerator(output_dir=str(output_dir))
         generated_files = generator.generate(config)
         
         click.echo(f"Generated {len(generated_files)} files in {output_dir}:")

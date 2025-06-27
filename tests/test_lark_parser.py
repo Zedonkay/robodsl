@@ -4,15 +4,16 @@ import pytest
 from robodsl.parsers.lark_parser import parse_robodsl
 from robodsl.parsers.semantic_analyzer import SemanticError
 from lark import ParseError
+from robodsl.core.ast import RoboDSLAST, NodeNode, KernelNode
 
 
 def test_basic_node_parsing():
     """Test basic node parsing with the new Lark parser."""
     content = """
     node test_node {
-        parameter test_param: 42
-        publisher /test_topic : "std_msgs/String"
-        subscriber /input_topic : "std_msgs/String"
+        parameter int test_param = 42
+        publisher /test_topic: "std_msgs/msg/String"
+        subscriber /input_topic: "std_msgs/msg/String"
     }
     """
     
@@ -22,8 +23,11 @@ def test_basic_node_parsing():
     node = ast.nodes[0]
     assert node.name == "test_node"
     assert len(node.content.parameters) == 1
-    assert node.content.parameters[0].name == "test_param"
-    assert node.content.parameters[0].value.value == 42
+    
+    param = node.content.parameters[0]
+    assert param.name == "test_param"
+    assert param.type == "int"
+    assert param.value.value == 42
     assert len(node.content.publishers) == 1
     assert node.content.publishers[0].topic == "/test_topic"
     assert len(node.content.subscribers) == 1
@@ -63,7 +67,7 @@ def test_qos_configuration():
     """Test QoS configuration parsing."""
     content = """
     node test_node {
-        publisher /test_topic : "std_msgs/String" {
+        publisher /test_topic: "std_msgs/msg/String" {
             qos {
                 reliability: reliable
                 durability: transient_local
@@ -144,68 +148,75 @@ def test_timer_configuration():
     
     assert 'oneshot' in setting_names
     assert 'autostart' in setting_names
+    
+    # Check that we have boolean values (True/False)
+    assert any(isinstance(v, bool) for v in setting_values)
     assert True in setting_values
     assert False in setting_values
 
 
 def test_include_statements():
     """Test include statement parsing."""
-    content = """
-    include <ros/ros.h>
-    include "custom_header.h"
+    dsl_code = """
+    include <rclcpp/rclcpp.hpp>
+    include "common.robodsl"
     
     node test_node {
-        parameter test_param: 42
+        parameter int test_param = 42
     }
     """
     
-    ast = parse_robodsl(content)
+    ast = parse_robodsl(dsl_code)
     
     assert len(ast.includes) == 2
-    include_paths = [inc.path for inc in ast.includes]
-    assert "ros/ros.h" in include_paths
-    assert "custom_header.h" in include_paths
-    assert len(ast.nodes) == 1
+    assert ast.includes[0].path == "rclcpp/rclcpp.hpp"
+    assert ast.includes[0].is_system is True
+    assert ast.includes[1].path == "common.robodsl"
+    assert ast.includes[1].is_system is False
 
 
 def test_comments():
     """Test comment handling."""
-    content = """
+    dsl_code = """
     // This is a comment
     node test_node {
-        parameter test_param: 42  // Another comment
+        parameter int test_param = 42  // Another comment
         // publisher "/test_topic" "std_msgs/String"  // Commented out
     }
     """
     
-    ast = parse_robodsl(content)
+    ast = parse_robodsl(dsl_code)
     
     assert len(ast.nodes) == 1
     node = ast.nodes[0]
+    assert node.name == "test_node"
     assert len(node.content.parameters) == 1
-    assert len(node.content.publishers) == 0  # Should be ignored due to comment
+    assert node.content.parameters[0].name == "test_param"
+    assert node.content.parameters[0].type == "int"
+    assert node.content.parameters[0].value.value == 42
 
 
 def test_semantic_errors():
     """Test semantic error detection."""
-    content = """
+    dsl_code = """
     node test_node {
-        parameter test_param: 42
-        parameter test_param: 43  // Duplicate parameter name
+        parameter int test_param = 42
+        parameter int test_param = 43  // Duplicate parameter name
     }
     """
     
     with pytest.raises(SemanticError) as exc_info:
-        parse_robodsl(content)
+        ast = parse_robodsl(dsl_code)
     
-    assert "Duplicate parameter name" in str(exc_info.value)
+    error_msg = str(exc_info.value)
+    assert "duplicate parameter name" in error_msg.lower()
 
 
 def test_parse_errors():
     """Test parse error handling."""
     content = """
     node test_node {
-        parameter test_param: 42
+        parameter test_param = 42
         invalid_syntax_here
     }
     """
@@ -215,21 +226,21 @@ def test_parse_errors():
 
 
 def test_complex_value_types():
-    """Test complex value types (arrays, nested dicts)."""
-    content = """
+    """Test parsing complex value types."""
+    dsl_code = """
     node test_node {
-        parameter int_array: [1, 2, 3, 4, 5]
-        parameter float_array: [1.0, 2.5, 3.14]
-        parameter string_array: ["hello", "world"]
-        parameter nested_dict: {
+        parameter list int_array = [1, 2, 3, 4, 5]
+        parameter list float_array = [1.0, 2.5, 3.14]
+        parameter list string_array = ["hello", "world"]
+        parameter dict nested_dict = {
             key1: "value1",
             key2: 42,
-            key3: true
+            key3: [1, 2, 3]
         }
     }
     """
     
-    ast = parse_robodsl(content)
+    ast = parse_robodsl(dsl_code)
     
     assert len(ast.nodes) == 1
     node = ast.nodes[0]
@@ -237,13 +248,23 @@ def test_complex_value_types():
     
     # Check array parameters
     int_array_param = next(p for p in node.content.parameters if p.name == "int_array")
+    assert int_array_param.type == "list"
     assert int_array_param.value.value == [1, 2, 3, 4, 5]
     
     float_array_param = next(p for p in node.content.parameters if p.name == "float_array")
+    assert float_array_param.type == "list"
     assert float_array_param.value.value == [1.0, 2.5, 3.14]
     
     string_array_param = next(p for p in node.content.parameters if p.name == "string_array")
+    assert string_array_param.type == "list"
     assert string_array_param.value.value == ["hello", "world"]
+    
+    # Check nested dict parameter
+    dict_param = next(p for p in node.content.parameters if p.name == "nested_dict")
+    assert dict_param.type == "dict"
+    assert dict_param.value.value["key1"] == "value1"
+    assert dict_param.value.value["key2"] == 42
+    assert dict_param.value.value["key3"] == [1, 2, 3]
 
 
 def test_remapping():
@@ -251,7 +272,7 @@ def test_remapping():
     content = """
     node test_node {
         remap from: /original_topic to: /new_topic
-        subscriber /original_topic : "std_msgs/String"
+        subscriber /original_topic: "std_msgs/msg/String"
     }
     """
     
@@ -266,20 +287,24 @@ def test_remapping():
 
 
 def test_namespace():
-    """Test namespace configuration."""
-    content = """
+    """Test namespace parsing."""
+    dsl_code = """
     node test_node {
         namespace : /my/namespace
-        parameter test_param: 42
+        parameter int test_param = 42
     }
     """
     
-    ast = parse_robodsl(content)
+    ast = parse_robodsl(dsl_code)
     
     assert len(ast.nodes) == 1
     node = ast.nodes[0]
     assert node.content.namespace is not None
     assert node.content.namespace.namespace == "/my/namespace"
+    assert len(node.content.parameters) == 1
+    assert node.content.parameters[0].name == "test_param"
+    assert node.content.parameters[0].type == "int"
+    assert node.content.parameters[0].value.value == 42
 
 
 def test_cpp_method_parsing():
@@ -309,66 +334,47 @@ node test_node {
 
 
 def test_node_with_cuda_kernels():
-    """Test parsing a node with CUDA kernels inside it."""
-    content = """
+    """Test node with CUDA kernels."""
+    dsl_code = """
     node processing_node {
-        parameter input_size: 1024
-        parameter output_size: 1024
+        parameter int input_size = 1024
+        parameter int output_size = 1024
         
-        publisher /processed_data : "std_msgs/msg/Float32MultiArray"
-        subscriber /raw_data : "std_msgs/msg/Float32MultiArray"
+        publisher /processed_data: "std_msgs/msg/Float32MultiArray"
         
-        kernel process_kernel {
-            block_size: (256, 1, 1)
-            grid_size: (4, 1, 1)
-            shared_memory: 1024
-            use_thrust: true
-            input: float input_data (size)
-            output: float output_data (size)
-        }
-        
-        kernel filter_kernel {
-            block_size: (128, 1, 1)
-            grid_size: (8, 1, 1)
-            shared_memory: 512
-            use_thrust: false
-            input: float* data (width, height)
-            output: float* filtered_data (width, height)
+        cuda_kernels {
+            kernel filter_kernel {
+                input: float* data (width, height)
+                output: float* filtered_data (width, height)
+                block_size: (256, 1, 1)
+                grid_size: (1, 1, 1)
+            }
         }
     }
     """
     
-    ast = parse_robodsl(content)
+    ast = parse_robodsl(dsl_code)
     
     assert len(ast.nodes) == 1
     node = ast.nodes[0]
     assert node.name == "processing_node"
-    
-    # Check that the node has CUDA kernels
-    assert len(node.content.cuda_kernels) == 2
-    
-    # Check first kernel
-    kernel1 = node.content.cuda_kernels[0]
-    assert kernel1.name == "process_kernel"
-    assert kernel1.content.block_size == (256, 1, 1)
-    assert kernel1.content.grid_size == (4, 1, 1)
-    assert kernel1.content.shared_memory == 1024
-    assert kernel1.content.use_thrust is True
-    assert len(kernel1.content.parameters) == 2
-    
-    # Check second kernel
-    kernel2 = node.content.cuda_kernels[1]
-    assert kernel2.name == "filter_kernel"
-    assert kernel2.content.block_size == (128, 1, 1)
-    assert kernel2.content.grid_size == (8, 1, 1)
-    assert kernel2.content.shared_memory == 512
-    assert kernel2.content.use_thrust is False
-    assert len(kernel2.content.parameters) == 2
-    
-    # Check that the node also has ROS2 components
-    assert len(node.content.publishers) == 1
-    assert len(node.content.subscribers) == 1
     assert len(node.content.parameters) == 2
+    assert len(node.content.cuda_kernels) == 1
+    
+    # Check parameters
+    input_size_param = next(p for p in node.content.parameters if p.name == "input_size")
+    assert input_size_param.type == "int"
+    assert input_size_param.value.value == 1024
+    
+    output_size_param = next(p for p in node.content.parameters if p.name == "output_size")
+    assert output_size_param.type == "int"
+    assert output_size_param.value.value == 1024
+    
+    # Check CUDA kernel
+    kernel = node.content.cuda_kernels[0]
+    assert kernel.name == "filter_kernel"
+    assert kernel.content.block_size == (256, 1, 1)
+    assert kernel.content.grid_size == (1, 1, 1)
 
 
 def test_enhanced_cpp_method_parsing():

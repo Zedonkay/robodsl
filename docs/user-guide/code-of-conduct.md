@@ -22,6 +22,6 @@ We're committed to a harassment-free experience for everyone, regardless of pers
 
 ## Enforcement
 
-Violations may result in actions including warnings, temporary bans, or permanent bans. Report issues to [INSERT EMAIL].
+Violations may result in actions including warnings, temporary bans, or permanent bans. Report issues to [ishikhar@andrew.cmu.edu](ishikhar@andrew.cmu.edu)
 
 Based on the [Contributor Covenant](https://www.contributor-covenant.org/version/1/4/code-of-conduct.html).

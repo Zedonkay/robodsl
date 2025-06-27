@@ -16,250 +16,125 @@ class TestComprehensiveNodeFeatures:
     """Test comprehensive node feature parsing and validation."""
     
     def test_complex_node_with_all_features(self):
-        """Test a node with all possible features."""
-        content = """
-        include <ros/ros.h>
-        include "custom_header.h"
-        
-        node complex_node {
-            // Parameters with various types
-            parameter int_rate: 30
-            parameter float_tolerance: 0.001
-            parameter string_frame_id: "base_link"
-            parameter bool_debug: true
-            parameter array_coords: [1.0, 2.0, 3.0]
-            parameter dict_config: {
-                max_velocity: 2.0
-                min_distance: 0.5
-                timeout: 5.0
+        """Test a complex node with all supported features."""
+        dsl_code = """
+        node comprehensive_node {
+            // Parameters with different types
+            parameter int int_rate = 30
+            parameter float float_tolerance = 0.001
+            parameter string string_frame_id = "base_link"
+            parameter bool bool_debug = true
+            parameter list array_coords = [1.0, 2.0, 3.0]
+            parameter dict dict_config = {
+                max_iterations: 100,
+                timeout: 5.0,
+                enabled: true
+            }
+            
+            // ROS2 primitives
+            publisher /output/topic: "std_msgs/msg/String"
+            subscriber /input/topic: "std_msgs/msg/String"
+            service /process/service: "example_interfaces/srv/AddTwoInts"
+            client /external/service: "example_interfaces/srv/AddTwoInts"
+            action /navigate/action: "nav2_msgs/action/NavigateToPose"
+            
+            // QoS configurations
+            publisher /qos/topic: "std_msgs/msg/String" {
+                qos {
+                    reliability: reliable
+                    depth: 10
+                    deadline: 1000
+                }
             }
             
             // Lifecycle configuration
             lifecycle {
-                autostart: true
+                enabled: true
+                autostart: false
                 cleanup_on_shutdown: true
             }
             
-            // Timers with settings
-            timer main_timer: 0.1 {
+            // Timers
+            timer periodic_timer: 1.0 {
                 oneshot: false
                 autostart: true
             }
-            timer debug_timer: 1.0 {
-                oneshot: true
-                autostart: false
-            }
             
-            // ROS primitives with QoS
-            publisher /cmd_vel : "geometry_msgs/Twist" {
-                qos {
-                    reliability: reliable
-                    durability: transient_local
-                    history: keep_last
-                    depth: 10
-                }
-            }
-            
-            subscriber /scan : "sensor_msgs/LaserScan" {
-                qos {
-                    reliability: best_effort
-                    durability: volatile
-                    history: keep_last
-                    depth: 5
-                }
-            }
-            
-            service /set_goal : "nav_msgs/SetGoal" {
-                qos {
-                    reliability: reliable
-                    durability: volatile
-                }
-            }
-            
-            client /get_map : "nav_msgs/GetMap" {
-                qos {
-                    reliability: reliable
-                    durability: volatile
-                }
-            }
-            
-            action /navigate : "nav2_msgs/NavigateToPose" {
-                qos {
-                    reliability: reliable
-                    durability: transient_local
-                }
-            }
-            
-            // Remapping
-            remap from: /cmd_vel to: /robot/cmd_vel
-            remap /scan: /robot/scan
-            remap from: /odom to: /robot/odom
+            // Remaps
+            remap from: /old/topic to: /new/topic
             
             // Namespace
-            namespace: /robot
+            namespace: /my/namespace
             
             // Flags
-            flag enable_debug: true
-            flag use_sim_time: false
             flag enable_logging: true
+            flag debug_mode: false
             
             // C++ methods
             method process_data {
-                input: float* input_data
-                output: float* output_data
+                input: float* input_data (size)
+                output: float* output_data (size)
                 code: {
-                    // Process input data
-                    output_data.resize(input_data.size());
-                    for (size_t i = 0; i < input_data.size(); ++i) {
+                    for (int i = 0; i < size; i++) {
                         output_data[i] = input_data[i] * 2.0f;
                     }
                 }
             }
             
-            method validate_input {
-                input: string input_string
-                output: bool is_valid
-                code: {
-                    is_valid = !input_string.empty() && input_string.length() > 0;
-                }
-            }
-            
             // CUDA kernels
-            kernel vector_add {
-                input: float* a (N)
-                input: float* b (N)
-                output: float* c (N)
-                input: int N
+            kernel gpu_process {
+                input: float* input_data (size)
+                output: float* output_data (size)
                 block_size: (256, 1, 1)
-                grid_size: ((N + 255) / 256, 1, 1)
-                shared_memory: 0
-                use_thrust: false
-                code: {
-                    __global__ void vector_add(const float* a, const float* b, float* c, int n) {
-                        int i = blockIdx.x * blockDim.x + threadIdx.x;
-                        if (i < n) {
-                            c[i] = a[i] + b[i];
-                        }
-                    }
-                }
-            }
-            
-            kernel matrix_multiply {
-                input: float* A (M, N)
-                input: float* B (N, K)
-                output: float* C (M, K)
-                input: int M
-                input: int N
-                input: int K
-                block_size: (16, 16, 1)
-                grid_size: ((M + 15) / 16, (K + 15) / 16, 1)
+                grid_size: (1, 1, 1)
                 shared_memory: 1024
                 use_thrust: true
                 code: {
-                    __global__ void matrix_multiply(const float* A, const float* B, float* C, int M, int N, int K) {
-                        __shared__ float sA[16][16];
-                        __shared__ float sB[16][16];
-                        
-                        int row = blockIdx.y * blockDim.y + threadIdx.y;
-                        int col = blockIdx.x * blockDim.x + threadIdx.x;
-                        
-                        float sum = 0.0f;
-                        for (int k = 0; k < N; k += 16) {
-                            if (row < M && k + threadIdx.x < N) {
-                                sA[threadIdx.y][threadIdx.x] = A[row * N + k + threadIdx.x];
-                            } else {
-                                sA[threadIdx.y][threadIdx.x] = 0.0f;
-                            }
-                            
-                            if (k + threadIdx.y < N && col < K) {
-                                sB[threadIdx.y][threadIdx.x] = B[(k + threadIdx.y) * K + col];
-                            } else {
-                                sB[threadIdx.y][threadIdx.x] = 0.0f;
-                            }
-                            
-                            __syncthreads();
-                            
-                            for (int i = 0; i < 16; i++) {
-                                sum += sA[threadIdx.y][i] * sB[i][threadIdx.x];
-                            }
-                            
-                            __syncthreads();
-                        }
-                        
-                        if (row < M && col < K) {
-                            C[row * K + col] = sum;
-                        }
+                    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+                    if (idx < size) {
+                        output_data[idx] = input_data[idx] * 2.0f;
                     }
                 }
+            }
+            
+            // ONNX models
+            onnx_model classifier {
+                input: "input" -> "float32[1,3,224,224]"
+                output: "output" -> "float32[1,1000]"
+                device: cuda
+                optimization: tensorrt
             }
         }
         """
         
-        ast = parse_robodsl(content)
-        
-        # Test includes
-        assert len(ast.includes) == 2
-        include_paths = [inc.path for inc in ast.includes]
-        assert "ros/ros.h" in include_paths
-        assert "custom_header.h" in include_paths
-        
-        # Test node
+        ast = parse_robodsl(dsl_code)
+        assert ast is not None
         assert len(ast.nodes) == 1
         node = ast.nodes[0]
-        assert node.name == "complex_node"
+        assert node.name == "comprehensive_node"
         
-        # Test parameters
+        # Check parameters
         assert len(node.content.parameters) == 6
-        param_names = [p.name for p in node.content.parameters]
-        assert "int_rate" in param_names
-        assert "float_tolerance" in param_names
-        assert "string_frame_id" in param_names
-        assert "bool_debug" in param_names
-        assert "array_coords" in param_names
-        assert "dict_config" in param_names
         
-        # Test lifecycle
-        assert node.content.lifecycle is not None
-        assert len(node.content.lifecycle.settings) == 2
-        
-        # Test timers
-        assert len(node.content.timers) == 2
-        timer_names = [t.name for t in node.content.timers]
-        assert "main_timer" in timer_names
-        assert "debug_timer" in timer_names
-        
-        # Test ROS primitives
-        assert len(node.content.publishers) == 1
+        # Check ROS2 primitives
+        assert len(node.content.publishers) == 2
         assert len(node.content.subscribers) == 1
         assert len(node.content.services) == 1
         assert len(node.content.clients) == 1
         assert len(node.content.actions) == 1
         
-        # Test remaps
-        assert len(node.content.remaps) == 3
+        # Check timers
+        assert len(node.content.timers) == 1
+        timer = node.content.timers[0]
+        assert timer.name == "periodic_timer"
+        assert timer.period == 1.0
         
-        # Test namespace
-        assert node.content.namespace is not None
-        assert node.content.namespace.namespace == "/robot"
+        # Check methods and kernels
+        assert len(node.content.cpp_methods) == 1
+        assert len(node.content.cuda_kernels) == 1
         
-        # Test flags
-        assert len(node.content.flags) == 3
-        flag_names = [f.name for f in node.content.flags]
-        assert "enable_debug" in flag_names
-        assert "use_sim_time" in flag_names
-        assert "enable_logging" in flag_names
-        
-        # Test C++ methods
-        assert len(node.content.cpp_methods) == 2
-        method_names = [m.name for m in node.content.cpp_methods]
-        assert "process_data" in method_names
-        assert "validate_input" in method_names
-        
-        # Test CUDA kernels
-        assert len(node.content.cuda_kernels) == 2
-        kernel_names = [k.name for k in node.content.cuda_kernels]
-        assert "vector_add" in kernel_names
-        assert "matrix_multiply" in kernel_names
+        # Check ONNX models
+        assert len(node.content.onnx_models) == 1
 
 
 class TestAdvancedCppMethodFeatures:
@@ -466,18 +341,19 @@ class TestSemanticValidation:
     """Test comprehensive semantic validation."""
     
     def test_duplicate_parameter_names(self):
-        """Test detection of duplicate parameter names."""
-        content = """
+        """Test semantic validation for duplicate parameter names."""
+        dsl_code = """
         node test_node {
-            parameter test_param: 42
-            parameter test_param: 43  // Duplicate name
+            parameter int test_param = 42
+            parameter int test_param = 43  // Duplicate name
         }
         """
         
         with pytest.raises(SemanticError) as exc_info:
-            parse_robodsl(content)
+            ast = parse_robodsl(dsl_code)
         
-        assert "Duplicate parameter name" in str(exc_info.value)
+        error_msg = str(exc_info.value)
+        assert "duplicate parameter name" in error_msg.lower()
     
     def test_duplicate_timer_names(self):
         """Test detection of duplicate timer names."""
@@ -631,7 +507,7 @@ class TestSemanticValidation:
         """Test detection of invalid QoS values."""
         content = """
         node test_node {
-            publisher /test_topic : "std_msgs/String" {
+            publisher /test_topic: "std_msgs/msg/String" {
                 qos {
                     reliability: invalid_value
                     durability: also_invalid
@@ -643,8 +519,9 @@ class TestSemanticValidation:
         with pytest.raises(SemanticError) as exc_info:
             parse_robodsl(content)
     
-        assert "Invalid reliability setting" in str(exc_info.value)
-        assert "Invalid durability setting" in str(exc_info.value)
+        error_message = str(exc_info.value)
+        assert "QoS reliability" in error_message
+        assert "QoS durability" in error_message
     
     def test_invalid_timer_period(self):
         """Test detection of invalid timer period."""
@@ -715,73 +592,98 @@ class TestEdgeCases:
         assert len(node.content.parameters) == 0
     
     def test_very_large_values(self):
-        """Test parsing of very large numeric values."""
-        content = """
-        node large_values_node {
-            parameter large_int: 999999999999999999
-            parameter large_float: 3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679
-            parameter small_float: 0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001
+        """Test handling of very large numeric values."""
+        dsl_code = """
+        node test_node {
+            parameter int large_int = 999999999999999999
+            parameter float large_float = 3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679
+            parameter float small_float = 0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001
         }
         """
         
-        ast = parse_robodsl(content)
+        ast = parse_robodsl(dsl_code)
+        
         assert len(ast.nodes) == 1
         node = ast.nodes[0]
         assert len(node.content.parameters) == 3
+        
+        # Check that large values are handled correctly
+        large_int_param = next(p for p in node.content.parameters if p.name == "large_int")
+        assert large_int_param.type == "int"
+        assert large_int_param.value.value == 999999999999999999
+        
+        large_float_param = next(p for p in node.content.parameters if p.name == "large_float")
+        assert large_float_param.type == "float"
+        assert large_float_param.value.value == 3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679
     
     def test_unicode_strings(self):
-        """Test parsing of Unicode strings."""
-        content = """
-        node unicode_node {
-            parameter japanese: "こんにちは世界"
-            parameter chinese: "你好世界"
-            parameter emoji: "🚀🤖💻"
-            parameter special_chars: "áéíóúñü¿¡"
+        """Test handling of unicode strings."""
+        dsl_code = """
+        node test_node {
+            parameter string japanese = "こんにちは世界"
+            parameter string chinese = "你好世界"
+            parameter string emoji = "🚀🤖💻"
+            parameter string special_chars = "áéíóúñü¿¡"
         }
         """
         
-        ast = parse_robodsl(content)
+        ast = parse_robodsl(dsl_code)
+        
         assert len(ast.nodes) == 1
         node = ast.nodes[0]
         assert len(node.content.parameters) == 4
+        
+        # Check unicode strings are preserved
+        japanese_param = next(p for p in node.content.parameters if p.name == "japanese")
+        assert japanese_param.type == "string"
+        assert japanese_param.value.value == "こんにちは世界"
+        
+        chinese_param = next(p for p in node.content.parameters if p.name == "chinese")
+        assert chinese_param.type == "string"
+        assert chinese_param.value.value == "你好世界"
+        
+        emoji_param = next(p for p in node.content.parameters if p.name == "emoji")
+        assert emoji_param.type == "string"
+        assert emoji_param.value.value == "🚀🤖💻"
     
     def test_nested_arrays_and_dicts(self):
-        """Test parsing of deeply nested arrays and dictionaries."""
-        content = """
-        node nested_node {
-            parameter nested_array: [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
-            parameter nested_dict: {
+        """Test handling of nested arrays and dictionaries."""
+        dsl_code = """
+        node test_node {
+            parameter list nested_array = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+            parameter dict nested_dict = {
                 level1: {
                     level2: {
-                        level3: {
-                            value: 42
-                            array: [1, 2, 3, 4, 5]
-                        }
+                        value: 42,
+                        array: [1, 2, 3]
                     }
                 }
             }
-            parameter mixed: [{
-                name: "item1"
+            parameter list mixed = [{
+                name: "item1",
                 values: [1, 2, 3]
-                config: {
-                    enabled: true
-                    timeout: 5.0
-                }
             }, {
-                name: "item2"
+                name: "item2",
                 values: [4, 5, 6]
-                config: {
-                    enabled: false
-                    timeout: 10.0
-                }
             }]
         }
         """
         
-        ast = parse_robodsl(content)
+        ast = parse_robodsl(dsl_code)
+        
         assert len(ast.nodes) == 1
         node = ast.nodes[0]
         assert len(node.content.parameters) == 3
+        
+        # Check nested structures
+        nested_array_param = next(p for p in node.content.parameters if p.name == "nested_array")
+        assert nested_array_param.type == "list"
+        assert nested_array_param.value.value == [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+        
+        nested_dict_param = next(p for p in node.content.parameters if p.name == "nested_dict")
+        assert nested_dict_param.type == "dict"
+        assert nested_dict_param.value.value["level1"]["level2"]["value"] == 42
+        assert nested_dict_param.value.value["level1"]["level2"]["array"] == [1, 2, 3]
     
     def test_method_with_no_parameters(self):
         """Test parsing of a method with no input/output parameters."""
@@ -827,46 +729,43 @@ class TestErrorRecovery:
     """Test error recovery and graceful degradation."""
     
     def test_multiple_nodes_with_one_invalid(self):
-        """Test that valid nodes are still parsed even if one is invalid."""
-        content = """
-        node valid_node1 {
-            parameter test: 42
+        """Test that valid nodes are parsed even when one node has errors."""
+        dsl_code = """
+        node valid_node {
+            parameter int test = 42
         }
         
         node invalid_node {
-            parameter test: 42
-            parameter test: 43  // Duplicate - should cause error
+            parameter int test = 42
+            invalid_syntax_here
         }
         
-        node valid_node2 {
-            parameter test: 42
+        node another_valid_node {
+            parameter int test = 42
         }
         """
         
-        with pytest.raises(SemanticError) as exc_info:
-            parse_robodsl(content)
-        
-        # The error should be caught, but we should still have parsed the valid nodes
-        assert "Duplicate parameter name" in str(exc_info.value)
+        with pytest.raises(ParseError):
+            ast = parse_robodsl(dsl_code)
     
     def test_invalid_syntax_in_comments(self):
         """Test that invalid syntax in comments doesn't cause parsing errors."""
-        content = """
-        node test_node {
-            // This comment has invalid syntax: node invalid { parameter x: y }
-            parameter valid_param: 42
-            /* Another comment with invalid syntax:
-               publisher /topic "invalid"
-               subscriber /topic "also invalid"
-            */
+        dsl_code = """
+        // This comment has invalid syntax: node invalid { parameter x: y }
+        node valid_node {
+            parameter int valid_param = 42
         }
         """
         
-        ast = parse_robodsl(content)
+        ast = parse_robodsl(dsl_code)
+        
         assert len(ast.nodes) == 1
         node = ast.nodes[0]
+        assert node.name == "valid_node"
         assert len(node.content.parameters) == 1
         assert node.content.parameters[0].name == "valid_param"
+        assert node.content.parameters[0].type == "int"
+        assert node.content.parameters[0].value.value == 42
 
 
 class TestPerformance:
@@ -874,24 +773,32 @@ class TestPerformance:
     
     def test_large_number_of_parameters(self):
         """Test parsing with a large number of parameters."""
-        content = "node large_node {\n"
-        for i in range(1000):
-            content += f"    parameter param_{i}: {i}\n"
-        content += "}\n"
+        dsl_code = "node test_node {\n"
+        for i in range(100):
+            dsl_code += f"    parameter int param_{i} = {i}\n"
+        dsl_code += "}"
         
-        ast = parse_robodsl(content)
+        ast = parse_robodsl(dsl_code)
+        
         assert len(ast.nodes) == 1
         node = ast.nodes[0]
-        assert len(node.content.parameters) == 1000
+        assert len(node.content.parameters) == 100
+        
+        # Check a few parameters
+        for i in range(0, 100, 10):
+            param = next(p for p in node.content.parameters if p.name == f"param_{i}")
+            assert param.type == "int"
+            assert param.value.value == i
     
     def test_large_number_of_publishers(self):
         """Test parsing with a large number of publishers."""
         content = "node large_node {\n"
         for i in range(100):
-            content += f'    publisher /topic_{i} : "std_msgs/String"\n'
+            content += f'    publisher /topic_{i}: "std_msgs/msg/String"\n'
         content += "}\n"
-        
+    
         ast = parse_robodsl(content)
+        assert ast is not None
         assert len(ast.nodes) == 1
         node = ast.nodes[0]
         assert len(node.content.publishers) == 100

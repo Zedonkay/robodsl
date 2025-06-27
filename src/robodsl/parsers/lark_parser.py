@@ -100,6 +100,50 @@ class RoboDSLParser:
         
         return self.parse(content)
 
+    def parse_with_issues(self, content: str):
+        """Parse RoboDSL content and return (ast, issues). Issues is a list of dicts with keys: level, message, rule_id."""
+        issues = []
+        ast = None
+        try:
+            # Preprocess content to remove comments
+            content = re.sub(r'//.*$', '', content, flags=re.MULTILINE)
+            content = re.sub(r'/\*[\s\S]*?\*/', '', content)
+            # Parse with Lark
+            parse_tree = self.parser.parse(content)
+            # Build AST
+            ast = self.ast_builder.build(parse_tree)
+            # Perform semantic analysis
+            if not self.semantic_analyzer.analyze(ast):
+                errors = self.semantic_analyzer.get_errors()
+                warnings = self.semantic_analyzer.get_warnings()
+                for warning in warnings:
+                    issues.append({
+                        'level': 'warning',
+                        'message': warning,
+                        'rule_id': 'semantic_warning'
+                    })
+                for error in errors:
+                    issues.append({
+                        'level': 'error',
+                        'message': error,
+                        'rule_id': 'semantic_error'
+                    })
+        except ParseError as e:
+            issues.append({
+                'level': 'error',
+                'message': f'Parse error: {str(e)}',
+                'rule_id': 'parse_error'
+            })
+            return None, issues
+        except Exception as e:
+            issues.append({
+                'level': 'error',
+                'message': f'Parse error: {str(e)}',
+                'rule_id': 'parse_error'
+            })
+            return None, issues
+        return ast, issues
+
 
 # Global parser instance
 _parser = None

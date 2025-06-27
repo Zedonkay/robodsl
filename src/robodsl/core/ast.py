@@ -33,141 +33,10 @@ class QoSLiveliness(Enum):
     MANUAL_BY_TOPIC = "manual_by_topic"
 
 
-@dataclass
-class QoSConfig:
-    """Quality of Service configuration."""
-    reliability: Optional[QoSReliability] = None
-    durability: Optional[QoSDurability] = None
-    history: Optional[QoSHistory] = None
-    depth: int = 10
-    deadline: Optional[int] = None
-    lifespan: Optional[int] = None
-    liveliness: Optional[QoSLiveliness] = None
-    liveliness_lease_duration: Optional[int] = None
-
-
-@dataclass
-class PublisherConfig:
-    """Publisher configuration."""
-    topic: str
-    msg_type: str
-    qos: Optional[QoSConfig] = None
-    queue_size: int = 10
-
-
-@dataclass
-class SubscriberConfig:
-    """Subscriber configuration."""
-    topic: str
-    msg_type: str
-    qos: Optional[QoSConfig] = None
-    queue_size: int = 10
-
-
-@dataclass
-class ServiceConfig:
-    """Service configuration."""
-    service: str
-    srv_type: str
-    qos: Optional[QoSConfig] = None
-
-
-@dataclass
-class ActionConfig:
-    """Action configuration."""
-    name: str
-    action_type: str
-    qos: Optional[QoSConfig] = None
-
-
-@dataclass
-class ParameterConfig:
-    """Parameter configuration."""
-    name: str
-    type: str
-    default: Any
-    description: str = ""
-    read_only: bool = False
-
-
-@dataclass
-class LifecycleConfig:
-    """Lifecycle configuration."""
-    enabled: bool = False
-    autostart: bool = True
-    cleanup_on_shutdown: bool = True
-
-
-@dataclass
-class TimerConfig:
-    """Timer configuration."""
-    period: float
-    callback: str
-    oneshot: bool = False
-    autostart: bool = True
-
-
-@dataclass
-class RemapRule:
-    """Topic remapping rule."""
-    from_topic: str
-    to_topic: str
-
-
-@dataclass
-class NodeConfig:
-    """Node configuration."""
-    name: str
-    publishers: List[PublisherConfig] = field(default_factory=list)
-    subscribers: List[SubscriberConfig] = field(default_factory=list)
-    services: List[ServiceConfig] = field(default_factory=list)
-    actions: List[ActionConfig] = field(default_factory=list)
-    parameters: List[ParameterConfig] = field(default_factory=list)
-    lifecycle: LifecycleConfig = field(default_factory=LifecycleConfig)
-    timers: List[TimerConfig] = field(default_factory=list)
-    namespace: str = ""
-    remap: List[RemapRule] = field(default_factory=list)
-    parameter_callbacks: bool = False
-
-
 class KernelParameterDirection(Enum):
     IN = "in"
     OUT = "out"
     INOUT = "inout"
-
-
-@dataclass
-class KernelParameter:
-    """CUDA kernel parameter."""
-    name: str
-    type: str
-    direction: KernelParameterDirection
-    is_const: bool = False
-    is_pointer: bool = False
-    size_expr: Optional[str] = None
-
-
-@dataclass
-class CudaKernelConfig:
-    """CUDA kernel configuration."""
-    name: str
-    parameters: List[KernelParameter] = field(default_factory=list)
-    block_size: tuple = (256, 1, 1)
-    grid_size: Optional[tuple] = None
-    shared_mem_bytes: int = 0
-    use_thrust: bool = False
-    code: str = ""
-    includes: List[str] = field(default_factory=list)
-    defines: Dict[str, str] = field(default_factory=dict)
-
-
-@dataclass
-class RoboDSLConfig:
-    """Top-level RoboDSL configuration."""
-    project_name: str = "robodsl_project"
-    nodes: List[NodeConfig] = field(default_factory=list)
-    cuda_kernels: List[CudaKernelConfig] = field(default_factory=list)
-    includes: set[str] = field(default_factory=set)
 
 
 # AST Node classes for the parse tree
@@ -194,6 +63,7 @@ class ValueNode(ASTNode):
 class ParameterNode(ASTNode):
     """Parameter node."""
     name: str
+    type: str
     value: ValueNode
 
 
@@ -416,6 +286,7 @@ class RoboDSLAST(ASTNode):
     nodes: List[NodeNode] = field(default_factory=list)
     cuda_kernels: Optional[CudaKernelsNode] = None  # Standalone kernels outside nodes 
     onnx_models: List['OnnxModelNode'] = field(default_factory=list)  # ONNX models
+    pipelines: List['PipelineNode'] = field(default_factory=list)  # Pipeline definitions
 
 
 # ONNX Model AST Nodes (Phase 3)
@@ -459,3 +330,78 @@ class OnnxModelNode(ASTNode):
     """ONNX model node."""
     name: str
     config: ModelConfigNode 
+
+
+# Pipeline AST Nodes (Phase 4)
+@dataclass
+class StageInputNode(ASTNode):
+    """Pipeline stage input node."""
+    input_name: str
+
+
+@dataclass
+class StageOutputNode(ASTNode):
+    """Pipeline stage output node."""
+    output_name: str
+
+
+@dataclass
+class StageMethodNode(ASTNode):
+    """Pipeline stage method node."""
+    method_name: str
+
+
+@dataclass
+class StageModelNode(ASTNode):
+    """Pipeline stage model node."""
+    model_name: str
+
+
+@dataclass
+class StageTopicNode(ASTNode):
+    """Pipeline stage topic node."""
+    topic_path: str
+
+
+@dataclass
+class StageCudaKernelNode(ASTNode):
+    """Pipeline stage CUDA kernel node."""
+    kernel_name: str
+
+
+@dataclass
+class StageOnnxModelNode(ASTNode):
+    """Pipeline stage ONNX model node."""
+    model_name: str
+
+
+@dataclass
+class StageContentNode(ASTNode):
+    """Pipeline stage content node."""
+    inputs: List[StageInputNode] = field(default_factory=list)
+    outputs: List[StageOutputNode] = field(default_factory=list)
+    methods: List[StageMethodNode] = field(default_factory=list)
+    models: List[StageModelNode] = field(default_factory=list)
+    topics: List[StageTopicNode] = field(default_factory=list)
+    cuda_kernels: List[StageCudaKernelNode] = field(default_factory=list)
+    onnx_models: List[StageOnnxModelNode] = field(default_factory=list)
+
+
+@dataclass
+class StageNode(ASTNode):
+    """Pipeline stage node."""
+    name: str
+    content: StageContentNode
+
+
+@dataclass
+class PipelineContentNode(ASTNode):
+    """Pipeline content node."""
+    stages: List[StageNode] = field(default_factory=list)
+
+
+@dataclass
+class PipelineNode(ASTNode):
+    """Pipeline definition node."""
+    name: str
+    content: PipelineContentNode 

@@ -14,6 +14,7 @@ from .cmake_generator import CMakeGenerator
 from .launch_generator import LaunchGenerator
 from .package_generator import PackageGenerator
 from .onnx_integration import OnnxIntegrationGenerator
+from .pipeline_generator import PipelineGenerator
 from ..core.ast import RoboDSLAST
 
 
@@ -37,6 +38,7 @@ class MainGenerator(BaseGenerator):
         self.launch_generator = LaunchGenerator(output_dir, template_dirs)
         self.package_generator = PackageGenerator(output_dir, template_dirs)
         self.onnx_generator = OnnxIntegrationGenerator(output_dir)
+        self.pipeline_generator = PipelineGenerator(output_dir)
     
     def generate(self, ast: RoboDSLAST) -> List[Path]:
         """Generate all files from the AST.
@@ -91,8 +93,36 @@ class MainGenerator(BaseGenerator):
         all_generated_files.extend(onnx_files)
         print(f"Generated {len(onnx_files)} ONNX integration files")
         
+        # Generate pipeline files (including per-stage CUDA/ONNX integration)
+        print("Generating pipeline files...")
+        pipeline_files = []
+        if hasattr(ast, 'pipelines') and ast.pipelines:
+            for pipeline in ast.pipelines:
+                # Use the project name if available, else fallback
+                project_name = getattr(ast, 'project_name', 'robodsl_project')
+                print(f"DEBUG: Processing pipeline '{pipeline.name}' with project_name '{project_name}'")
+                for idx, stage in enumerate(pipeline.content.stages):
+                    print(f"DEBUG: Processing stage '{stage.name}' (index {idx})")
+                    files = self.pipeline_generator._generate_stage_node(stage, pipeline.name, idx, project_name)
+                    print(f"DEBUG: Stage '{stage.name}' generated files: {list(files.keys())}")
+                    # Write files to disk and collect their paths
+                    for rel_path, content in files.items():
+                        abs_path = Path(self.output_dir) / rel_path
+                        abs_path.parent.mkdir(parents=True, exist_ok=True)
+                        abs_path.write_text(content)
+                        pipeline_files.append(abs_path)
+        all_generated_files.extend(pipeline_files)
+        print(f"Generated {len(pipeline_files)} pipeline files")
+        
         # Generate README
-        readme_path = self._generate_readme(ast)
+        print("Generating README.md...")
+        try:
+            readme_content = self.render_template('README.md.jinja2', self._prepare_readme_context(ast))
+        except Exception as e:
+            print(f"Template error for README.md: {e}")
+            readme_content = self._generate_fallback_readme(ast)
+        readme_path = Path(self.output_dir) / 'README.md'
+        readme_path.write_text(readme_content)
         all_generated_files.append(readme_path)
         print("Generated README.md")
         
@@ -287,5 +317,26 @@ Apache-2.0
                     
                 except Exception as e:
                     print(f"Error generating ONNX integration for model {model.name} in node {node.name}: {e}")
+        
+        return generated_files 
+
+    def _generate_pipelines(self, ast: RoboDSLAST) -> List[Path]:
+        """Generate pipeline files for all pipelines."""
+        generated_files = []
+        
+        for pipeline in ast.pipelines:
+            try:
+                # Generate pipeline files
+                pipeline_files = self.pipeline_generator.generate(pipeline, "robodsl_project")
+                
+                # Write files to disk
+                for file_path, content in pipeline_files.items():
+                    path = Path(file_path)
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text(content)
+                    generated_files.append(path)
+                
+            except Exception as e:
+                print(f"Error generating pipeline {pipeline.name}: {e}")
         
         return generated_files 

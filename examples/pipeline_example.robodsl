@@ -1,0 +1,75 @@
+# Simple Pipeline Example
+# This demonstrates the basic pipeline functionality
+
+# Include necessary headers
+include <rclcpp/rclcpp.hpp>
+include <std_msgs/msg/string.hpp>
+include <sensor_msgs/msg/image.hpp>
+
+# Define a simple image processing pipeline
+pipeline image_processing {
+    # Stage 1: Image acquisition
+    stage acquisition {
+        input: "camera_feed"
+        output: "raw_image"
+        method: "capture_image"
+        topic: "/camera/image_raw"
+    }
+    
+    # Stage 2: Image preprocessing
+    stage preprocessing {
+        input: "raw_image"
+        output: "processed_image"
+        method: "preprocess"
+        method: "normalize"
+        topic: "/image_processing/preprocessed"
+    }
+    
+    # Stage 3: Object detection
+    stage detection {
+        input: "processed_image"
+        output: "detections"
+        method: "detect_objects"
+        model: "yolo_model"
+        topic: "/detection/results"
+    }
+    
+    # Stage 4: Result visualization
+    stage visualization {
+        input: "detections"
+        output: "annotated_image"
+        method: "draw_boxes"
+        method: "add_labels"
+        topic: "/visualization/output"
+    }
+}
+
+# Define a simple data processing pipeline
+pipeline data_processing {
+    # Stage 1: Data collection
+    stage collection {
+        input: "sensor_data"
+        output: "raw_data"
+        method: "collect_data"
+        topic: "/sensors/data"
+    }
+    
+    # Stage 2: Data filtering
+    stage filtering {
+        input: "raw_data"
+        output: "filtered_data"
+        method: "filter_noise"
+        method: "remove_outliers"
+        topic: "/data/filtered"
+    }
+    
+    # Stage 3: Data analysis
+    stage analysis {
+        input: "filtered_data"
+        output: "analysis_results"
+        method: "analyze_trends"
+        method: "calculate_statistics"
+        model: "ml_model"
+        topic: "/analysis/results"
+    }
+} 
