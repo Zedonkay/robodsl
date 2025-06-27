@@ -95,7 +95,7 @@ use_thrust: "use_thrust" ":" BOOLEAN
 kernel_input_param: "input" ":" cpp_type NAME kernel_param_size?
 kernel_output_param: "output" ":" cpp_type NAME kernel_param_size?
 cpp_type: cpp_type_name
-cpp_type_name: /[a-zA-Z_][a-zA-Z0-9_]*(\s+[a-zA-Z_][a-zA-Z0-9_]*)*(\:\:[a-zA-Z_][a-zA-Z0-9_]*(\s+[a-zA-Z_][a-zA-Z0-9_]*)*)*(\<[^>]*\>)?\**/
+cpp_type_name: /[a-zA-Z_][a-zA-Z0-9_]*(\**|\:\:[a-zA-Z_][a-zA-Z0-9_]*(\**)?)*(\<[^>]*\>)?/
 kernel_param_size: LPAR kernel_param_size_list RPAR
 kernel_param_size_list: kernel_param_size_item (COMMA kernel_param_size_item)*
 kernel_param_size_item: SIGNED_NUMBER | NAME | STRING

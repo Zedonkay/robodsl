@@ -55,11 +55,13 @@ class OnnxIntegrationGenerator:
         # Prepare template variables
         device_type = model.config.device.device if model.config.device else 'cpu'
         optimizations = model.config.optimizations if model.config.optimizations else []
+        optimization_names = [opt.optimization for opt in optimizations]
         
         return template.render(
             node_name=node_name,
             device_type=device_type,
-            optimizations=optimizations
+            optimizations=optimizations,
+            optimization_names=optimization_names
         )
     
     def generate_cmake_integration(self, model: OnnxModelNode, node_name: str) -> str:
@@ -204,6 +206,125 @@ int main(int argc, char** argv) {
     rclcpp::shutdown();
     return 0;
 }
+"""
+        
+        template = Template(template_str)
+        return template.render(
+            node_name=node_name,
+            model=model
+        )
+
+    def generate_python_integration(self, model: OnnxModelNode, node_name: str) -> str:
+        """Generate Python integration code for ONNX model."""
+        template_str = """
+# Python ONNX Integration for {{ node_name }}
+# This provides Python bindings for the {{ model.name }} ONNX model
+
+import numpy as np
+import onnxruntime as ort
+from typing import List, Optional, Tuple
+import logging
+
+class {{ node_name }}OnnxPython:
+    \"\"\"Python wrapper for {{ node_name }} ONNX model.\"\"\"
+    
+    def __init__(self, model_path: str, device: str = "cpu"):
+        self.model_path = model_path
+        self.device = device
+        self.session = None
+        self.logger = logging.getLogger(__name__)
+        
+        # Initialize ONNX Runtime session
+        self._initialize_session()
+    
+    def _initialize_session(self):
+        \"\"\"Initialize ONNX Runtime session with appropriate providers.\"\"\"
+        try:
+            providers = []
+            if self.device == "cuda":
+                providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
+            else:
+                providers = ['CPUExecutionProvider']
+            
+            self.session = ort.InferenceSession(self.model_path, providers=providers)
+            self.logger.info(f"ONNX model loaded successfully: {{ model.name }}")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to load ONNX model: {e}")
+            raise
+    
+    def preprocess_input(self, input_data: np.ndarray) -> np.ndarray:
+        \"\"\"Preprocess input data for the model.\"\"\"
+        # Add your preprocessing logic here
+        # Example: normalize, resize, convert format, etc.
+        return input_data
+    
+    def postprocess_output(self, output_data: np.ndarray) -> np.ndarray:
+        \"\"\"Postprocess output data from the model.\"\"\"
+        # Add your postprocessing logic here
+        # Example: apply softmax, convert to probabilities, etc.
+        return output_data
+    
+    def run_inference(self, input_data: np.ndarray) -> np.ndarray:
+        \"\"\"Run inference on the ONNX model.\"\"\"
+        try:
+            # Preprocess input
+            processed_input = self.preprocess_input(input_data)
+            
+            # Get input/output names
+            input_name = self.session.get_inputs()[0].name
+            output_name = self.session.get_outputs()[0].name
+            
+            # Run inference
+            outputs = self.session.run([output_name], {input_name: processed_input})
+            
+            # Postprocess output
+            result = self.postprocess_output(outputs[0])
+            
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"Inference failed: {e}")
+            raise
+    
+    def get_model_info(self) -> dict:
+        \"\"\"Get information about the model inputs and outputs.\"\"\"
+        info = {
+            "model_name": "{{ model.name }}",
+            "device": self.device,
+            "inputs": [],
+            "outputs": []
+        }
+        
+        for input_info in self.session.get_inputs():
+            info["inputs"].append({
+                "name": input_info.name,
+                "shape": input_info.shape,
+                "type": str(input_info.type)
+            })
+        
+        for output_info in self.session.get_outputs():
+            info["outputs"].append({
+                "name": output_info.name,
+                "shape": output_info.shape,
+                "type": str(output_info.type)
+            })
+        
+        return info
+
+# Example usage
+if __name__ == "__main__":
+    # Initialize the model
+    model = {{ node_name }}OnnxPython("{{ model.name }}.onnx", device="cpu")
+    
+    # Get model information
+    info = model.get_model_info()
+    print(f"Model info: {info}")
+    
+    # Example inference
+    # input_data = np.random.random((1, 3, 224, 224)).astype(np.float32)
+    # result = model.run_inference(input_data)
+    # print(f"Inference result shape: {result.shape}")
 """
         
         template = Template(template_str)
