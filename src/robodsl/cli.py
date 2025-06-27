@@ -496,8 +496,8 @@ def generate(input_file: Path, output_dir: Optional[Path], force: bool) -> None:
         config = parse_robodsl(input_file.read_text())
         
         # Generate code
-        generator = CodeGenerator(config, output_dir=output_dir)
-        generated_files = generator.generate()
+        generator = CodeGenerator(output_dir=output_dir)
+        generated_files = generator.generate(config)
         
         click.echo(f"Generated {len(generated_files)} files in {output_dir}:")
         for file_path in generated_files:

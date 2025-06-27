@@ -1,6 +1,11 @@
 // RoboDSL Grammar - Phase 1.5+ (Enhanced)
 
-start: include_stmt* (node_def | cuda_kernels_block)*
+%ignore _WS
+%ignore COMMENT   // Officially recognize // as a comment
+%ignore BLOCK_COMMENT
+%ignore _NL
+
+start: include_stmt* (node_def | cuda_kernels_block | onnx_model)*
 
 // Include statements
 include_stmt: "include" ("<" include_path ">" | STRING)
@@ -8,7 +13,18 @@ include_path: STRING | NAME ("/" NAME)* ("." NAME)?
 
 // Node definitions
 node_def: "node" NAME LBRACE node_content RBRACE
-node_content: (parameter | lifecycle | timer | remap | namespace | ros_primitive | flag | cpp_method | kernel_def)*
+node_content: (parameter | lifecycle | timer | remap | namespace | ros_primitive | flag | cpp_method | kernel_def | onnx_model_ref)*
+
+// ONNX Model definitions (Phase 3)
+onnx_model: "onnx_model" STRING LBRACE model_config RBRACE
+onnx_model_ref: "onnx_model" STRING LBRACE model_config RBRACE
+model_config: (input_def | output_def | device | optimization)*
+input_def: "input" ":" STRING "->" STRING
+output_def: "output" ":" STRING "->" STRING
+device: "device" ":" device_type
+device_type: NAME
+optimization: "optimization" ":" optimization_type
+optimization_type: NAME
 
 // Parameters
 parameter: "parameter" NAME ":" value
@@ -70,26 +86,26 @@ method_param_size_item: SIGNED_NUMBER | NAME | STRING | dotted_name
 // CUDA kernels block
 cuda_kernels_block: "cuda_kernels" LBRACE kernel_def* RBRACE
 kernel_def: "kernel" NAME LBRACE kernel_content RBRACE
-kernel_content: (block_size | grid_size | shared_memory | use_thrust | kernel_param | code_block)*
+kernel_content: (block_size | grid_size | shared_memory | use_thrust | kernel_input_param | kernel_output_param | code_block)*
 
 block_size: "block_size" ":" LPAR expr COMMA expr COMMA expr RPAR
 grid_size: "grid_size" ":" LPAR expr COMMA expr COMMA expr RPAR
 shared_memory: "shared_memory" ":" expr
 use_thrust: "use_thrust" ":" BOOLEAN
-kernel_param: "param" DIRECTION cpp_type NAME kernel_param_size?
-DIRECTION: "in" | "out" | "inout"
-cpp_type: cpp_type_name STAR?
-cpp_type_name: NAME ("::" NAME)* (LESSTHAN cpp_type_list MORETHAN)?
-cpp_type_list: cpp_type_name (COMMA cpp_type_name)*
+kernel_input_param: "input" ":" cpp_type NAME kernel_param_size?
+kernel_output_param: "output" ":" cpp_type NAME kernel_param_size?
+cpp_type: cpp_type_name
+cpp_type_name: /[a-zA-Z_][a-zA-Z0-9_]*(\s+[a-zA-Z_][a-zA-Z0-9_]*)*(\:\:[a-zA-Z_][a-zA-Z0-9_]*(\s+[a-zA-Z_][a-zA-Z0-9_]*)*)*(\<[^>]*\>)?\**/
 kernel_param_size: LPAR kernel_param_size_list RPAR
 kernel_param_size_list: kernel_param_size_item (COMMA kernel_param_size_item)*
 kernel_param_size_item: SIGNED_NUMBER | NAME | STRING
 
 dotted_name: NAME (DOT NAME | LPAR (dotted_name (COMMA dotted_name)*)? RPAR)+
 
-// Code blocks as quoted strings or raw blocks (triple quotes)
-code_block: "code" ":"? (STRING | RAW_STRING)
-RAW_STRING: /"""([\s\S]*?)"""/
+// Code blocks use C++/CUDA curly braces, not triple quotes or strings
+code_block: "code" ":"? balanced_braces
+balanced_braces: "{" balanced_content* "}"
+balanced_content: /[^{}]+/ | balanced_braces
 
 // Values
 value: primitive | array | nested_dict
@@ -128,6 +144,7 @@ SIGNED_NUMBER: /-?[0-9]+(\.[0-9]+)?/
 NAME: /[a-zA-Z_][a-zA-Z0-9_]*/
 STRING: /"([^"\\]|\\.)*"/
 BOOLEAN: "true" | "false"
+TYPE: /[a-zA-Z_][a-zA-Z0-9_]*(\[[0-9,]*\])?/
 
 // Block comments and line comments
 BLOCK_COMMENT: /\/\*[\s\S]*?\*\//
@@ -136,11 +153,6 @@ COMMENT: /\/\/[^\n]*/
 // Ignore whitespace and comments
 _NL: /(\r?\n)+\s*/
 _WS: /[ \t]+/
-
-%ignore _WS
-%ignore COMMENT
-%ignore BLOCK_COMMENT
-%ignore _NL
 
 // QoS configuration
 qos_config: "qos" LBRACE qos_setting* RBRACE

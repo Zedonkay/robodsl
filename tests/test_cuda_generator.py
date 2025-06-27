@@ -161,6 +161,57 @@ class TestCudaGenerator(unittest.TestCase):
         generated_files = self.generator.generate(empty_ast)
         self.assertEqual(len(generated_files), 0)
 
+    def test_new_kernel_syntax(self):
+        """Test the new input: and output: syntax for CUDA kernels."""
+        # Create a sample CUDA kernel AST with new syntax
+        kernel_content = KernelContentNode(
+            block_size=(256, 1, 1),
+            grid_size=(1, 1, 1),
+            shared_memory=0,
+            use_thrust=False,
+            parameters=[
+                KernelParamNode(
+                    direction=KernelParameterDirection.IN,
+                    param_type="float",
+                    param_name="input_data",
+                    size_expr=["size"]
+                ),
+                KernelParamNode(
+                    direction=KernelParameterDirection.OUT, 
+                    param_type="float",
+                    param_name="output_data",
+                    size_expr=["size"]
+                )
+            ]
+        )
+        
+        kernel = KernelNode(
+            name="test_new_syntax",
+            content=kernel_content
+        )
+        
+        # Create a complete AST
+        ast = RoboDSLAST()
+        ast.cuda_kernels = MagicMock()
+        ast.cuda_kernels.kernels = [kernel]
+        
+        # Generate files
+        generated_files = self.generator.generate(ast)
+        
+        # Check that files were generated
+        self.assertGreater(len(generated_files), 0)
+        
+        # Check that the generated files contain the correct parameter names
+        for file_path in generated_files:
+            if file_path.suffix in ['.cu', '.cuh', '.hpp']:
+                with open(file_path, 'r') as f:
+                    content = f.read()
+                    # Check that the parameter names are used correctly
+                    self.assertIn('input_data', content)
+                    self.assertIn('output_data', content)
+                    self.assertIn('d_input_data_', content)
+                    self.assertIn('d_output_data_', content)
+
     def tearDown(self):
         # Clean up test output directory
         if self.test_dir.exists():

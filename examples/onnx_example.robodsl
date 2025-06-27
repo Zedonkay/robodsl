@@ -1,0 +1,174 @@
+// ONNX Integration Example for RoboDSL Phase 3 (Pure C++/CUDA)
+
+// Include necessary headers
+include <rclcpp/rclcpp.hpp>
+include <sensor_msgs/msg/image.hpp>
+include <std_msgs/msg/float32_multi_array.hpp>
+
+// Define ROS2 node that uses ONNX models
+node image_classifier {
+    // ROS2 primitives
+    subscriber "/camera/image_raw": "sensor_msgs/msg/Image"
+    publisher "/classification/result": "std_msgs/msg/Float32MultiArray"
+    
+    // Parameters
+    parameter "model_path": "resnet50.onnx"
+    parameter "confidence_threshold": 0.5
+    
+    // Timer for periodic processing
+    timer process_timer: 0.1 {
+        autostart: true
+    }
+    
+    // ONNX model definition - belongs to this node
+    onnx_model "resnet50" {
+        input: "input" -> "float32[1,3,224,224]"
+        output: "output" -> "float32[1,1000]"
+        device: cuda
+        optimization: tensorrt
+    }
+    
+    // C++ method for image preprocessing (pure C++)
+    method preprocess_image {
+        input: cv::Mat input_image
+        output: std::vector<float> processed_data
+        code: {
+            // Resize image to 224x224
+            cv::Mat resized;
+            cv::resize(input_image, resized, cv::Size(224, 224));
+            
+            // Convert to float and normalize
+            cv::Mat float_img;
+            resized.convertTo(float_img, CV_32F, 1.0/255.0);
+            
+            // Convert BGR to RGB and transpose to NCHW format
+            std::vector<cv::Mat> channels(3);
+            cv::split(float_img, channels);
+            
+            // Normalize with ImageNet mean and std
+            std::vector<float> mean = {0.485, 0.456, 0.406};
+            std::vector<float> std = {0.229, 0.224, 0.225};
+            
+            std::vector<float> processed_data;
+            processed_data.reserve(3 * 224 * 224);
+            
+            for (int c = 0; c < 3; ++c) {
+                for (int h = 0; h < 224; ++h) {
+                    for (int w = 0; w < 224; ++w) {
+                        float pixel = channels[c].at<float>(h, w);
+                        processed_data.push_back((pixel - mean[c]) / std[c]);
+                    }
+                }
+            }
+        }
+    }
+    
+    // C++ method for post-processing classification results (pure C++)
+    method postprocess_results {
+        input: std::vector<float> raw_output
+        output: std::vector<float> probabilities
+        code: {
+            // Apply softmax to get probabilities (pure C++)
+            float max_val = *std::max_element(raw_output.begin(), raw_output.end());
+            float sum = 0.0f;
+            
+            std::vector<float> exp_values(raw_output.size());
+            for (size_t i = 0; i < raw_output.size(); ++i) {
+                exp_values[i] = std::exp(raw_output[i] - max_val);
+                sum += exp_values[i];
+            }
+            
+            probabilities.resize(raw_output.size());
+            for (size_t i = 0; i < raw_output.size(); ++i) {
+                probabilities[i] = exp_values[i] / sum;
+            }
+        }
+    }
+}
+
+// Another node with a different ONNX model
+node object_detector {
+    // ROS2 primitives
+    subscriber "/camera/image_raw": "sensor_msgs/msg/Image"
+    publisher "/detection/result": "vision_msgs/msg/Detection2DArray"
+    
+    // Parameters
+    parameter "model_path": "yolov5.onnx"
+    parameter "confidence_threshold": 0.25
+    
+    // ONNX model definition - belongs to this node
+    onnx_model "yolov5" {
+        input: "images" -> "float32[1,3,640,640]"
+        output: "output0" -> "float32[1,25200,85]"
+        device: cuda
+        optimization: tensorrt
+    }
+    
+    // C++ method for YOLO preprocessing
+    method preprocess_yolo {
+        input: cv::Mat input_image
+        output: std::vector<float> processed_data
+        code: {
+            // YOLO preprocessing (pure C++)
+            cv::Mat resized;
+            cv::resize(input_image, resized, cv::Size(640, 640));
+            
+            cv::Mat float_img;
+            resized.convertTo(float_img, CV_32F, 1.0/255.0);
+            
+            std::vector<cv::Mat> channels(3);
+            cv::split(float_img, channels);
+            
+            std::vector<float> processed_data;
+            processed_data.reserve(3 * 640 * 640);
+            
+            for (int c = 0; c < 3; ++c) {
+                for (int h = 0; h < 640; ++h) {
+                    for (int w = 0; w < 640; ++w) {
+                        processed_data.push_back(channels[c].at<float>(h, w));
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Standalone CUDA kernels for additional processing
+cuda_kernels {
+    kernel normalize_kernel {
+        param in float* input_data
+        param out float* output_data
+        param in int data_size
+        param in float mean
+        param in float std_dev
+        
+        block_size: (256, 1, 1)
+        use_thrust: false
+        
+        code: {
+            int idx = blockIdx.x * blockDim.x + threadIdx.x;
+            if (idx < data_size) {
+                output_data[idx] = (input_data[idx] - mean) / std_dev;
+            }
+        }
+    }
+    
+    kernel softmax_kernel {
+        param in float* input_data
+        param out float* output_data
+        param in int data_size
+        
+        block_size: (256, 1, 1)
+        use_thrust: true
+        
+        code: {
+            // CUDA kernel for softmax computation
+            int idx = blockIdx.x * blockDim.x + threadIdx.x;
+            if (idx < data_size) {
+                // This is a simplified version - in practice you'd use shared memory
+                // and multiple passes for proper softmax
+                output_data[idx] = __expf(input_data[idx]);
+            }
+        }
+    }
+} 

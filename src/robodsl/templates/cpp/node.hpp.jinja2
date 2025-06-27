@@ -130,16 +130,15 @@ public:
     // Individual CUDA kernel declarations
     {% for kernel in cuda_kernels %}
     /**
-     * @brief {{ kernel.description|default("Process data using CUDA kernel: " + kernel.name) }}
-     * @param input Input data for the kernel
-     * @param parameters Kernel parameters
-     * @return Processed output data
-     * @note This method provides a C++ interface to the {{ kernel.name }} CUDA kernel.
+     * @brief {{ kernel.description|default("Process data using CUDA kernel: " + kernel.kernel_name) }}
+     * @note This method provides a C++ interface to the {{ kernel.kernel_name }} CUDA kernel.
      * The actual CUDA kernel implementation should be provided in a .cu file.
      */
-    virtual std::vector<{{ kernel.output_type|default('float') }}> {{ kernel.name }}(
-        const std::vector<{{ kernel.input_type|default('float') }}>& input,
-        const {{ kernel.param_type|default('CudaParams') }}& parameters);
+    virtual void {{ kernel.kernel_name }}(
+        {%- for param in kernel.parameters -%}
+        {{ param.type }} {{ param.name }}{% if not loop.last %}, {% endif %}
+        {%- endfor -%}
+    );
     {% endfor %}
     {% endif %}
 
