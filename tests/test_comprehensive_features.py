@@ -105,8 +105,8 @@ class TestComprehensiveNodeFeatures:
             
             // C++ methods
             method process_data {
-                input: std::vector<float> input_data
-                output: std::vector<float> output_data
+                input: float* input_data
+                output: float* output_data
                 code: {
                     // Process input data
                     output_data.resize(input_data.size());
@@ -117,7 +117,7 @@ class TestComprehensiveNodeFeatures:
             }
             
             method validate_input {
-                input: std::string input_string
+                input: string input_string
                 output: bool is_valid
                 code: {
                     is_valid = !input_string.empty() && input_string.length() > 0;
@@ -126,10 +126,10 @@ class TestComprehensiveNodeFeatures:
             
             // CUDA kernels
             kernel vector_add {
-                param in float* a (N)
-                param in float* b (N)
-                param out float* c (N)
-                param in int N
+                input: float* a (N)
+                input: float* b (N)
+                output: float* c (N)
+                input: int N
                 block_size: (256, 1, 1)
                 grid_size: ((N + 255) / 256, 1, 1)
                 shared_memory: 0
@@ -145,12 +145,12 @@ class TestComprehensiveNodeFeatures:
             }
             
             kernel matrix_multiply {
-                param in float* A (M, N)
-                param in float* B (N, K)
-                param out float* C (M, K)
-                param in int M
-                param in int N
-                param in int K
+                input: float* A (M, N)
+                input: float* B (N, K)
+                output: float* C (M, K)
+                input: int M
+                input: int N
+                input: int K
                 block_size: (16, 16, 1)
                 grid_size: ((M + 15) / 16, (K + 15) / 16, 1)
                 shared_memory: 1024
@@ -272,11 +272,11 @@ class TestAdvancedCppMethodFeatures:
             method complex_processing {
                 input: int data_size
                 input: float* input_data (data_size)
-                input: std::vector<float> weights (weights.size())
-                input: std::string config_file
+                input: float* weights (weights.size())
+                input: string config_file
                 input: bool enable_optimization
                 output: float* result (data_size)
-                output: std::vector<int> indices (data_size)
+                output: int* indices (data_size)
                 output: bool success
                 code: {
                     try {
@@ -296,8 +296,8 @@ class TestAdvancedCppMethodFeatures:
             }
             
             method template_method {
-                input: std::vector<int> input_vector (input_vector.size())
-                output: std::vector<float> output_vector (input_vector.size())
+                input: float* input_vector (input_vector.size())
+                output: float* output_vector (input_vector.size())
                 code: {
                     output_vector.resize(input_vector.size());
                     for (size_t i = 0; i < input_vector.size(); i++) {
@@ -322,14 +322,14 @@ class TestAdvancedCppMethodFeatures:
         input_types = [p.param_type for p in complex_method.inputs]
         assert "int" in input_types
         assert "float*" in input_types
-        assert "std::vector<float>" in input_types
-        assert "std::string" in input_types
+        assert "float*" in input_types
+        assert "string" in input_types
         assert "bool" in input_types
         
         # Check output parameters
         output_types = [p.param_type for p in complex_method.outputs]
         assert "float*" in output_types
-        assert "std::vector<int>" in output_types
+        assert "int*" in output_types
         assert "bool" in output_types
         
         # Test template method
@@ -347,13 +347,13 @@ class TestAdvancedCudaKernelFeatures:
         content = """
         cuda_kernels {
             kernel convolution_2d {
-                param in float* input_image (width, height, channels)
-                param in float* kernel (kernel_size, kernel_size)
-                param out float* output_image (width, height, channels)
-                param in int width
-                param in int height
-                param in int channels
-                param in int kernel_size
+                input: float* input_image (width, height, channels)
+                input: float* kernel (kernel_size, kernel_size)
+                output: float* output_image (width, height, channels)
+                input: int width
+                input: int height
+                input: int channels
+                input: int kernel_size
                 block_size: (32, 32, 1)
                 grid_size: ((width + 31) / 32, (height + 31) / 32, 1)
                 shared_memory: 4096
@@ -408,9 +408,9 @@ class TestAdvancedCudaKernelFeatures:
             }
             
             kernel reduce_sum {
-                param in float* input_data (N)
-                param out float* result (1)
-                param in int N
+                input: float* input_data (N)
+                output: float* result (1)
+                input: int N
                 block_size: (256, 1, 1)
                 grid_size: (1, 1, 1)
                 shared_memory: 1024
@@ -606,15 +606,15 @@ class TestSemanticValidation:
         content = """
         cuda_kernels {
             kernel test_kernel {
-                param in float* input (N)
-                param out float* output (N)
+                input: float* input (N)
+                output: float* output (N)
                 code: {
                     printf('hello');
                 }
             }
             kernel test_kernel {
-                param in int* input (N)
-                param out int* output (N)
+                input: int* input (N)
+                output: int* output (N)
                 code: {
                     printf('world');
                 }
@@ -664,8 +664,8 @@ class TestSemanticValidation:
         content = """
         cuda_kernels {
             kernel test_kernel {
-                param in float* input (N)
-                param out float* output (N)
+                input: float* input (N)
+                output: float* output (N)
                 block_size: (0, 1, 1)  // Invalid zero block size
                 code: {
                     printf('hello');

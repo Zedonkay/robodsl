@@ -190,10 +190,11 @@ class TestOnnxIntegration:
         
         python_content = self.generator.generate_python_integration(model, "test_node")
         
-        assert "class test_nodeOnnxInference" in python_content
+        assert "class test_nodeOnnxPython" in python_content
         assert "import onnxruntime as ort" in python_content
         assert "import numpy as np" in python_content
-        assert "self.device_type = \"cpu\"" in python_content
+        assert "self.device = device" in python_content
+        assert 'device: str = "cpu"' in python_content
     
     def test_invalid_onnx_model(self):
         """Test handling of invalid ONNX model definitions."""
@@ -215,7 +216,7 @@ class TestOnnxIntegration:
         node image_classifier {
             subscriber /camera/image_raw: "sensor_msgs/msg/Image"
             publisher /classification/result: "std_msgs/msg/Float32MultiArray"
-            parameter "model_path": "resnet50.onnx"
+            parameter model_path: "resnet50.onnx"
             
             onnx_model "resnet50" {
                 input: "input" -> "float32[1,3,224,224]"

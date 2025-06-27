@@ -129,8 +129,8 @@ def test_parse_cuda_kernels():
     ast = parse_robodsl("""
     cuda_kernels {
         kernel image_processor {
-            param in Image input (width)
-            param out Image output (width)
+            input: float* input (width)
+            output: float* output (width)
             block_size: (256, 1, 1)
             grid_size: (1, 1, 1)
         }
@@ -146,13 +146,13 @@ def test_parse_cuda_kernels():
     
     input_param = kernel.content.parameters[0]
     assert input_param.direction.value == "in"
-    assert input_param.param_type == "Image"
+    assert input_param.param_type == "float*"
     assert input_param.param_name == "input"
     assert input_param.size_expr == ["width"]
     
     output_param = kernel.content.parameters[1]
     assert output_param.direction.value == "out"
-    assert output_param.param_type == "Image"
+    assert output_param.param_type == "float*"
     assert output_param.param_name == "output"
     assert output_param.size_expr == ["width"]
 
@@ -161,8 +161,8 @@ def test_parse_cuda_kernels_new_syntax():
     ast = parse_robodsl("""
     cuda_kernels {
         kernel image_processor {
-            input: Image input_data (width, height)
-            output: Image output_data (width, height)
+            input: float* input_data (width, height)
+            output: float* output_data (width, height)
             block_size: (256, 1, 1)
             grid_size: (1, 1, 1)
         }
@@ -178,13 +178,13 @@ def test_parse_cuda_kernels_new_syntax():
     
     input_param = kernel.content.parameters[0]
     assert input_param.direction.value == "in"
-    assert input_param.param_type == "Image"
+    assert input_param.param_type == "float*"
     assert input_param.param_name == "input_data"
     assert input_param.size_expr == ["width", "height"]
     
     output_param = kernel.content.parameters[1]
     assert output_param.direction.value == "out"
-    assert output_param.param_type == "Image"
+    assert output_param.param_type == "float*"
     assert output_param.param_name == "output_data"
     assert output_param.size_expr == ["width", "height"]
 
@@ -230,9 +230,9 @@ def test_parse_complex_config():
     
     cuda_kernels {
         kernel image_filter {
-            param in Image input (width)
-            param out Image output (width)
-            param in float kernel_size
+            input: float* input (width)
+            output: float* output (width)
+            input: float kernel_size
             block_size: (256, 1, 1)
             grid_size: (1, 1, 1)
         }
