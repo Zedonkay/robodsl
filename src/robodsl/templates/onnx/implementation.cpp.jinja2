@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <cuda_runtime.h>
 
+// Optimizations: {% if optimization_names %}{{ optimization_names|join(', ') }}{% else %}None{% endif %}
+
 {{ node_name }}OnnxInference::{{ node_name }}OnnxInference(const std::string& model_path)
     : model_path_(model_path), device_type_("{{ device_type }}") {
     

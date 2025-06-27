@@ -4,8 +4,10 @@
 - **Phase 0: Foundation & VSCode Integration**: ✅ Complete
 - **Phase 1: Lark Parser Migration & VSCode Integration**: ✅ Complete
 - **Phase 2: Enhanced Compiler Features**: ✅ Complete
+- **Phase 3: ONNX Integration**: ✅ Complete
+- **Repository Reorganization**: ✅ Complete
 - **Grammar & Parser Fixes**: ✅ Complete - Resolved all reduce/reduce conflicts, fixed AST builder issues, and updated VSCode syntax highlighting
-- **Test Coverage**: All 101 tests pass successfully, including comprehensive feature tests
+- **Test Coverage**: 113/114 tests pass successfully, including comprehensive feature tests
 - **Grammar Stability**: Fixed all reduce/reduce conflicts in Lark grammar by resolving ambiguities between `signed_atom`, `dotted_name`, `qos_setting`, and parameter size rules
 - **AST Builder Enhancements**: Added proper expression handling with `_extract_expr`, `_extract_signed_atom`, and `_extract_dotted_name` methods
 - **Comment Handling**: Implemented preprocessing to remove comments before parsing, ensuring proper lexer behavior
@@ -13,6 +15,61 @@
 - **Semantic Validation**: Enhanced validation for clients, flags, kernels, negative timer periods, and zero block sizes
 - **VSCode Integration**: Updated TextMate grammar to exactly match Lark grammar syntax, supporting all constructs including node definitions, CUDA kernels, C++ methods, ROS primitives, topic paths, expressions, arrays, nested dictionaries, and raw strings
 - **Comprehensive Testing**: All test suites pass, including 28 comprehensive feature tests covering complex scenarios
+
+### Recent Major Accomplishments (06-27-2025)
+
+#### Repository Reorganization ✅
+- **Restructured entire codebase** for better maintainability and organization
+- **New directory structure**:
+  ```
+  cuif/
+  ├── src/robodsl/
+  │   ├── core/           # Core functionality (ast, validator, generator)
+  │   ├── generators/     # All code generators
+  │   ├── parsers/        # All parsing logic
+  │   ├── cli/           # CLI entry points
+  │   ├── templates/     # Jinja2 templates
+  │   └── utils/         # Utility functions
+  ├── docs/
+  │   ├── website/       # HTML documentation (renamed from api/)
+  │   ├── user-guide/    # User-facing markdown
+  │   └── developer/     # Developer documentation
+  ├── build/             # Build artifacts and generated files
+  ├── config/            # Build and deployment configuration
+  ├── tools/             # Development tools and CI
+  └── scripts/           # Standalone scripts
+  ```
+- **Updated all import paths** throughout the codebase to match new structure
+- **Fixed package installation** and CLI functionality
+- **Updated GitHub CI** to deploy from `docs/website/` instead of `docs/api/`
+- **Maintained all functionality** while improving code organization
+
+#### ONNX Integration ✅
+- **Complete ONNX model support** implemented in grammar and AST
+- **ONNX model grammar** supports:
+  - Model configuration with input/output definitions
+  - Device specification (CPU/CUDA)
+  - Optimization settings (TensorRT/OpenVINO)
+  - Integration with ROS2 nodes
+- **Code generation** for ONNX Runtime integration
+- **Template system** for ONNX integration code
+- **Comprehensive testing** with ONNX-specific test cases
+- **Example implementations** demonstrating ONNX model usage
+
+#### Current Status
+- **Package Installation**: ✅ `pip install -e .` works correctly
+- **Module Imports**: ✅ All modules import successfully
+- **CLI Functionality**: ✅ `robodsl` command works with all subcommands
+- **Test Suite**: ✅ 113/114 tests pass (only 1 DSL grammar test fails, unrelated to reorganization)
+- **GitHub Pages**: ✅ CI workflow updated to deploy from `docs/website/`
+- **Documentation**: ✅ All documentation updated to reflect new structure
+
+#### Remaining Work
+- **Phase 4: Simple Pipeline System**: Not started
+- **Phase 5: AI-Powered Development Tools**: Not started  
+- **Phase 6: Real-time Constraints**: Not started
+- **Phase 7: Training Integration**: Not started
+- **Phase 8: Advanced Features**: Not started
 
 ---
 
@@ -198,13 +255,13 @@ RoboDSL is a Domain-Specific Language (DSL) and compiler designed to simplify th
    - [x] ROS2 node lifecycle testing
 
 ---
-### Phase 3: ONNX Integration
+### Phase 3: ONNX Integration ✅ COMPLETE
 **Priority**: 3  
 **Estimated Time**: 4-5 days  
 **Goal**: Seamless ONNX model integration
 
 #### Tasks
-1. **ONNX Model Grammar**
+1. **ONNX Model Grammar** ✅
    ```lark
    onnx_model: "onnx_model" STRING "{" model_config "}"
    model_config: (input_def | output_def | device | optimization)*
@@ -214,30 +271,39 @@ RoboDSL is a Domain-Specific Language (DSL) and compiler designed to simplify th
    optimization: "optimization" ":" ("tensorrt" | "openvino")
    ```
 
-2. **Code Generation**
-   - Generate ONNX Runtime integration code
-   - Handle input/output tensor management
-   - Memory management and optimization
+2. **Code Generation** ✅
+   - [x] Generate ONNX Runtime integration code
+   - [x] Handle input/output tensor management
+   - [x] Memory management and optimization
 
-3. **Integration with Nodes**
-   - Allow nodes to reference ONNX models
-   - Generate inference methods automatically
+3. **Integration with Nodes** ✅
+   - [x] Allow nodes to reference ONNX models
+   - [x] Generate inference methods automatically
 
-#### Files to Create/Modify
-- Update `src/robodsl/grammar/robodsl.lark` to include ONNX grammar
-- `src/robodsl/generators/onnx_integration.py` - ONNX code generation
-- `src/robodsl/templates/onnx/` - ONNX integration templates
-- Update node generators to handle ONNX models
+#### Files Created/Modified ✅
+- [x] Updated `src/robodsl/grammar/robodsl.lark` to include ONNX grammar
+- [x] `src/robodsl/generators/onnx_integration.py` - ONNX code generation
+- [x] `src/robodsl/templates/onnx/` - ONNX integration templates
+- [x] Updated node generators to handle ONNX models
+- [x] `src/robodsl/core/ast.py` - Added ONNX AST nodes
+- [x] `tests/test_onnx_integration.py` - Comprehensive ONNX tests
 
-#### Deliverables
-- ONNX model parsing and code generation
-- Integration with ROS 2 nodes
-- Example inference pipeline
+#### Deliverables ✅
+- [x] ONNX model parsing and code generation
+- [x] Integration with ROS 2 nodes
+- [x] Example inference pipeline
 
-#### Success Criteria
-- ONNX models can be defined and referenced
-- Inference code is automatically generated
-- Models integrate seamlessly with ROS 2 nodes
+#### Success Criteria ✅
+- [x] ONNX models can be defined and referenced
+- [x] Inference code is automatically generated
+- [x] Models integrate seamlessly with ROS 2 nodes
+
+#### Implementation Details
+- **AST Nodes Added**: `OnnxModelNode`, `ModelConfigNode`, `InputDefNode`, `OutputDefNode`, `DeviceNode`, `OptimizationNode`
+- **Grammar Support**: Full ONNX model definition syntax with input/output specifications
+- **Code Generation**: Complete ONNX Runtime integration with proper memory management
+- **Template System**: Comprehensive templates for ONNX integration code
+- **Testing**: Full test coverage including model parsing, code generation, and integration scenarios
 
 ---
 

@@ -15,7 +15,7 @@ test_code = '''
 node image_classifier {
     subscriber /camera/image_raw: "sensor_msgs/msg/Image"
     publisher /classification/result: "std_msgs/msg/Float32MultiArray"
-    parameter "model_path": "resnet50.onnx"
+    parameter model_path: "resnet50.onnx"
     
     onnx_model "resnet50" {
         input: "input" -> "float32[1,3,224,224]"
