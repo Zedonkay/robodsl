@@ -126,8 +126,8 @@ class PackageGenerator(BaseGenerator):
             'package_name': package_name,
             'version': '0.1.0',
             'description': 'Generated ROS2 package from RoboDSL specification',
-            'maintainer': 'robodsl',
-            'maintainer_email': 'robodsl@example.com',
+            'maintainer': 'Ishayu Shikhare',
+            'maintainer_email': 'ishikhar@andrew.cmu.edu',
             'license': 'Apache-2.0',
             'build_dependencies': sorted(list(build_dependencies)),
             'exec_dependencies': sorted(list(exec_dependencies)),
@@ -145,7 +145,7 @@ class PackageGenerator(BaseGenerator):
   <name>{package_name}</name>
   <version>0.1.0</version>
   <description>Generated ROS2 package from RoboDSL specification</description>
-  <maintainer email="robodsl@example.com">robodsl</maintainer>
+  <maintainer email="ishikhar@andrew.cmu.edu">Ishayu Shikhare</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>

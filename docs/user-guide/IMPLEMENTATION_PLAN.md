@@ -426,7 +426,7 @@ RoboDSL is a Domain-Specific Language (DSL) and compiler designed to simplify th
 
 ---
 
-### Phase 6: Visualization
+### Phase 7: Visualization
 **Priority**: 6  
 **Estimated Time**: 3-4 days  
 **Goal**: Generate diagrams and visual representations
@@ -463,7 +463,7 @@ RoboDSL is a Domain-Specific Language (DSL) and compiler designed to simplify th
 
 ---
 
-### Phase 7: Training Integration
+### Phase 8: Training Integration
 **Priority**: 7  
 **Estimated Time**: 3-4 days  
 **Goal**: Framework-agnostic training configuration
@@ -497,7 +497,7 @@ RoboDSL is a Domain-Specific Language (DSL) and compiler designed to simplify th
 
 ---
 
-### Phase 8: Advanced Features
+### Phase 9: Advanced Features
 **Priority**: 8  
 **Estimated Time**: 5-7 days  
 **Goal**: Enhanced functionality

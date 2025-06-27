@@ -14,6 +14,7 @@ from .cmake_generator import CMakeGenerator
 from .launch_generator import LaunchGenerator
 from .package_generator import PackageGenerator
 from .onnx_integration import OnnxIntegrationGenerator
+from .pipeline_generator import PipelineGenerator
 from ..core.ast import RoboDSLAST
 
 
@@ -37,6 +38,7 @@ class MainGenerator(BaseGenerator):
         self.launch_generator = LaunchGenerator(output_dir, template_dirs)
         self.package_generator = PackageGenerator(output_dir, template_dirs)
         self.onnx_generator = OnnxIntegrationGenerator(output_dir)
+        self.pipeline_generator = PipelineGenerator(output_dir)
     
     def generate(self, ast: RoboDSLAST) -> List[Path]:
         """Generate all files from the AST.
@@ -90,6 +92,12 @@ class MainGenerator(BaseGenerator):
         onnx_files = self._generate_onnx_integration(ast)
         all_generated_files.extend(onnx_files)
         print(f"Generated {len(onnx_files)} ONNX integration files")
+        
+        # Generate pipeline files
+        print("Generating pipeline files...")
+        pipeline_files = self._generate_pipelines(ast)
+        all_generated_files.extend(pipeline_files)
+        print(f"Generated {len(pipeline_files)} pipeline files")
         
         # Generate README
         readme_path = self._generate_readme(ast)
@@ -287,5 +295,26 @@ Apache-2.0
                     
                 except Exception as e:
                     print(f"Error generating ONNX integration for model {model.name} in node {node.name}: {e}")
+        
+        return generated_files 
+
+    def _generate_pipelines(self, ast: RoboDSLAST) -> List[Path]:
+        """Generate pipeline files for all pipelines."""
+        generated_files = []
+        
+        for pipeline in ast.pipelines:
+            try:
+                # Generate pipeline files
+                pipeline_files = self.pipeline_generator.generate(pipeline, "robodsl_project")
+                
+                # Write files to disk
+                for file_path, content in pipeline_files.items():
+                    path = Path(file_path)
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text(content)
+                    generated_files.append(path)
+                
+            except Exception as e:
+                print(f"Error generating pipeline {pipeline.name}: {e}")
         
         return generated_files 

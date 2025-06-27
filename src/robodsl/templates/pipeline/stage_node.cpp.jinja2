@@ -1,0 +1,102 @@
+#include "{{ project_name }}/{{ stage.name }}_node.hpp"
+#include <chrono>
+
+using namespace std::chrono_literals;
+
+namespace {{ project_name }} {
+
+{{ stage.name | title }}Node::{{ stage.name | title }}Node()
+    : Node("{{ stage.name }}_node", "{{ stage_namespace }}"),
+      initialized_(false),
+      processing_count_(0) {
+    
+    RCLCPP_INFO(this->get_logger(), "Initializing {{ stage.name | title }}Node");
+    
+    // Declare parameters
+    {% for topic in stage.content.topics %}
+    this->declare_parameter("{{ topic.topic_path.split('/')[-1] }}_topic", "{{ topic.topic_path }}");
+    {{ topic.topic_path.split('/')[-1] }}_topic_ = this->get_parameter("{{ topic.topic_path.split('/')[-1] }}_topic").as_string();
+    {% endfor %}
+    
+    // Initialize publishers
+    {% for output in stage.content.outputs %}
+    {{ output.output_name }}_publisher_ = this->create_publisher<std_msgs::msg::String>(
+        "{{ stage_namespace }}/{{ output.output_name }}", 10);
+    {% endfor %}
+    
+    // Initialize subscribers
+    {% for input in stage.content.inputs %}
+    {{ input.input_name }}_subscriber_ = this->create_subscription<std_msgs::msg::String>(
+        "{{ stage_namespace }}/{{ input.input_name }}", 10,
+        std::bind(&{{ stage.name | title }}Node::on_{{ input.input_name }}_received, this, std::placeholders::_1));
+    {% endfor %}
+    
+    // Initialize timer for periodic processing
+    timer_ = this->create_wall_timer(
+        100ms, std::bind(&{{ stage.name | title }}Node::timer_callback, this));
+    
+    initialized_ = true;
+    RCLCPP_INFO(this->get_logger(), "{{ stage.name | title }}Node initialized successfully");
+}
+
+{% for input in stage.content.inputs %}
+void {{ stage.name | title }}Node::on_{{ input.input_name }}_received(const std_msgs::msg::String::SharedPtr msg) {
+    RCLCPP_INFO(this->get_logger(), "Received {{ input.input_name }}: %s", msg->data.c_str());
+    
+    // Process the input
+    {% for method in stage.content.methods %}
+    {{ method.method_name }}();
+    {% endfor %}
+    
+    // Publish outputs if available
+    {% for output in stage.content.outputs %}
+    auto output_msg = std_msgs::msg::String();
+    output_msg.data = "Processed {{ input.input_name }}: " + msg->data;
+    {{ output.output_name }}_publisher_->publish(output_msg);
+    {% endfor %}
+}
+{% endfor %}
+
+{% for method in stage.content.methods %}
+void {{ stage.name | title }}Node::{{ method.method_name }}() {
+    RCLCPP_DEBUG(this->get_logger(), "Executing {{ method.method_name }}");
+    
+    // TODO: Implement {{ method.method_name }} logic
+    // This is where the actual processing logic would go
+    
+    processing_count_++;
+}
+{% endfor %}
+
+void {{ stage.name | title }}Node::timer_callback() {
+    if (!initialized_) {
+        return;
+    }
+    
+    // Periodic processing
+    RCLCPP_DEBUG(this->get_logger(), "{{ stage.name | title }}Node timer callback, count: %d", processing_count_);
+    
+    {% if stage.content.outputs %}
+    // Publish periodic status
+    auto status_msg = std_msgs::msg::String();
+    status_msg.data = "{{ stage.name | title }}Node status: " + std::to_string(processing_count_);
+    {% for output in stage.content.outputs %}
+    {{ output.output_name }}_publisher_->publish(status_msg);
+    {% endfor %}
+    {% endif %}
+}
+
+} // namespace {{ project_name }}
+
+int main(int argc, char** argv) {
+    rclcpp::init(argc, argv);
+    
+    auto node = std::make_shared<{{ project_name }}::{{ stage.name | title }}Node>();
+    
+    RCLCPP_INFO(node->get_logger(), "Starting {{ stage.name | title }}Node");
+    
+    rclcpp::spin(node);
+    
+    rclcpp::shutdown();
+    return 0;
+} 
