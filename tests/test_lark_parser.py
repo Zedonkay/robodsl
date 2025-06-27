@@ -277,15 +277,21 @@ def test_namespace():
 
 
 def test_cpp_method_parsing():
-    """Test parsing of a node with an inline C++ method."""
-    content = '''
-    node cpp_node {
-        cpp_method do_something : code : "int x = 42;\nstd::cout << x << std::endl;"
+    """Test basic C++ method parsing (legacy syntax)."""
+    content = """
+node test_node {
+    method do_something {
+        code: "int x = 42;\nstd::cout << x << std::endl;"
     }
-    '''
+}
+"""
+    
     ast = parse_robodsl(content)
+    assert len(ast.nodes) == 1
+    
     node = ast.nodes[0]
-    assert node.name == 'cpp_node'
+    assert node.name == 'test_node'
+    
     cpp_methods = node.content.cpp_methods
     assert len(cpp_methods) == 1
     assert cpp_methods[0].name == 'do_something'
@@ -459,17 +465,15 @@ node test_node {
 }
 """
     
-    ast = parse_robodsl(config)
-    analyzer = SemanticAnalyzer()
-    result = analyzer.analyze(ast)
+    with pytest.raises(SemanticError) as exc_info:
+        ast = parse_robodsl(config)
     
     # Should have errors due to duplicate and conflicting parameter names
-    assert not result
-    errors = analyzer.get_errors()
+    error_msg = str(exc_info.value)
     
     # Check for expected errors
-    duplicate_error = any("duplicate input parameter name: data_size" in error for error in errors)
-    conflict_error = any("parameter name conflicts between inputs and outputs: data_size" in error for error in errors)
+    duplicate_error = "duplicate input parameter name: data_size" in error_msg
+    conflict_error = "parameter name conflicts between inputs and outputs: data_size" in error_msg
     
     assert duplicate_error, "Should detect duplicate input parameter names"
     assert conflict_error, "Should detect parameter name conflicts between inputs and outputs"
