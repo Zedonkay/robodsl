@@ -2,7 +2,7 @@
 
 import pytest
 from pathlib import Path
-from robodsl.validator import (
+from robodsl.core.validator import (
     RoboDSLValidator, RoboDSLLinter, ValidationIssue, ValidationLevel,
     validate_robodsl_file, format_robodsl_file
 )

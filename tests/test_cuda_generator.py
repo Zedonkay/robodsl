@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 # Add the src directory to the Python path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
-from robodsl.ast import RoboDSLAST, KernelNode, KernelContentNode, KernelParamNode, KernelParameterDirection
+from robodsl.core.ast import RoboDSLAST, KernelNode, KernelContentNode, KernelParamNode, KernelParameterDirection
 from robodsl.generators import CudaKernelGenerator
 
 class TestCudaGenerator(unittest.TestCase):

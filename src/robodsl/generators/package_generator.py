@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Dict, List, Any
 
 from .base_generator import BaseGenerator
-from ..ast import RoboDSLAST, NodeNode
+from ..core.ast import RoboDSLAST, NodeNode
 
 
 class PackageGenerator(BaseGenerator):

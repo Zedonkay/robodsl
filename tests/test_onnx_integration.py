@@ -5,9 +5,9 @@ from pathlib import Path
 import tempfile
 import shutil
 
-from robodsl.parser.lark_parser import RoboDSLParser
+from robodsl.parsers.lark_parser import RoboDSLParser
 from robodsl.generators.onnx_integration import OnnxIntegrationGenerator
-from robodsl.ast import OnnxModelNode, ModelConfigNode, InputDefNode, OutputDefNode, DeviceNode, OptimizationNode
+from robodsl.core.ast import OnnxModelNode, ModelConfigNode, InputDefNode, OutputDefNode, DeviceNode, OptimizationNode
 
 
 class TestOnnxIntegration:

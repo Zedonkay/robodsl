@@ -1,7 +1,8 @@
 """Tests for the new Lark-based parser."""
 
 import pytest
-from robodsl.parser import parse_robodsl, SemanticError
+from robodsl.parsers.lark_parser import parse_robodsl
+from robodsl.parsers.semantic_analyzer import SemanticError
 from lark import ParseError
 
 

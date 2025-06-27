@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional
 from abc import ABC, abstractmethod
 
-from ..ast import RoboDSLAST, NodeNode, KernelNode
+from ..core.ast import RoboDSLAST, NodeNode, KernelNode
 
 
 class BaseGenerator(ABC):

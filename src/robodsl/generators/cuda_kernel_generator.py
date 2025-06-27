@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Dict, List, Any
 
 from .base_generator import BaseGenerator
-from ..ast import RoboDSLAST, KernelNode, KernelParameterDirection
+from ..core.ast import RoboDSLAST, KernelNode, KernelParameterDirection
 
 
 class CudaKernelGenerator(BaseGenerator):
