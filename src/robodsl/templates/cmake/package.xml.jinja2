@@ -1,31 +1,74 @@
 <?xml version="1.0"?>
-<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema" version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>{{ project_name }}</name>
-  <version>0.1.0</version>
+  <name>{{ package_name }}</name>
+  <version>{{ version }}</version>
   <description>{{ description }}</description>
-  <maintainer email="{{ maintainer_email }}">{{ maintainer_name }}</maintainer>
+  <maintainer email="{{ maintainer_email }}">{{ maintainer }}</maintainer>
   <license>{{ license }}</license>
 
+  <url type="website">https://github.com/robodsl/{{ package_name }}</url>
+  <url type="bugtracker">https://github.com/robodsl/{{ package_name }}/issues</url>
+  <url type="repository">https://github.com/robodsl/{{ package_name }}.git</url>
+
+  <author email="{{ maintainer_email }}">{{ maintainer }}</author>
+
   <buildtool_depend>ament_cmake</buildtool_depend>
-  <buildtool_depend>rclcpp_components</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
 
   <depend>rclcpp</depend>
   <depend>std_msgs</depend>
-  
-  {% if has_lifecycle %}
-  <depend>rclcpp_lifecycle</depend>
-  <depend>lifecycle_msgs</depend>
-  {% endif %}
-  
-  {% for pkg in message_dependencies %}
-  <depend>{{ pkg }}</depend>
-  {% endfor %}
+  <depend>geometry_msgs</depend>
+
+{% for dep in dependencies %}
+  <depend>{{ dep }}</depend>
+{% endfor %}
+
+{% for msg_dep in message_dependencies %}
+  <depend>{{ msg_dep }}</depend>
+{% endfor %}
+
+{% if has_cuda %}
+  <depend>cuda</depend>
+{% endif %}
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
+  <test_depend>ament_cmake_gtest</test_depend>
+  <test_depend>ament_cmake_pytest</test_depend>
+
+{% for test_dep in test_dependencies %}
+  <test_depend>{{ test_dep }}</test_depend>
+{% endfor %}
 
   <export>
     <build_type>ament_cmake</build_type>
+    
+    <ament_cmake_export_include_directories>
+      include
+    </ament_cmake_export_include_directories>
+    
+    <ament_cmake_export_libraries>
+      ${PROJECT_NAME}_lib
+{% if has_cuda %}
+      ${PROJECT_NAME}_cuda
+{% endif %}
+    </ament_cmake_export_libraries>
+    
+    <ament_cmake_export_dependencies>
+      rclcpp
+      std_msgs
+      geometry_msgs
+{% for dep in dependencies %}
+      {{ dep }}
+{% endfor %}
+{% for msg_dep in message_dependencies %}
+      {{ msg_dep }}
+{% endfor %}
+    </ament_cmake_export_dependencies>
+    
+    <ament_cmake_export_targets>
+      export_${PROJECT_NAME}
+    </ament_cmake_export_targets>
   </export>
 </package>

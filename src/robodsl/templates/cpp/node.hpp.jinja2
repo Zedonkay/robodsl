@@ -143,6 +143,24 @@ public:
     {% endfor %}
     {% endif %}
 
+    // User-defined C++ methods
+    {% for method in cpp_methods %}
+    /**
+     * @brief {{ method.name }} - User-defined C++ method
+     {% for input in method.inputs %}
+     * @param {{ input.name }} Input parameter of type {{ input.type }}{% if input.size_expr %} with size {{ input.size_expr }}{% endif %}
+     {% endfor %}
+     {% for output in method.outputs %}
+     * @param {{ output.name }} Output parameter of type {{ output.type }}{% if output.size_expr %} with size {{ output.size_expr }}{% endif %}
+     {% endfor %}
+     */
+    void {{ method.name }}(
+        {% for input in method.inputs %}{{ input.type }} {{ input.name }}{% if input.size_expr %}[{{ input.size_expr }}]{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}
+        {% if method.inputs and method.outputs %}, {% endif %}
+        {% for output in method.outputs %}{{ output.type }}& {{ output.name }}{% if output.size_expr %}[{{ output.size_expr }}]{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}
+    );
+    {% endfor %}
+
 private:
     // ROS2 publishers
     {% for pub in publishers %}

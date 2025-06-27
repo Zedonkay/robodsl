@@ -21,12 +21,58 @@ class SemanticError(Exception):
     pass
 
 
+class SymbolTable:
+    """Symbol table for tracking names and types in RoboDSL."""
+    def __init__(self):
+        self.nodes: Dict[str, Dict[str, Any]] = {}
+        self.kernels: Dict[str, Dict[str, Any]] = {}
+        self.topics: Set[str] = set()
+        self.services: Set[str] = set()
+        self.actions: Set[str] = set()
+        self.parameters: Dict[str, str] = {}
+        self.errors: List[str] = []
+
+    def add_node(self, name: str):
+        if name in self.nodes:
+            self.errors.append(f"Duplicate node name: {name}")
+        self.nodes[name] = {}
+
+    def add_kernel(self, name: str):
+        if name in self.kernels:
+            self.errors.append(f"Duplicate kernel name: {name}")
+        self.kernels[name] = {}
+
+    def add_topic(self, topic: str):
+        if topic in self.topics:
+            self.errors.append(f"Duplicate topic: {topic}")
+        self.topics.add(topic)
+
+    def add_service(self, service: str):
+        if service in self.services:
+            self.errors.append(f"Duplicate service: {service}")
+        self.services.add(service)
+
+    def add_action(self, action: str):
+        if action in self.actions:
+            self.errors.append(f"Duplicate action: {action}")
+        self.actions.add(action)
+
+    def add_parameter(self, name: str, param_type: str):
+        if name in self.parameters:
+            self.errors.append(f"Duplicate parameter: {name}")
+        self.parameters[name] = param_type
+
+    def get_errors(self) -> List[str]:
+        return self.errors
+
+
 class SemanticAnalyzer:
     """Analyzes semantic correctness of RoboDSL configurations."""
     
     def __init__(self):
         self.errors: List[str] = []
         self.warnings: List[str] = []
+        self.symbol_table = SymbolTable()
     
     def analyze(self, ast: RoboDSLAST) -> bool:
         """Analyze the AST for semantic errors.
@@ -36,22 +82,26 @@ class SemanticAnalyzer:
         """
         self.errors.clear()
         self.warnings.clear()
+        self.symbol_table = SymbolTable()
         
         # Analyze project-level configuration
         self._analyze_project_config(ast)
         
         # Analyze each node
         for node in ast.nodes:
+            self.symbol_table.add_node(node.name)
             self._analyze_node(node)
         
         # Analyze CUDA kernels
         if ast.cuda_kernels:
             for kernel in ast.cuda_kernels.kernels:
+                self.symbol_table.add_kernel(kernel.name)
                 self._analyze_cuda_kernel(kernel)
         
         # Check for cross-references
         self._analyze_cross_references(ast)
         
+        self.errors.extend(self.symbol_table.get_errors())
         return len(self.errors) == 0
     
     def _analyze_project_config(self, ast: RoboDSLAST):
@@ -100,6 +150,10 @@ class SemanticAnalyzer:
         # Check remappings
         self._analyze_remappings(content.remaps)
         
+        # Check C++ methods
+        if hasattr(content, 'cpp_methods'):
+            self._analyze_cpp_methods(content.cpp_methods, node.name)
+        
         # Check QoS configurations
         for pub in content.publishers:
             if pub.qos:
@@ -134,13 +188,51 @@ class SemanticAnalyzer:
             # Check parameter value
             if param.value.value is None:
                 self.errors.append(f"Parameter '{param.name}' has no value")
-    
+            
+            # Add to symbol table with inferred type
+            param_type = self._infer_parameter_type(param.value.value)
+            self.symbol_table.add_parameter(param.name, param_type)
+            
+            # Type check: value matches inferred type (basic check)
+            if param_type in ("int", "float"):
+                if not isinstance(param.value.value, (int, float)):
+                    self.errors.append(f"Parameter '{param.name}' value does not match inferred type '{param_type}'")
+            elif param_type == "str":
+                if not isinstance(param.value.value, str):
+                    self.errors.append(f"Parameter '{param.name}' value does not match inferred type 'str'")
+            elif param_type == "bool":
+                if not isinstance(param.value.value, bool):
+                    self.errors.append(f"Parameter '{param.name}' value does not match inferred type 'bool'")
+            elif param_type == "list":
+                if not isinstance(param.value.value, list):
+                    self.errors.append(f"Parameter '{param.name}' value does not match inferred type 'list'")
+            elif param_type == "dict":
+                if not isinstance(param.value.value, dict):
+                    self.errors.append(f"Parameter '{param.name}' value does not match inferred type 'dict'")
+
+    def _infer_parameter_type(self, value: Any) -> str:
+        """Infer the type of a parameter value."""
+        if isinstance(value, int):
+            return "int"
+        elif isinstance(value, float):
+            return "float"
+        elif isinstance(value, str):
+            return "str"
+        elif isinstance(value, bool):
+            return "bool"
+        elif isinstance(value, list):
+            return "list"
+        elif isinstance(value, dict):
+            return "dict"
+        else:
+            return "auto"
+
     def _analyze_publishers(self, publishers: List[PublisherNode]):
         """Analyze publisher configurations."""
         topics = set()
         
         for pub in publishers:
-            # Check for duplicate topics
+            # Check for duplicate topics within this node only
             if pub.topic in topics:
                 self.errors.append(f"Duplicate publisher topic: {pub.topic}")
             topics.add(pub.topic)
@@ -152,13 +244,20 @@ class SemanticAnalyzer:
             # Check message type
             if not pub.msg_type or pub.msg_type.strip() == "":
                 self.errors.append(f"Message type cannot be empty for publisher {pub.topic}")
+            
+            # Add to symbol table (but don't check for global duplicates)
+            self.symbol_table.topics.add(pub.topic)
+            
+            # Type check: msg_type is a valid ROS type (basic check)
+            if not self._is_valid_ros_type(pub.msg_type):
+                self.errors.append(f"Publisher '{pub.topic}' has invalid message type '{pub.msg_type}'")
     
     def _analyze_subscribers(self, subscribers: List[SubscriberNode]):
         """Analyze subscriber configurations."""
         topics = set()
         
         for sub in subscribers:
-            # Check for duplicate topics
+            # Check for duplicate topics within this node only
             if sub.topic in topics:
                 self.errors.append(f"Duplicate subscriber topic: {sub.topic}")
             topics.add(sub.topic)
@@ -170,6 +269,13 @@ class SemanticAnalyzer:
             # Check message type
             if not sub.msg_type or sub.msg_type.strip() == "":
                 self.errors.append(f"Message type cannot be empty for subscriber {sub.topic}")
+            
+            # Add to symbol table (but don't check for global duplicates)
+            self.symbol_table.topics.add(sub.topic)
+            
+            # Type check: msg_type is a valid ROS type (basic check)
+            if not self._is_valid_ros_type(sub.msg_type):
+                self.errors.append(f"Subscriber '{sub.topic}' has invalid message type '{sub.msg_type}'")
     
     def _analyze_services(self, services: List[ServiceNode]):
         """Analyze service configurations."""
@@ -188,6 +294,13 @@ class SemanticAnalyzer:
             # Check service type
             if not srv.srv_type or srv.srv_type.strip() == "":
                 self.errors.append(f"Service type cannot be empty for service {srv.service}")
+            
+            # Add to symbol table
+            self.symbol_table.add_service(srv.service)
+            
+            # Type check: srv_type is a valid ROS type (basic check)
+            if not self._is_valid_ros_type(srv.srv_type):
+                self.errors.append(f"Service '{srv.service}' has invalid service type '{srv.srv_type}'")
     
     def _analyze_actions(self, actions: List[ActionNode]):
         """Analyze action configurations."""
@@ -206,6 +319,13 @@ class SemanticAnalyzer:
             # Check action type
             if not act.action_type or act.action_type.strip() == "":
                 self.errors.append(f"Action type cannot be empty for action {act.name}")
+            
+            # Add to symbol table
+            self.symbol_table.add_action(act.name)
+            
+            # Type check: action_type is a valid ROS type (basic check)
+            if not self._is_valid_ros_type(act.action_type):
+                self.errors.append(f"Action '{act.name}' has invalid action type '{act.action_type}'")
     
     def _analyze_timers(self, timers: List[TimerNode]):
         """Analyze timer configurations."""
@@ -237,37 +357,137 @@ class SemanticAnalyzer:
                 self.errors.append("Remap 'to' topic cannot be empty")
     
     def _analyze_qos_config(self, qos: QoSNode, context: str):
-        """Analyze QoS configuration."""
-        for setting in qos.settings:
-            if setting.name == 'reliability':
-                if setting.value not in ['reliable', 'best_effort']:
-                    self.errors.append(f"Invalid reliability value '{setting.value}' for {context}. "
-                                     "Valid values: 'reliable', 'best_effort'")
-            elif setting.name == 'durability':
-                if setting.value not in ['transient_local', 'volatile']:
-                    self.errors.append(f"Invalid durability value '{setting.value}' for {context}. "
-                                     "Valid values: 'transient_local', 'volatile'")
-            elif setting.name == 'history':
-                if setting.value not in ['keep_last', 'keep_all']:
-                    self.errors.append(f"Invalid history value '{setting.value}' for {context}. "
-                                     "Valid values: 'keep_last', 'keep_all'")
-            elif setting.name == 'depth':
-                if not isinstance(setting.value, (int, float)) or setting.value <= 0:
-                    self.errors.append(f"QoS depth must be positive for {context}")
-            elif setting.name == 'deadline':
-                if not isinstance(setting.value, (int, float)) or setting.value <= 0:
-                    self.errors.append(f"QoS deadline must be positive for {context}")
-            elif setting.name == 'lifespan':
-                if not isinstance(setting.value, (int, float)) or setting.value <= 0:
-                    self.errors.append(f"QoS lifespan must be positive for {context}")
-            elif setting.name == 'liveliness':
-                if setting.value not in ['automatic', 'manual_by_topic']:
-                    self.errors.append(f"Invalid liveliness value '{setting.value}' for {context}. "
-                                     "Valid values: 'automatic', 'manual_by_topic'")
-            elif setting.name == 'liveliness_lease_duration':
-                if not isinstance(setting.value, (int, float)) or setting.value <= 0:
-                    self.errors.append(f"QoS liveliness lease duration must be positive for {context}")
+        """Analyze QoS configuration for validity and compatibility."""
+        # Check reliability settings
+        if qos.reliability:
+            if qos.reliability not in ["reliable", "best_effort"]:
+                self.errors.append(f"Invalid reliability setting '{qos.reliability}' in {context}")
+        
+        # Check durability settings
+        if qos.durability:
+            if qos.durability not in ["volatile", "transient_local"]:
+                self.errors.append(f"Invalid durability setting '{qos.durability}' in {context}")
+        
+        # Check history settings
+        if qos.history:
+            if qos.history not in ["keep_last", "keep_all"]:
+                self.errors.append(f"Invalid history setting '{qos.history}' in {context}")
+        
+        # Check liveliness settings
+        if qos.liveliness:
+            if qos.liveliness not in ["automatic", "manual_by_topic", "manual_by_namespace"]:
+                self.errors.append(f"Invalid liveliness setting '{qos.liveliness}' in {context}")
+        
+        # Check depth settings
+        if qos.depth is not None:
+            if not isinstance(qos.depth, int) or qos.depth < 0:
+                self.errors.append(f"Invalid depth setting '{qos.depth}' in {context}")
+        
+        # Check QoS compatibility
+        if qos.reliability == "best_effort" and qos.durability == "transient_local":
+            self.warnings.append(f"QoS configuration in {context} may cause issues: best_effort reliability with transient_local durability")
+        
+        if qos.history == "keep_all" and qos.depth is not None:
+            self.warnings.append(f"QoS configuration in {context}: keep_all history with depth setting may be ignored")
     
+    def _analyze_cpp_methods(self, cpp_methods, node_name: str):
+        """Analyze enhanced C++ method configurations."""
+        method_names = set()
+        
+        for method in cpp_methods:
+            # Check for duplicate method names
+            if method.name in method_names:
+                self.errors.append(f"Node '{node_name}' has duplicate C++ method name: {method.name}")
+            method_names.add(method.name)
+            
+            # Check method name
+            if not method.name or method.name.strip() == "":
+                self.errors.append(f"Node '{node_name}' C++ method name cannot be empty")
+            
+            # Check method name follows C++ naming conventions
+            if not method.name.replace('_', '').isalnum():
+                self.errors.append(f"Node '{node_name}' C++ method name '{method.name}' contains invalid characters")
+            
+            # Check input parameters
+            input_names = set()
+            for input_param in method.inputs:
+                if not input_param.param_name or input_param.param_name.strip() == "":
+                    self.errors.append(f"Node '{node_name}' C++ method '{method.name}' input parameter name cannot be empty")
+                
+                if input_param.param_name in input_names:
+                    self.errors.append(f"Node '{node_name}' C++ method '{method.name}' has duplicate input parameter name: {input_param.param_name}")
+                input_names.add(input_param.param_name)
+                
+                if not input_param.param_type or input_param.param_type.strip() == "":
+                    self.errors.append(f"Node '{node_name}' C++ method '{method.name}' input parameter '{input_param.param_name}' type cannot be empty")
+                
+                # Validate C++ parameter types
+                if not self._is_valid_cpp_type(input_param.param_type):
+                    self.warnings.append(f"Node '{node_name}' C++ method '{method.name}' input parameter '{input_param.param_name}' has potentially invalid type '{input_param.param_type}'")
+            
+            # Check output parameters
+            output_names = set()
+            for output_param in method.outputs:
+                if not output_param.param_name or output_param.param_name.strip() == "":
+                    self.errors.append(f"Node '{node_name}' C++ method '{method.name}' output parameter name cannot be empty")
+                
+                if output_param.param_name in output_names:
+                    self.errors.append(f"Node '{node_name}' C++ method '{method.name}' has duplicate output parameter name: {output_param.param_name}")
+                output_names.add(output_param.param_name)
+                
+                if not output_param.param_type or output_param.param_type.strip() == "":
+                    self.errors.append(f"Node '{node_name}' C++ method '{method.name}' output parameter '{output_param.param_name}' type cannot be empty")
+                
+                # Validate C++ parameter types
+                if not self._is_valid_cpp_type(output_param.param_type):
+                    self.warnings.append(f"Node '{node_name}' C++ method '{method.name}' output parameter '{output_param.param_name}' has potentially invalid type '{output_param.param_type}'")
+            
+            # Check for parameter name conflicts between inputs and outputs
+            conflicts = input_names & output_names
+            if conflicts:
+                self.errors.append(f"Node '{node_name}' C++ method '{method.name}' has parameter name conflicts between inputs and outputs: {', '.join(conflicts)}")
+            
+            # Check method code
+            if not method.code or method.code.strip() == "":
+                self.errors.append(f"Node '{node_name}' C++ method '{method.name}' has empty code")
+            
+            # Basic C++ syntax validation
+            if method.code:
+                # Check for basic C++ syntax issues
+                if '{' in method.code and '}' not in method.code:
+                    self.warnings.append(f"Node '{node_name}' C++ method '{method.name}' may have unmatched braces")
+                if ';' not in method.code and 'return' not in method.code and 'if' not in method.code and 'for' not in method.code and 'while' not in method.code:
+                    self.warnings.append(f"Node '{node_name}' C++ method '{method.name}' may be missing statements")
+
+    def _is_valid_cpp_type(self, type_name: str) -> bool:
+        """Check if a type is valid for C++ method parameters."""
+        # Basic C++ types
+        cpp_types = {
+            "int", "unsigned int", "long", "unsigned long", "long long", "unsigned long long",
+            "float", "double", "char", "unsigned char", "short", "unsigned short",
+            "bool", "void", "size_t", "uint32_t", "int32_t", "uint64_t", "int64_t",
+            "std::string", "std::vector", "std::array", "std::map", "std::unordered_map",
+            "std::shared_ptr", "std::unique_ptr", "std::weak_ptr"
+        }
+        
+        # Check if it's a basic C++ type
+        if type_name in cpp_types:
+            return True
+        
+        # Check if it's a pointer type
+        if type_name.endswith('*') or type_name.endswith('[]'):
+            return True
+        
+        # Check if it's a template type (e.g., std::vector<int>)
+        if '<' in type_name and '>' in type_name:
+            return True
+        
+        # Check if it's a custom type (assume valid if it contains alphanumeric and underscores)
+        if type_name.replace('_', '').replace(':', '').replace('<', '').replace('>', '').isalnum():
+            return True
+        
+        return False
+
     def _analyze_cuda_kernel(self, kernel: KernelNode):
         """Analyze CUDA kernel configuration."""
         # Check kernel name
@@ -279,56 +499,252 @@ class SemanticAnalyzer:
         # Check block size
         if content.block_size:
             if len(content.block_size) != 3:
-                self.errors.append(f"CUDA kernel {kernel.name} block size must have 3 dimensions")
-            
+                self.errors.append(f"CUDA kernel '{kernel.name}' block size must have exactly 3 dimensions")
             for i, size in enumerate(content.block_size):
-                if size <= 0:
-                    self.errors.append(f"CUDA kernel {kernel.name} block size dimension {i} must be positive")
+                if not isinstance(size, int) or size <= 0:
+                    self.errors.append(f"CUDA kernel '{kernel.name}' block size dimension {i} must be a positive integer")
+                if size > 1024:  # CUDA limit
+                    self.errors.append(f"CUDA kernel '{kernel.name}' block size dimension {i} exceeds CUDA limit of 1024")
         
-        # Check grid size if specified
+        # Check grid size
         if content.grid_size:
             if len(content.grid_size) != 3:
-                self.errors.append(f"CUDA kernel {kernel.name} grid size must have 3 dimensions")
-            
+                self.errors.append(f"CUDA kernel '{kernel.name}' grid size must have exactly 3 dimensions")
             for i, size in enumerate(content.grid_size):
-                if size <= 0:
-                    self.errors.append(f"CUDA kernel {kernel.name} grid size dimension {i} must be positive")
+                if not isinstance(size, int) or size <= 0:
+                    self.errors.append(f"CUDA kernel '{kernel.name}' grid size dimension {i} must be a positive integer")
         
         # Check shared memory
-        if content.shared_memory is not None and content.shared_memory < 0:
-            self.errors.append(f"CUDA kernel {kernel.name} shared memory cannot be negative")
+        if content.shared_memory is not None:
+            if not isinstance(content.shared_memory, int) or content.shared_memory < 0:
+                self.errors.append(f"CUDA kernel '{kernel.name}' shared memory must be a non-negative integer")
+            if content.shared_memory > 49152:  # Typical CUDA limit
+                self.warnings.append(f"CUDA kernel '{kernel.name}' shared memory size may exceed device limits")
         
         # Check parameters
-        param_names = set()
-        for param in content.parameters:
-            if param.param_name and param.param_name in param_names:
-                self.errors.append(f"Duplicate parameter name '{param.param_name}' in CUDA kernel {kernel.name}")
-            if param.param_name:
+        if content.parameters:
+            param_names = set()
+            for param in content.parameters:
+                # Check for duplicate parameter names
+                if param.param_name in param_names:
+                    self.errors.append(f"CUDA kernel '{kernel.name}' has duplicate parameter name: {param.param_name}")
                 param_names.add(param.param_name)
-            
-            # Check parameter type
-            if not param.param_type or param.param_type.strip() == "":
-                self.errors.append(f"CUDA kernel {kernel.name} parameter type cannot be empty")
+                
+                # Check parameter name
+                if not param.param_name or param.param_name.strip() == "":
+                    self.errors.append(f"CUDA kernel '{kernel.name}' parameter name cannot be empty")
+                
+                # Check parameter type
+                if not param.param_type or param.param_type.strip() == "":
+                    self.errors.append(f"CUDA kernel '{kernel.name}' parameter '{param.param_name}' type cannot be empty")
+                
+                # Validate CUDA parameter types
+                if not self._is_valid_cuda_type(param.param_type):
+                    self.errors.append(f"CUDA kernel '{kernel.name}' parameter '{param.param_name}' has invalid type '{param.param_type}'")
+                
+                # Check parameter direction
+                if param.direction not in [KernelParameterDirection.IN, KernelParameterDirection.OUT, KernelParameterDirection.INOUT]:
+                    self.errors.append(f"CUDA kernel '{kernel.name}' parameter '{param.param_name}' has invalid direction '{param.direction}'")
+                
+                # Check size expression
+                if param.size_expr:
+                    for expr in param.size_expr:
+                        if not expr or expr.strip() == "":
+                            self.errors.append(f"CUDA kernel '{kernel.name}' parameter '{param.param_name}' has empty size expression")
+    
+    def _is_valid_cuda_type(self, type_name: str) -> bool:
+        """Check if a type is valid for CUDA kernel parameters."""
+        # Basic CUDA types
+        cuda_types = {
+            "int", "unsigned int", "long", "unsigned long", "long long", "unsigned long long",
+            "float", "double", "char", "unsigned char", "short", "unsigned short",
+            "bool", "void", "size_t", "uint32_t", "int32_t", "uint64_t", "int64_t"
+        }
+        
+        # Check if it's a basic CUDA type
+        if type_name in cuda_types:
+            return True
+        
+        # Check if it's a pointer type
+        if type_name.endswith('*') or type_name.endswith('[]'):
+            return True
+        
+        # Check if it's a custom type (assume valid if it contains alphanumeric and underscores)
+        if type_name.replace('_', '').replace(':', '').isalnum():
+            return True
+        
+        return False
     
     def _analyze_cross_references(self, ast: RoboDSLAST):
         """Analyze cross-references between components."""
-        # Check for topic consistency between publishers and subscribers
-        all_pub_topics = set()
-        all_sub_topics = set()
+        # Build comprehensive topic/service/action maps
+        topic_publishers = {}  # topic -> list of (node_name, publisher)
+        topic_subscribers = {}  # topic -> list of (node_name, subscriber)
+        service_providers = {}  # service -> list of (node_name, service)
+        service_clients = {}  # service -> list of (node_name, client)
+        action_providers = {}  # action -> list of (node_name, action)
+        action_clients = {}  # action -> list of (node_name, client)
         
+        # Collect all topics, services, and actions
         for node in ast.nodes:
+            # Collect publishers
             for pub in node.content.publishers:
-                all_pub_topics.add(pub.topic)
+                if pub.topic not in topic_publishers:
+                    topic_publishers[pub.topic] = []
+                topic_publishers[pub.topic].append((node.name, pub))
+            
+            # Collect subscribers
             for sub in node.content.subscribers:
-                all_sub_topics.add(sub.topic)
+                if sub.topic not in topic_subscribers:
+                    topic_subscribers[sub.topic] = []
+                topic_subscribers[sub.topic].append((node.name, sub))
+            
+            # Collect services
+            for srv in node.content.services:
+                if srv.service not in service_providers:
+                    service_providers[srv.service] = []
+                service_providers[srv.service].append((node.name, srv))
+            
+            # Collect service clients
+            for client in node.content.clients:
+                if client.service not in service_clients:
+                    service_clients[client.service] = []
+                service_clients[client.service].append((node.name, client))
+            
+            # Collect actions
+            for act in node.content.actions:
+                if act.name not in action_providers:
+                    action_providers[act.name] = []
+                action_providers[act.name].append((node.name, act))
         
-        # Warn about topics that are published but not subscribed
-        for topic in all_pub_topics - all_sub_topics:
-            self.warnings.append(f"Topic '{topic}' is published but never subscribed to")
+        # Validate remaps
+        self._validate_remaps(ast, topic_publishers, topic_subscribers)
         
-        # Warn about topics that are subscribed but not published
-        for topic in all_sub_topics - all_pub_topics:
-            self.warnings.append(f"Topic '{topic}' is subscribed to but never published")
+        # Validate topic compatibility
+        self._validate_topic_compatibility(topic_publishers, topic_subscribers)
+        
+        # Validate service compatibility
+        self._validate_service_compatibility(service_providers, service_clients)
+        
+        # Validate action compatibility
+        self._validate_action_compatibility(action_providers, action_clients)
+    
+    def _validate_remaps(self, ast: RoboDSLAST, topic_publishers: dict, topic_subscribers: dict):
+        """Validate remap rules."""
+        for node in ast.nodes:
+            for remap in node.content.remaps:
+                # Check if the remapped topic exists in the current configuration
+                if remap.from_topic and remap.from_topic not in topic_publishers and remap.from_topic not in topic_subscribers:
+                    self.warnings.append(f"Node '{node.name}' remap '{remap.from_topic}' -> '{remap.to_topic}' references topic '{remap.from_topic}' that is not defined in the current configuration (may be external)")
+                
+                # Check for circular remaps (basic check)
+                if remap.from_topic == remap.to_topic:
+                    self.errors.append(f"Node '{node.name}' has circular remap: '{remap.from_topic}' -> '{remap.to_topic}'")
+                
+                # Check if remap target is valid
+                if remap.to_topic and not remap.to_topic.startswith('/'):
+                    self.warnings.append(f"Node '{node.name}' remap target '{remap.to_topic}' should start with '/'")
+    
+    def _validate_topic_compatibility(self, topic_publishers: dict, topic_subscribers: dict):
+        """Validate topic compatibility between publishers and subscribers."""
+        all_topics = set(topic_publishers.keys()) | set(topic_subscribers.keys())
+        
+        for topic in all_topics:
+            publishers = topic_publishers.get(topic, [])
+            subscribers = topic_subscribers.get(topic, [])
+            
+            # All publishers should have the same message type (check even if no subscribers)
+            if publishers:
+                pub_types = set(pub.msg_type for _, pub in publishers)
+                if len(pub_types) > 1:
+                    pub_nodes = [node_name for node_name, _ in publishers]
+                    msg = f"Topic '{topic}' has multiple publishers with different message types: {pub_types} from nodes {pub_nodes}"
+                    print("DEBUG: ", msg)
+                    self.errors.append(msg)
+            
+            # Check for subscribers without publishers (warn, not error - could be external)
+            if subscribers and not publishers:
+                sub_nodes = [node_name for node_name, _ in subscribers]
+                self.warnings.append(f"Topic '{topic}' is subscribed to by nodes {sub_nodes} but not published by any node in the current configuration")
+            
+            # Check message type compatibility between publishers and subscribers
+            if publishers and subscribers:
+                pub_types = set(pub.msg_type for _, pub in publishers)
+                sub_types = set(sub.msg_type for _, sub in subscribers)
+                
+                # All subscribers should have the same message type as publishers
+                if pub_types and sub_types and not pub_types.intersection(sub_types):
+                    self.errors.append(f"Topic '{topic}' has incompatible message types: publishers use {pub_types}, subscribers use {sub_types}")
+                
+                # Check QoS compatibility
+                self._validate_topic_qos_compatibility(topic, publishers, subscribers)
+    
+    def _validate_topic_qos_compatibility(self, topic: str, publishers: list, subscribers: list):
+        """Validate QoS compatibility between publishers and subscribers on the same topic."""
+        for _, pub in publishers:
+            for _, sub in subscribers:
+                if pub.qos and sub.qos:
+                    # Check reliability compatibility
+                    if pub.qos.reliability and sub.qos.reliability:
+                        if pub.qos.reliability != sub.qos.reliability:
+                            self.warnings.append(f"Topic '{topic}' has QoS reliability mismatch: publisher uses '{pub.qos.reliability}', subscriber uses '{sub.qos.reliability}'")
+                    
+                    # Check durability compatibility
+                    if pub.qos.durability and sub.qos.durability:
+                        if pub.qos.durability != sub.qos.durability:
+                            self.warnings.append(f"Topic '{topic}' has QoS durability mismatch: publisher uses '{pub.qos.durability}', subscriber uses '{sub.qos.durability}'")
+    
+    def _validate_service_compatibility(self, service_providers: dict, service_clients: dict):
+        """Validate service compatibility."""
+        all_services = set(service_providers.keys()) | set(service_clients.keys())
+        
+        for service in all_services:
+            providers = service_providers.get(service, [])
+            clients = service_clients.get(service, [])
+            
+            # Check for clients without providers
+            if clients and not providers:
+                client_nodes = [node_name for node_name, _ in clients]
+                self.warnings.append(f"Service '{service}' is used by clients in nodes {client_nodes} but not provided by any node in the current configuration")
+            
+            # Check for multiple providers (error - services should have only one provider)
+            if len(providers) > 1:
+                provider_nodes = [node_name for node_name, _ in providers]
+                self.errors.append(f"Service '{service}' is provided by multiple nodes: {provider_nodes}")
+            
+            # Check service type compatibility
+            if providers and clients:
+                provider_types = set(srv.srv_type for _, srv in providers)
+                client_types = set(client.srv_type for _, client in clients)
+                
+                if provider_types and client_types and not provider_types.intersection(client_types):
+                    self.errors.append(f"Service '{service}' has incompatible types: provider uses {provider_types}, clients use {client_types}")
+    
+    def _validate_action_compatibility(self, action_providers: dict, action_clients: dict):
+        """Validate action compatibility."""
+        all_actions = set(action_providers.keys()) | set(action_clients.keys())
+        
+        for action in all_actions:
+            providers = action_providers.get(action, [])
+            clients = action_clients.get(action, [])
+            
+            # Check for clients without providers
+            if clients and not providers:
+                client_nodes = [node_name for node_name, _ in clients]
+                self.warnings.append(f"Action '{action}' is used by clients in nodes {client_nodes} but not provided by any node in the current configuration")
+            
+            # Check for multiple providers (error - actions should have only one provider)
+            if len(providers) > 1:
+                provider_nodes = [node_name for node_name, _ in providers]
+                self.errors.append(f"Action '{action}' is provided by multiple nodes: {provider_nodes}")
+            
+            # Check action type compatibility
+            if providers and clients:
+                provider_types = set(act.action_type for _, act in providers)
+                client_types = set(client.action_type for _, client in clients)
+                
+                if provider_types and client_types and not provider_types.intersection(client_types):
+                    self.errors.append(f"Action '{action}' has incompatible types: provider uses {provider_types}, clients use {client_types}")
     
     def get_errors(self) -> List[str]:
         """Get list of semantic errors."""
@@ -344,4 +760,26 @@ class SemanticAnalyzer:
     
     def has_warnings(self) -> bool:
         """Check if there are any semantic warnings."""
-        return len(self.warnings) > 0 
+        return len(self.warnings) > 0
+    
+    def _is_valid_ros_type(self, type_name: str) -> bool:
+        """Check if a type is valid for ROS messages/services/actions."""
+        # Basic check: must contain a package and type (e.g., std_msgs.String)
+        if '.' in type_name or '::' in type_name:
+            return True
+        
+        # Allow common ROS types
+        common_types = {
+            "std_msgs", "geometry_msgs", "sensor_msgs", "nav_msgs", "tf2_msgs",
+            "String", "Int32", "Float32", "Bool", "Header", "Pose", "Twist",
+            "Image", "Point", "Quaternion", "Vector3", "Transform"
+        }
+        
+        if type_name in common_types:
+            return True
+        
+        # Allow types that look like valid ROS types (alphanumeric with underscores)
+        if type_name.replace('_', '').replace('/', '').isalnum():
+            return True
+        
+        return False 

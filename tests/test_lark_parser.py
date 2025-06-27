@@ -293,6 +293,188 @@ def test_cpp_method_parsing():
     assert 'std::cout' in cpp_methods[0].code
 
 
+def test_node_with_cuda_kernels():
+    """Test parsing a node with CUDA kernels inside it."""
+    content = """
+    node processing_node {
+        parameter input_size: 1024
+        parameter output_size: 1024
+        
+        publisher /processed_data : "std_msgs/msg/Float32MultiArray"
+        subscriber /raw_data : "std_msgs/msg/Float32MultiArray"
+        
+        kernel process_kernel {
+            block_size: (256, 1, 1)
+            grid_size: (4, 1, 1)
+            shared_memory: 1024
+            use_thrust: true
+            param in float input_data (size)
+            param out float output_data (size)
+        }
+        
+        kernel filter_kernel {
+            block_size: (128, 1, 1)
+            grid_size: (8, 1, 1)
+            shared_memory: 512
+            use_thrust: false
+            param in float data (width, height)
+            param out float filtered_data (width, height)
+        }
+    }
+    """
+    
+    ast = parse_robodsl(content)
+    
+    assert len(ast.nodes) == 1
+    node = ast.nodes[0]
+    assert node.name == "processing_node"
+    
+    # Check that the node has CUDA kernels
+    assert len(node.content.cuda_kernels) == 2
+    
+    # Check first kernel
+    kernel1 = node.content.cuda_kernels[0]
+    assert kernel1.name == "process_kernel"
+    assert kernel1.content.block_size == (256, 1, 1)
+    assert kernel1.content.grid_size == (4, 1, 1)
+    assert kernel1.content.shared_memory == 1024
+    assert kernel1.content.use_thrust is True
+    assert len(kernel1.content.parameters) == 2
+    
+    # Check second kernel
+    kernel2 = node.content.cuda_kernels[1]
+    assert kernel2.name == "filter_kernel"
+    assert kernel2.content.block_size == (128, 1, 1)
+    assert kernel2.content.grid_size == (8, 1, 1)
+    assert kernel2.content.shared_memory == 512
+    assert kernel2.content.use_thrust is False
+    assert len(kernel2.content.parameters) == 2
+    
+    # Check that the node also has ROS2 components
+    assert len(node.content.publishers) == 1
+    assert len(node.content.subscribers) == 1
+    assert len(node.content.parameters) == 2
+
+
+def test_enhanced_cpp_method_parsing():
+    """Test enhanced C++ method parsing with input/output parameters.
+    NOTE: Pointer types must be written with a space, e.g., 'float * input_data', not 'float* input_data'.
+    """
+    config = """
+node test_node {
+    method process_data {
+        input: int data_size
+        input: float * input_data (data_size)
+        output: float * output_data (data_size)
+        code: "for (int i = 0; i < data_size; i++) { output_data[i] = input_data[i] * 2.0f; }"
+    }
+    
+    method calculate_stats {
+        input: std::vector<float> values
+        output: float mean
+        output: float variance
+        code: "float sum = 0.0f; for (auto v : values) sum += v; mean = sum / values.size();"
+    }
+}
+"""
+    
+    ast = parse_robodsl(config)
+    assert len(ast.nodes) == 1
+    
+    node = ast.nodes[0]
+    assert node.name == 'test_node'
+    
+    cpp_methods = node.content.cpp_methods
+    assert len(cpp_methods) == 2
+    
+    # Check first method
+    method1 = cpp_methods[0]
+    assert method1.name == 'process_data'
+    assert len(method1.inputs) == 2
+    assert len(method1.outputs) == 1
+    
+    # Check input parameters
+    assert method1.inputs[0].param_type == 'int'
+    assert method1.inputs[0].param_name == 'data_size'
+    assert method1.inputs[0].size_expr is None
+    
+    assert method1.inputs[1].param_type == 'float*'
+    assert method1.inputs[1].param_name == 'input_data'
+    assert method1.inputs[1].size_expr == 'data_size'
+    
+    # Check output parameters
+    assert method1.outputs[0].param_type == 'float*'
+    assert method1.outputs[0].param_name == 'output_data'
+    assert method1.outputs[0].size_expr == 'data_size'
+    
+    # Check code
+    assert 'for (int i = 0; i < data_size; i++)' in method1.code
+    
+    # Check second method
+    method2 = cpp_methods[1]
+    assert method2.name == 'calculate_stats'
+    assert len(method2.inputs) == 1
+    assert len(method2.outputs) == 2
+    
+    # Check input parameters
+    assert method2.inputs[0].param_type == 'std::vector<float>'
+    assert method2.inputs[0].param_name == 'values'
+    assert method2.inputs[0].size_expr is None
+    
+    # Check output parameters
+    assert method2.outputs[0].param_type == 'float'
+    assert method2.outputs[0].param_name == 'mean'
+    assert method2.outputs[0].size_expr is None
+    
+    assert method2.outputs[1].param_type == 'float'
+    assert method2.outputs[1].param_name == 'variance'
+    assert method2.outputs[1].size_expr is None
+    
+    # Check code
+    assert 'float sum = 0.0f;' in method2.code
+
+
+def test_enhanced_cpp_method_semantic_validation():
+    """Test semantic validation of enhanced C++ methods."""
+    config = """
+node test_node {
+    method valid_method {
+        input: int data_size
+        output: float result
+        code: "result = data_size * 2.0f;"
+    }
+    
+    method duplicate_input {
+        input: int data_size
+        input: int data_size  // Duplicate name
+        output: float result
+        code: "result = data_size * 2.0f;"
+    }
+    
+    method input_output_conflict {
+        input: int data_size
+        output: int data_size  // Conflict with input
+        code: "data_size = 42;"
+    }
+}
+"""
+    
+    ast = parse_robodsl(config)
+    analyzer = SemanticAnalyzer()
+    result = analyzer.analyze(ast)
+    
+    # Should have errors due to duplicate and conflicting parameter names
+    assert not result
+    errors = analyzer.get_errors()
+    
+    # Check for expected errors
+    duplicate_error = any("duplicate input parameter name: data_size" in error for error in errors)
+    conflict_error = any("parameter name conflicts between inputs and outputs: data_size" in error for error in errors)
+    
+    assert duplicate_error, "Should detect duplicate input parameter names"
+    assert conflict_error, "Should detect parameter name conflicts between inputs and outputs"
+
+
 if __name__ == "__main__":
     # Run tests
     test_basic_node_parsing()
@@ -302,9 +484,14 @@ if __name__ == "__main__":
     test_timer_configuration()
     test_include_statements()
     test_comments()
+    test_semantic_errors()
+    test_parse_errors()
     test_complex_value_types()
     test_remapping()
     test_namespace()
     test_cpp_method_parsing()
+    test_node_with_cuda_kernels()
+    test_enhanced_cpp_method_parsing()
+    test_enhanced_cpp_method_semantic_validation()
     
     print("All tests passed!") 

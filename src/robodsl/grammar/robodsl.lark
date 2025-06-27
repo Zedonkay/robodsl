@@ -9,7 +9,7 @@ include_path: STRING | NAME ("/" NAME)* ("." NAME)?
 
 // Node definitions
 node_def: "node" NAME "{" node_content "}"
-node_content: (parameter | lifecycle | timer | remap | namespace | ros_primitive | flag | cpp_method)*
+node_content: (parameter | lifecycle | timer | remap | namespace | ros_primitive | flag | cpp_method | kernel_def)*
 
 // Parameters
 parameter: "parameter" NAME ":" value
@@ -55,8 +55,14 @@ topic_path: "/" NAME ("/" NAME)*
 // Flags
 flag: "flag" NAME ":" BOOLEAN
 
-// C++ methods
-cpp_method: "cpp_method" NAME ":"? "code" ":"? STRING
+// Enhanced C++ methods (Phase 2)
+cpp_method: "method" NAME "{" method_content "}"
+method_content: (input_param | output_param | code_block)*
+input_param: "input" ":" cpp_type NAME input_param_size?
+output_param: "output" ":" cpp_type NAME output_param_size?
+input_param_size: "(" method_param_size_list ")"
+output_param_size: "(" method_param_size_list ")"
+method_param_size_list: (NAME | STRING | number) ("," (NAME | STRING | number))*
 
 // CUDA kernels block
 cuda_kernels_block: "cuda_kernels" "{" kernel_def* "}"
@@ -69,8 +75,11 @@ shared_memory: "shared_memory" ":" number
 use_thrust: "use_thrust" ":" BOOLEAN
 kernel_param: "param" DIRECTION cpp_type NAME kernel_param_size?
 DIRECTION: "in" | "out" | "inout"
-cpp_type: NAME ("*")?
-kernel_param_size: "(" (NAME | STRING) ")"
+cpp_type: cpp_type_name STAR?
+cpp_type_name: NAME ("::" NAME)* ("<" cpp_type_list ">")?
+cpp_type_list: cpp_type_name ("," cpp_type_name)*
+kernel_param_size: "(" kernel_param_size_list ")"
+kernel_param_size_list: (NAME | STRING) ("," (NAME | STRING))*
 
 // Code blocks as quoted strings
 code_block: "code" ":"? STRING
@@ -95,6 +104,7 @@ number: NUMBER
 TOPIC_PATH: /\/[a-zA-Z_][a-zA-Z0-9_\/]*/
 
 // Terminals
+STAR: "*"
 NAME: /[a-zA-Z_][a-zA-Z0-9_]*/
 NUMBER: /[0-9]+(\.[0-9]+)?/
 STRING: /"[^"]*"/

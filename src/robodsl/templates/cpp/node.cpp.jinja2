@@ -850,6 +850,17 @@ std::vector<{{ kernel.output_type|default('float') }}>
 {% endfor %}
 {% endif %}
 
+// User-defined C++ methods
+{% for method in cpp_methods %}
+void {{ class_name }}::{{ method.name }}(
+    {% for input in method.inputs %}{{ input.type }} {{ input.name }}{% if input.size_expr %}[{{ input.size_expr }}]{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}
+    {% if method.inputs and method.outputs %}, {% endif %}
+    {% for output in method.outputs %}{{ output.type }}& {{ output.name }}{% if output.size_expr %}[{{ output.size_expr }}]{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}
+) {
+{{ method.code | indent(4) }}
+}
+{% endfor %}
+
 {% if namespace %}
 } // namespace {{ namespace }}
 {% endif %}

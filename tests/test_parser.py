@@ -146,13 +146,13 @@ def test_parse_cuda_kernels():
     assert input_param.direction.value == "in"
     assert input_param.param_type == "Image"
     assert input_param.param_name == "input"
-    assert input_param.size_expr == "width"
+    assert input_param.size_expr == ["width"]
     
     output_param = kernel.content.parameters[1]
     assert output_param.direction.value == "out"
     assert output_param.param_type == "Image"
     assert output_param.param_name == "output"
-    assert output_param.size_expr == "width"
+    assert output_param.size_expr == ["width"]
 
 def test_parse_include():
     """Test parsing include statements."""
@@ -227,3 +227,120 @@ def test_parse_complex_config():
     kernel = ast.cuda_kernels.kernels[0]
     assert kernel.name == "image_filter"
     assert len(kernel.content.parameters) == 3
+
+def test_cross_reference_validation():
+    """Test cross-reference validation with various scenarios."""
+    from src.robodsl.parser.semantic_analyzer import SemanticAnalyzer, SemanticError
+    from src.robodsl.parser.lark_parser import parse_robodsl
+    
+    # Test 1: Valid configuration with matching publisher/subscriber
+    valid_config = """
+    node publisher_node {
+        publisher /test_topic: "std_msgs/msg/String"
+    }
+    
+    node subscriber_node {
+        subscriber /test_topic: "std_msgs/msg/String"
+    }
+    """
+    
+    ast = parse_robodsl(valid_config)
+    analyzer = SemanticAnalyzer()
+    assert analyzer.analyze(ast)
+    assert len(analyzer.get_errors()) == 0
+    assert len(analyzer.get_warnings()) == 0
+    
+    # Test 2: Subscriber without publisher (should warn)
+    missing_publisher_config = """
+    node subscriber_node {
+        subscriber /test_topic: "std_msgs/msg/String"
+    }
+    """
+    
+    ast = parse_robodsl(missing_publisher_config)
+    analyzer = SemanticAnalyzer()
+    assert analyzer.analyze(ast)
+    assert len(analyzer.get_errors()) == 0
+    assert len(analyzer.get_warnings()) == 1
+    assert "not published by any node" in analyzer.get_warnings()[0]
+    
+    # Test 3: Incompatible message types (should error)
+    incompatible_types_config = """
+    node publisher_node {
+        publisher /test_topic: "std_msgs/msg/String"
+    }
+    
+    node subscriber_node {
+        subscriber /test_topic: "std_msgs/msg/Int32"
+    }
+    """
+    
+    try:
+        ast = parse_robodsl(incompatible_types_config)
+        assert False, "Expected SemanticError for incompatible message types"
+    except SemanticError as e:
+        assert "incompatible message types" in str(e)
+    
+    # Test 4: Multiple publishers with different types (should error)
+    multiple_publishers_config = """
+    node publisher1 {
+        publisher /test_topic: "std_msgs/msg/String"
+    }
+    
+    node publisher2 {
+        publisher /test_topic: "std_msgs/msg/Int32"
+    }
+    """
+    
+    try:
+        ast = parse_robodsl(multiple_publishers_config)
+        assert False, "Expected SemanticError for multiple publishers with different types"
+    except SemanticError as e:
+        assert "multiple publishers with different message types" in str(e)
+    
+    # Test 5: Service with multiple providers (should error)
+    multiple_service_providers_config = """
+    node provider1 {
+        service /test_service: "std_srvs/srv/Trigger"
+    }
+    
+    node provider2 {
+        service /test_service: "std_srvs/srv/Trigger"
+    }
+    """
+    
+    try:
+        ast = parse_robodsl(multiple_service_providers_config)
+        assert False, "Expected SemanticError for multiple service providers"
+    except SemanticError as e:
+        assert "provided by multiple nodes" in str(e)
+    
+    # Test 6: Circular remap (should error)
+    circular_remap_config = """
+    node test_node {
+        publisher /test_topic: "std_msgs/msg/String"
+        remap /test_topic: /test_topic
+    }
+    """
+    
+    try:
+        ast = parse_robodsl(circular_remap_config)
+        assert False, "Expected SemanticError for circular remap"
+    except SemanticError as e:
+        assert "circular remap" in str(e)
+    
+    # Test 7: Remap to non-existent topic (should warn)
+    remap_nonexistent_config = """
+    node test_node {
+        subscriber /test_topic: "std_msgs/msg/String"
+        remap /nonexistent_topic: /test_topic
+    }
+    """
+    
+    ast = parse_robodsl(remap_nonexistent_config)
+    analyzer = SemanticAnalyzer()
+    assert analyzer.analyze(ast)
+    warnings = analyzer.get_warnings()
+    assert len(warnings) == 2
+    assert any("not defined in the current configuration" in w for w in warnings)
+    assert any("not published by any node" in w for w in warnings)

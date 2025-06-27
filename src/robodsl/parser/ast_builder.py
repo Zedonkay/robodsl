@@ -6,6 +6,8 @@ providing a clean representation of parsed configurations.
 
 from typing import Any, Dict, List, Optional, Union
 from lark import Tree, Token
+from pathlib import Path
+import sys
 
 from ..ast import (
     RoboDSLAST, IncludeNode, NodeNode, NodeContentNode, ParameterNode, ValueNode,
@@ -14,7 +16,7 @@ from ..ast import (
     PublisherNode, SubscriberNode, ServiceNode, ActionNode,
     CudaKernelsNode, KernelNode, KernelContentNode, KernelParamNode,
     QoSReliability, QoSDurability, QoSHistory, QoSLiveliness, KernelParameterDirection,
-    CppMethodNode, ClientNode
+    CppMethodNode, ClientNode, MethodParamNode
 )
 
 
@@ -109,19 +111,21 @@ class ASTBuilder:
                 elif child.data == 'cpp_method':
                     content.cpp_methods.append(self._handle_cpp_method(child))
                 elif child.data == 'ros_primitive':
-                    # The actual primitive is the first child
-                    if child.children and isinstance(child.children[0], Tree):
-                        prim = child.children[0]
-                        if prim.data == 'publisher':
-                            content.publishers.append(self._handle_publisher(prim))
-                        elif prim.data == 'subscriber':
-                            content.subscribers.append(self._handle_subscriber(prim))
-                        elif prim.data == 'service':
-                            content.services.append(self._handle_service(prim))
-                        elif prim.data == 'client':
-                            content.clients.append(self._handle_client(prim))
-                        elif prim.data == 'action':
-                            content.actions.append(self._handle_action(prim))
+                    # Handle ROS primitives (publisher, subscriber, service, client, action)
+                    primitive_child = child.children[0]
+                    if primitive_child.data == 'publisher':
+                        content.publishers.append(self._handle_publisher(primitive_child))
+                    elif primitive_child.data == 'subscriber':
+                        content.subscribers.append(self._handle_subscriber(primitive_child))
+                    elif primitive_child.data == 'service':
+                        content.services.append(self._handle_service(primitive_child))
+                    elif primitive_child.data == 'client':
+                        content.clients.append(self._handle_client(primitive_child))
+                    elif primitive_child.data == 'action':
+                        content.actions.append(self._handle_action(primitive_child))
+                elif child.data == 'kernel_def':
+                    # Handle CUDA kernels inside nodes
+                    content.cuda_kernels.append(self._handle_kernel_def(child))
         
         return content
     
@@ -410,48 +414,46 @@ class ASTBuilder:
                 elif child.data == 'shared_memory':
                     content.shared_memory = self._extract_number(child.children[0])
                 elif child.data == 'use_thrust':
-                    content.use_thrust = True
+                    # Set use_thrust based on the boolean value in the tree
+                    for token in child.children:
+                        if isinstance(token, Token) and token.type == 'BOOLEAN':
+                            content.use_thrust = token.value.lower() == 'true'
                 elif child.data == 'kernel_param':
-                    param = self._parse_kernel_param(child)
+                    param = self._handle_kernel_param(child)
                     if param:
                         content.parameters.append(param)
                 elif child.data == 'code_block':
                     content.code = self._extract_code_block(child)
         return content
     
-    def _parse_kernel_param(self, tree: Tree) -> Optional[KernelParamNode]:
+    def _handle_kernel_param(self, tree: Tree) -> KernelParamNode:
         direction = None
         param_type = None
         param_name = None
-        size_param = None
+        size_expr = None
+        
         for child in tree.children:
-            if isinstance(child, Tree):
-                if child.data == 'cpp_type':
-                    param_type = self._extract_cpp_type(child)
-                elif child.data == 'kernel_param_size':
-                    size_param = self._extract_kernel_param_size(child)
-                elif child.data == 'input_data' or child.data == 'param_name':
-                    for name_child in child.children:
-                        if isinstance(name_child, Token) and name_child.type == 'NAME':
-                            param_name = name_child.value
-            elif isinstance(child, Token):
+            if isinstance(child, Token):
                 if child.type == 'DIRECTION':
-                    if child.value == 'in':
-                        direction = KernelParameterDirection.IN
-                    elif child.value == 'out':
-                        direction = KernelParameterDirection.OUT
-                    elif child.value == 'inout':
-                        direction = KernelParameterDirection.INOUT
+                    direction = KernelParameterDirection(child.value)
                 elif child.type == 'NAME':
-                    param_name = child.value
-        if direction and param_type and param_name:
-            return KernelParamNode(
-                direction=direction,
-                param_type=param_type,
-                param_name=param_name,
-                size_expr=size_param or ""
-            )
-        return None
+                    # First NAME is the type, second is the parameter name
+                    if param_type is None:
+                        param_type = child.value
+                    elif param_name is None:
+                        param_name = child.value
+            elif isinstance(child, Tree) and child.data == 'cpp_type':
+                # Handle cpp_type which can be NAME or NAME "*"
+                type_parts = []
+                for token in child.children:
+                    if isinstance(token, Token):
+                        type_parts.append(token.value)
+                param_type = ''.join(type_parts)
+            elif isinstance(child, Tree) and child.data == 'kernel_param_size':
+                # kernel_param_size_list is the first child
+                size_expr = [tok.value for tok in child.children[0].children if isinstance(tok, Token)]
+        
+        return KernelParamNode(direction=direction, param_type=param_type, param_name=param_name, size_expr=size_expr)
     
     def _extract_value(self, tree: Tree) -> Any:
         """Extract value from value tree."""
@@ -568,13 +570,46 @@ class ASTBuilder:
     
     def _handle_cpp_method(self, tree: Tree) -> CppMethodNode:
         method_name = None
-        code = None
+        inputs = []
+        outputs = []
+        code = ""
+        
         for child in tree.children:
             if isinstance(child, Token) and child.type == 'NAME':
                 method_name = child.value
-            elif isinstance(child, Token) and child.type == 'STRING':
-                code = child.value.strip('"')
-        return CppMethodNode(name=method_name or '', code=code or '')
+            elif isinstance(child, Tree) and child.data == 'method_content':
+                for content_child in child.children:
+                    if isinstance(content_child, Tree):
+                        if content_child.data == 'input_param':
+                            inputs.append(self._handle_method_param(content_child))
+                        elif content_child.data == 'output_param':
+                            outputs.append(self._handle_method_param(content_child))
+                        elif content_child.data == 'code_block':
+                            code = self._extract_code_block(content_child)
+        
+        return CppMethodNode(name=method_name or '', inputs=inputs, outputs=outputs, code=code)
+
+    def _handle_method_param(self, tree: Tree) -> MethodParamNode:
+        print('DEBUG _handle_method_param:', tree.pretty(), file=sys.stderr)
+        param_type = None
+        param_name = None
+        size_expr = None
+        
+        for child in tree.children:
+            if isinstance(child, Tree) and child.data == 'cpp_type':
+                param_type = self._extract_cpp_type(child)
+            elif isinstance(child, Token) and child.type == 'NAME':
+                param_name = child.value
+            elif isinstance(child, Tree) and (child.data == 'input_param_size' or child.data == 'output_param_size'):
+                # Extract size expression from the method_param_size_list
+                if child.children and isinstance(child.children[0], Tree) and child.children[0].data == 'method_param_size_list':
+                    size_parts = []
+                    for token in child.children[0].children:
+                        if isinstance(token, Token):
+                            size_parts.append(token.value)
+                    size_expr = ', '.join(size_parts)
+        
+        return MethodParamNode(param_type=param_type or '', param_name=param_name or '', size_expr=size_expr)
 
     def _extract_number(self, tree: Tree) -> float:
         """Extract number from tree."""
@@ -591,10 +626,53 @@ class ASTBuilder:
     def _extract_cpp_type(self, tree: Tree) -> str:
         """Extract C++ type from tree."""
         type_parts = []
+        pointer = False
+        for child in tree.children:
+            if isinstance(child, Tree) and child.data == 'cpp_type_name':
+                type_parts.extend(self._extract_cpp_type_name(child))
+            elif isinstance(child, Token):
+                if child.type == 'STAR':
+                    pointer = True
+                else:
+                    type_parts.append(child.value)
+        type_str = "".join(type_parts)
+        if pointer:
+            type_str += '*'
+        return type_str
+
+    def _extract_cpp_type_name(self, tree: Tree) -> List[str]:
+        """Extract C++ type name from tree, handling namespaces and templates."""
+        namespace_parts = []
+        template_str = ''
+        in_template = False
         for child in tree.children:
             if isinstance(child, Token):
-                type_parts.append(child.value)
-        return "".join(type_parts)
+                if child.type == 'NAME':
+                    if not in_template:
+                        namespace_parts.append(child.value)
+                    else:
+                        template_str += child.value
+                elif child.type == 'LESSTHAN':
+                    in_template = True
+                elif child.type == 'MORETHAN':
+                    in_template = False
+                elif child.type == 'COMMA':
+                    template_str += ','
+                else:
+                    template_str += child.value
+            elif isinstance(child, Tree) and child.data == 'cpp_type_list':
+                # Handle template parameters
+                template_args = []
+                for template_child in child.children:
+                    if isinstance(template_child, Tree) and template_child.data == 'cpp_type_name':
+                        template_args.append(''.join(self._extract_cpp_type_name(template_child)))
+                    elif isinstance(template_child, Token):
+                        template_args.append(template_child.value)
+                template_str += '<' + ','.join(template_args) + '>'
+        type_str = '::'.join(namespace_parts)
+        if template_str:
+            type_str += template_str
+        return [type_str]
 
     def _extract_kernel_param_size(self, tree: Tree) -> str:
         for child in tree.children:
@@ -615,4 +693,7 @@ class ASTBuilder:
         for child in tree.children:
             if isinstance(child, Token) and child.type == 'NAME':
                 parts.append(child.value)
-        return '/' + '/'.join(parts) if parts else '' 
+        return '/' + '/'.join(parts) if parts else ''
+
+    def _handle_kernel_def(self, tree: Tree) -> KernelNode:
+        return self._parse_kernel(tree) 
