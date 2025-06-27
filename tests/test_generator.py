@@ -11,15 +11,12 @@ from pathlib import Path
 # Add the src directory to the Python path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
-from robodsl.parser import (
-    RoboDSLAST, NodeNode, NodeContentNode, PublisherNode, SubscriberNode, 
-    ServiceNode, ParameterNode, ValueNode
-)
-from robodsl.generator import CodeGenerator
+from robodsl.parsers.lark_parser import parse_robodsl
+from robodsl.core.generator import CodeGenerator
 
 def create_test_ast(ros2_enabled=True):
     """Create a test AST."""
-    ast = RoboDSLAST()
+    ast = parse_robodsl()
     
     # Create a test node with publishers, subscribers, and services
     node_content = NodeContentNode(
@@ -99,7 +96,7 @@ def test_node_generation():
     print("Testing node generation...")
     
     # Create test AST with a simple node
-    ast = RoboDSLAST()
+    ast = parse_robodsl()
     
     node_content = NodeContentNode(
         publishers=[],
@@ -127,7 +124,7 @@ def test_publisher_generation():
     print("Testing publisher generation...")
     
     # Create test AST with a publisher
-    ast = RoboDSLAST()
+    ast = parse_robodsl()
     
     node_content = NodeContentNode(
         publishers=[
@@ -156,7 +153,7 @@ def test_subscriber_generation():
     print("Testing subscriber generation...")
     
     # Create test AST with a subscriber
-    ast = RoboDSLAST()
+    ast = parse_robodsl()
     
     node_content = NodeContentNode(
         publishers=[],
@@ -185,7 +182,7 @@ def test_service_generation():
     print("Testing service generation...")
     
     # Create test AST with a service
-    ast = RoboDSLAST()
+    ast = parse_robodsl()
     
     node_content = NodeContentNode(
         publishers=[],
@@ -214,7 +211,7 @@ def test_parameter_generation():
     print("Testing parameter generation...")
     
     # Create test AST with parameters
-    ast = RoboDSLAST()
+    ast = parse_robodsl()
     
     node_content = NodeContentNode(
         publishers=[],

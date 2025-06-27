@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 from jinja2 import Template, Environment, FileSystemLoader
 
-from ..ast import OnnxModelNode, ModelConfigNode, InputDefNode, OutputDefNode
+from ..core.ast import OnnxModelNode, ModelConfigNode, InputDefNode, OutputDefNode
 
 
 class OnnxIntegrationGenerator:

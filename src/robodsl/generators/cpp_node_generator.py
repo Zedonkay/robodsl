@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Dict, List, Any
 
 from .base_generator import BaseGenerator
-from ..ast import RoboDSLAST, NodeNode, KernelNode
+from ..core.ast import RoboDSLAST, NodeNode, KernelNode
 
 
 class CppNodeGenerator(BaseGenerator):

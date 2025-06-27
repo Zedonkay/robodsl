@@ -1,9 +1,10 @@
 """Comprehensive test cases for RoboDSL features implemented in Phase 0, 1, and 1.5."""
 
 import pytest
-from robodsl.parser import parse_robodsl, SemanticError
+from robodsl.parsers.lark_parser import parse_robodsl
+from robodsl.parsers.semantic_analyzer import SemanticError
 from lark import ParseError
-from robodsl.ast import (
+from robodsl.core.ast import (
     RoboDSLAST, NodeNode, PublisherNode, SubscriberNode, ServiceNode, 
     ActionNode, ClientNode, ParameterNode, TimerNode, LifecycleNode,
     RemapNode, NamespaceNode, FlagNode, QoSNode, CudaKernelsNode,

@@ -14,7 +14,7 @@ from .cmake_generator import CMakeGenerator
 from .launch_generator import LaunchGenerator
 from .package_generator import PackageGenerator
 from .onnx_integration import OnnxIntegrationGenerator
-from ..ast import RoboDSLAST
+from ..core.ast import RoboDSLAST
 
 
 class MainGenerator(BaseGenerator):
