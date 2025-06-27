@@ -142,6 +142,7 @@ class NodeConfig:
     def parameters_dict(self) -> Dict[str, Any]:
         """For backward compatibility, return parameters as a dictionary."""
         return {param.name: param.default for param in self.parameters}
+
 @dataclass
 class KernelParameter:
     name: str
@@ -252,30 +253,39 @@ def parse_robodsl(content: str) -> RoboDSLConfig:
             ) if qos_dict else None
             
         # Parse parameters
-        param_matches = re.finditer(r'parameter\s+(\w+)\s+(\w+)(?:\s*=\s*([^\s]+))?(?:\s*#\s*(.*))?', node_content)
+        param_matches = re.finditer(r'parameter\s+(\w+)\s*[:=]\s*([^\n]+)', node_content)
         for param in param_matches:
             param_name = param.group(1)
-            param_type = param.group(2)
-            param_default = param.group(3) if param.lastindex >= 3 else None
-            param_desc = param.group(4).strip() if param.lastindex >= 4 and param.group(4) else ""
+            param_value = param.group(2).strip()
             
-            # Convert default value to appropriate type
-            default_value = None
-            if param_default is not None:
-                if param_type == 'int':
-                    default_value = int(param_default)
-                elif param_type == 'double':
-                    default_value = float(param_default)
-                elif param_type == 'bool':
-                    default_value = param_default.lower() in ('true', '1', 'yes')
-                else:  # string or other types
-                    default_value = param_default.strip('"\'')
+            # Handle boolean values first
+            if param_value.lower() in ('true', 'false'):
+                default_value = param_value.lower() == 'true'
+                param_type = 'bool'
+            else:
+                # Try to evaluate the parameter value (handles numbers, lists, dicts, etc.)
+                try:
+                    default_value = eval(param_value)
+                except (NameError, SyntaxError):
+                    # If evaluation fails, store as string
+                    default_value = param_value.strip('\'"')
+                
+                # Determine parameter type based on the value
+                if isinstance(default_value, bool):
+                    param_type = 'bool'
+                elif isinstance(default_value, int):
+                    param_type = 'int'
+                elif isinstance(default_value, float):
+                    param_type = 'double'
+                else:
+                    param_type = 'string'
             
+            # Create ParameterConfig object and append to the list
             node.parameters.append(ParameterConfig(
                 name=param_name,
                 type=param_type,
                 default=default_value,
-                description=param_desc
+                description=""
             ))
             
         # Parse lifecycle settings
@@ -397,32 +407,6 @@ def parse_robodsl(content: str) -> RoboDSLConfig:
                 qos=qos
             ))
 
-        # Parse timers
-        timer_matches = re.finditer(r'timer\s+(\w+)\s+(\d+\.?\d*)(?:\s+([^\n]+))?', node_content)
-        for timer in timer_matches:
-            timer_name = timer.group(1)
-            period = float(timer.group(2))
-            callback = timer.group(3).strip() if timer.lastindex == 3 else f'on_timer_{timer_name}'
-            
-            node.timers.append({
-                'name': timer_name,
-                'period': period,
-                'callback': callback
-            })
-
-        # Parse parameters
-        param_matches = re.finditer(r'parameter\s+(\w+)\s*[:=]\s*([^\n]+)', node_content)
-        for param in param_matches:
-            param_name = param.group(1)
-            param_value = param.group(2).strip()
-            
-            # Try to evaluate the parameter value (handles numbers, lists, dicts, etc.)
-            try:
-                node.parameters[param_name] = eval(param_value)
-            except (NameError, SyntaxError):
-                # If evaluation fails, store as string
-                node.parameters[param_name] = param_value.strip('\'"')
-
         # Lifecycle flag
         if re.search(r'lifecycle\s*[:=]\s*true', node_content, re.IGNORECASE):
             node.lifecycle = True
@@ -431,11 +415,23 @@ def parse_robodsl(content: str) -> RoboDSLConfig:
         if re.search(r'parameter_callbacks\s*[:=]\s*true', node_content, re.IGNORECASE):
             node.parameter_callbacks = True
 
+        # At the end of each node parsing, append the node to config.nodes
+        config.nodes.append(node)
+
     # Parse CUDA kernels section if it exists
-    kernel_section = re.search(r'cuda_kernels\s*\{([^}]*)\}', content, re.DOTALL)
-    if kernel_section:
-        kernel_blocks = re.finditer(r'kernel\s+(\w+)\s*\{([^}]*)\}', kernel_section.group(1), re.DOTALL)
-        
+    cuda_start = re.search(r'cuda_kernels\s*\{', content, re.DOTALL)
+    if cuda_start:
+        start_pos = cuda_start.end()
+        brace_count = 1
+        end_pos = start_pos
+        while end_pos < len(content) and brace_count > 0:
+            if content[end_pos] == '{':
+                brace_count += 1
+            elif content[end_pos] == '}':
+                brace_count -= 1
+            end_pos += 1
+        kernel_section_content = content[start_pos:end_pos-1]
+        kernel_blocks = re.finditer(r'kernel\s+(\w+)\s*\{([^}]*)\}', kernel_section_content, re.DOTALL)
         for kernel_match in kernel_blocks:
             kernel_name = kernel_match.group(1)
             kernel_content = kernel_match.group(2)
@@ -450,35 +446,34 @@ def parse_robodsl(content: str) -> RoboDSLConfig:
             includes = []
             defines = {}
 
-            # Parse block size
-            block_match = re.search(r'block_size\s*=\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)', kernel_content)
+            # Parse block size - handle both (x, y, z), [x, y, z], and x, y, z formats
+            block_match = re.search(r'block_size\s*[:=]\s*(?:[\[\(])?\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:[\]\)])?', kernel_content)
             if block_match:
                 block_size = (int(block_match.group(1)), 
                              int(block_match.group(2)), 
                              int(block_match.group(3)))
 
             # Parse grid size
-            grid_match = re.search(r'grid_size\s*=\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)', kernel_content)
+            grid_match = re.search(r'grid_size\s*[:=]\s*[\[\(]\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*[\]\)]', kernel_content)
             if grid_match:
                 grid_size = (int(grid_match.group(1)),
                             int(grid_match.group(2)),
                             int(grid_match.group(3)))
 
             # Parse shared memory
-            shared_match = re.search(r'shared_memory\s*=\s*(\d+)', kernel_content)
+            shared_match = re.search(r'shared_memory\s*[:=]\s*(\d+)', kernel_content)
             if shared_match:
                 shared_mem_bytes = int(shared_match.group(1))
 
             # Parse Thrust usage
             use_thrust = 'use_thrust' in kernel_content
 
-            # Parse inputs
-            input_pattern = r'input\s+([\w:]+)\s+(\w+)(?:\s*\[\s*(\w*)\s*\])?'
+            # Parse inputs - handle both "input: Type (params)" and "input: Type name (params)" formats
+            input_pattern = r'input\s*:?\s*([\w:/]+)(?:\s+(\w+))?(?:\s*\(([^)]*)\))?'
             for input_match in re.finditer(input_pattern, kernel_content):
-                param_name = input_match.group(2)
                 param_type = input_match.group(1)
-                size_expr = input_match.group(3) if input_match.lastindex == 3 else None
-                
+                param_name = input_match.group(2) if input_match.group(2) else param_type.lower()
+                size_expr = input_match.group(3) if input_match.group(3) else None
                 params.append(KernelParameter(
                     name=param_name,
                     type=param_type,
@@ -488,13 +483,12 @@ def parse_robodsl(content: str) -> RoboDSLConfig:
                     size_expr=size_expr
                 ))
 
-            # Parse outputs
-            output_pattern = r'output\s+([\w:]+)\s+(\w+)(?:\s*\[\s*(\w*)\s*\])?'
+            # Parse outputs - handle both "output: Type (params)" and "output: Type name (params)" formats
+            output_pattern = r'output\s*:?\s*([\w:/]+)(?:\s+(\w+))?(?:\s*\(([^)]*)\))?'
             for output_match in re.finditer(output_pattern, kernel_content):
-                param_name = output_match.group(2)
                 param_type = output_match.group(1)
-                size_expr = output_match.group(3) if output_match.lastindex == 3 else None
-                
+                param_name = output_match.group(2) if output_match.group(2) else param_type.lower()
+                size_expr = output_match.group(3) if output_match.group(3) else None
                 params.append(KernelParameter(
                     name=param_name,
                     type=param_type,

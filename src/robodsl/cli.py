@@ -135,10 +135,18 @@ def get_node_file_paths(project_path: Path, node_name: str, language: str) -> tu
     include_dir = project_path / 'include'
     
     # Create source and header file paths
+    if len(parts) > 1:
+        # For subnodes, create a directory structure in src
+        src_dir = src_dir / '/'.join(parts[:-1])
+        src_dir.mkdir(parents=True, exist_ok=True)
+    
     src_file = src_dir / f"{node_base_name}_node.cpp"
     
-    # For C++ headers, create a subdirectory matching the node name
-    node_include_dir = include_dir / node_name
+    # For C++ headers, create a subdirectory matching the node path (without base name)
+    if len(parts) > 1:
+        node_include_dir = include_dir / '/'.join(parts[:-1])
+    else:
+        node_include_dir = include_dir / node_name
     node_include_dir.mkdir(parents=True, exist_ok=True)
     
     header_file = node_include_dir / f"{node_base_name}_node.hpp"
@@ -537,13 +545,6 @@ def add_node(node_name: str, publisher: List[tuple], subscriber: List[tuple],
     if not project_dir.exists():
         click.echo(f"Error: Directory '{project_dir}' does not exist", err=True)
         sys.exit(1)
-        
-    # Create include directory structure for C++
-    if language == 'cpp':
-        node_parts = node_name.split('.')
-        if len(node_parts) > 1:
-            include_node_dir = include_dir / '/'.join(node_parts)
-            include_node_dir.mkdir(parents=True, exist_ok=True)
     
     # Create necessary directories
     src_dir = project_path / 'src'
@@ -554,6 +555,13 @@ def add_node(node_name: str, publisher: List[tuple], subscriber: List[tuple],
     # Ensure all required directories exist
     for directory in [src_dir, include_dir, launch_dir, config_dir]:
         directory.mkdir(parents=True, exist_ok=True)
+        
+    # Create include directory structure for C++
+    if language == 'cpp':
+        node_parts = node_name.split('.')
+        if len(node_parts) > 1:
+            include_node_dir = include_dir / '/'.join(node_parts)
+            include_node_dir.mkdir(parents=True, exist_ok=True)
     
     # Create default config YAML
     config_file = config_dir / f"{node_base_name}.yaml"
@@ -571,7 +579,7 @@ def add_node(node_name: str, publisher: List[tuple], subscriber: List[tuple],
                      [{'topic': s[0], 'msg_type': s[1]} for s in subscriber])
     
     # Create launch file
-    create_launch_file(project_path, node_name, language)
+    _create_launch_file_impl(project_path, node_name, language)
     
     # Create or update RoboDSL config
     create_robodsl_config(

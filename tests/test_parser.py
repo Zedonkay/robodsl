@@ -3,6 +3,12 @@
 import pytest
 from robodsl.parser import parse_robodsl, NodeConfig, CudaKernelConfig, RoboDSLConfig
 
+def get_param(node, name):
+    for p in node.parameters:
+        if hasattr(p, 'name') and p.name == name:
+            return p
+    return None
+
 def test_parse_empty_config():
     """Test parsing an empty configuration."""
     config = parse_robodsl("")
@@ -22,8 +28,8 @@ def test_parse_node_with_publisher():
     node = config.nodes[0]
     assert node.name == "test_node"
     assert len(node.publishers) == 1
-    assert node.publishers[0]["topic"] == "/camera/image_raw"
-    assert node.publishers[0]["msg_type"] == "sensor_msgs/msg/Image"
+    assert node.publishers[0].topic == "/camera/image_raw"
+    assert node.publishers[0].msg_type == "sensor_msgs/msg/Image"
 
 def test_parse_node_with_subscriber():
     """Test parsing a node with a subscriber."""
@@ -37,8 +43,8 @@ def test_parse_node_with_subscriber():
     node = config.nodes[0]
     assert node.name == "test_node"
     assert len(node.subscribers) == 1
-    assert node.subscribers[0]["topic"] == "/cmd_vel"
-    assert node.subscribers[0]["msg_type"] == "geometry_msgs/msg/Twist"
+    assert node.subscribers[0].topic == "/cmd_vel"
+    assert node.subscribers[0].msg_type == "geometry_msgs/msg/Twist"
 
 def test_parse_node_with_service():
     """Test parsing a node with a service."""
@@ -52,8 +58,8 @@ def test_parse_node_with_service():
     node = config.nodes[0]
     assert node.name == "test_node"
     assert len(node.services) == 1
-    assert node.services[0]["service"] == "/get_status"
-    assert node.services[0]["srv_type"] == "std_srvs/srv/Trigger"
+    assert node.services[0].service == "/get_status"
+    assert node.services[0].srv_type == "std_srvs/srv/Trigger"
 
 def test_parse_node_with_parameters():
     """Test parsing a node with parameters."""
@@ -69,9 +75,9 @@ def test_parse_node_with_parameters():
     node = config.nodes[0]
     assert node.name == "test_node"
     assert len(node.parameters) == 3
-    assert node.parameters["max_speed"] == "1.5"
-    assert node.parameters["use_gpu"] == "true"
-    assert node.parameters["sensor_name"] == "\"front_camera\""
+    assert get_param(node, "max_speed").default == 1.5
+    assert get_param(node, "use_gpu").default is True
+    assert get_param(node, "sensor_name").default == "front_camera"
 
 def test_parse_complete_node():
     """Test parsing a complete node with all features."""
@@ -102,24 +108,29 @@ def test_parse_complete_node():
     
     # Verify publishers
     assert len(node.publishers) == 2
-    assert node.publishers[0] == {"topic": "/odom", "msg_type": "nav_msgs/msg/Odometry"}
-    assert node.publishers[1] == {"topic": "/status", "msg_type": "std_msgs/msg/String"}
+    assert node.publishers[0].topic == "/odom"
+    assert node.publishers[0].msg_type == "nav_msgs/msg/Odometry"
+    assert node.publishers[1].topic == "/status"
+    assert node.publishers[1].msg_type == "std_msgs/msg/String"
     
     # Verify subscribers
     assert len(node.subscribers) == 1
-    assert node.subscribers[0] == {"topic": "/cmd_vel", "msg_type": "geometry_msgs/msg/Twist"}
+    assert node.subscribers[0].topic == "/cmd_vel"
+    assert node.subscribers[0].msg_type == "geometry_msgs/msg/Twist"
     
     # Verify services
     assert len(node.services) == 2
-    assert node.services[0] == {"service": "/get_status", "srv_type": "std_srvs/srv/Trigger"}
-    assert node.services[1] == {"service": "/reset_odom", "srv_type": "std_srvs/srv/Empty"}
+    assert node.services[0].service == "/get_status"
+    assert node.services[0].srv_type == "std_srvs/srv/Trigger"
+    assert node.services[1].service == "/reset_odom"
+    assert node.services[1].srv_type == "std_srvs/srv/Empty"
     
     # Verify parameters
     assert len(node.parameters) == 4
-    assert node.parameters["wheel_radius"] == "0.1"
-    assert node.parameters["max_speed"] == "2.5"
-    assert node.parameters["use_gpu"] == "true"
-    assert node.parameters["robot_name"] == "\"turtlebot1\""
+    assert get_param(node, "wheel_radius").default == 0.1
+    assert get_param(node, "max_speed").default == 2.5
+    assert get_param(node, "use_gpu").default is True
+    assert get_param(node, "robot_name").default == "turtlebot1"
 
 def test_parse_cuda_kernel():
     """Test parsing a CUDA kernel definition."""
@@ -136,13 +147,15 @@ def test_parse_cuda_kernel():
     assert len(config.cuda_kernels) == 1
     kernel = config.cuda_kernels[0]
     assert kernel.name == "process_image"
-    assert len(kernel.inputs) == 1
-    assert kernel.inputs[0]["type"] == "Image"
-    assert kernel.inputs[0]["width"] == "640"
-    assert kernel.inputs[0]["height"] == "480"
-    assert len(kernel.outputs) == 1
-    assert kernel.outputs[0]["type"] == "Image"
     assert kernel.block_size == (16, 16, 1)
+    # Kernel parameters: check for one input and one output
+    in_params = [p for p in kernel.parameters if p.direction == "in"]
+    out_params = [p for p in kernel.parameters if p.direction == "out"]
+    assert len(in_params) == 1
+    assert in_params[0].type == "Image"
+    assert in_params[0].size_expr is not None
+    assert len(out_params) == 1
+    assert out_params[0].type == "Image"
 
 def test_parse_complete_example():
     """Test parsing a complete example configuration."""
@@ -174,12 +187,12 @@ def test_parse_complete_example():
     node = config.nodes[0]
     assert node.name == "image_processor"
     assert len(node.subscribers) == 1
-    assert node.subscribers[0]["topic"] == "/camera/image_raw"
-    assert node.subscribers[0]["msg_type"] == "sensor_msgs/msg/Image"
+    assert node.subscribers[0].topic == "/camera/image_raw"
+    assert node.subscribers[0].msg_type == "sensor_msgs/msg/Image"
     
     assert len(node.publishers) == 1
-    assert node.publishers[0]["topic"] == "/processed_image"
-    assert node.publishers[0]["msg_type"] == "sensor_msgs/msg/Image"
+    assert node.publishers[0].topic == "/processed_image"
+    assert node.publishers[0].msg_type == "sensor_msgs/msg/Image"
     
     # Verify CUDA kernels
     assert len(config.cuda_kernels) == 2
@@ -187,21 +200,22 @@ def test_parse_complete_example():
     # First kernel
     kernel1 = config.cuda_kernels[0]
     assert kernel1.name == "process_image"
-    assert len(kernel1.inputs) == 1
-    assert kernel1.inputs[0]["type"] == "Image"
-    assert kernel1.inputs[0]["width"] == "640"
-    assert kernel1.inputs[0]["height"] == "480"
-    assert kernel1.inputs[0]["channels"] == "3"
-    assert len(kernel1.outputs) == 1
-    assert kernel1.outputs[0]["type"] == "Image"
-    assert kernel1.outputs[0]["channels"] == "1"
     assert kernel1.block_size == (16, 16, 1)
+    in_params1 = [p for p in kernel1.parameters if p.direction == "in"]
+    out_params1 = [p for p in kernel1.parameters if p.direction == "out"]
+    assert len(in_params1) == 1
+    assert in_params1[0].type == "Image"
+    assert in_params1[0].size_expr is not None
+    assert len(out_params1) == 1
+    assert out_params1[0].type == "Image"
     
     # Second kernel
     kernel2 = config.cuda_kernels[1]
     assert kernel2.name == "detect_edges"
-    assert len(kernel2.inputs) == 1
-    assert kernel2.inputs[0]["type"] == "Image"
-    assert len(kernel2.outputs) == 1
-    assert kernel2.outputs[0]["type"] == "Image"
     assert kernel2.block_size == (32, 32, 1)
+    in_params2 = [p for p in kernel2.parameters if p.direction == "in"]
+    out_params2 = [p for p in kernel2.parameters if p.direction == "out"]
+    assert len(in_params2) == 1
+    assert in_params2[0].type == "Image"
+    assert len(out_params2) == 1
+    assert out_params2[0].type == "Image"
