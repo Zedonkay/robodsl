@@ -1,51 +1,77 @@
 #ifndef {{ project_name.upper() }}_{{ stage.name.upper() }}_NODE_HPP
 #define {{ project_name.upper() }}_{{ stage.name.upper() }}_NODE_HPP
 
-#include <rclcpp/rclcpp.hpp>
-#include <std_msgs/msg/string.hpp>
-#include <sensor_msgs/msg/image.hpp>
-#include <sensor_msgs/msg/point_cloud2.hpp>
+#include "rclcpp/rclcpp.hpp"
+#include "std_msgs/msg/string.hpp"
+#include "sensor_msgs/msg/image.hpp"
+#include "geometry_msgs/msg/pose_stamped.hpp"
+#include <memory>
+#include <string>
+#include <vector>
+
+{% if has_cuda %}
+#include "{{ project_name }}/{{ stage.name }}_cuda.hpp"
+{% endif %}
+
+{% if has_onnx %}
+#include "{{ project_name }}/{{ stage.name }}_onnx.hpp"
+{% endif %}
 
 namespace {{ project_name }} {
 
-class {{ stage.name | title }}Node : public rclcpp::Node {
+class {{ stage.name }}Node : public rclcpp::Node {
 public:
-    {{ stage.name | title }}Node();
-    ~{{ stage.name | title }}Node() = default;
+    {{ stage.name }}Node();
+    ~{{ stage.name }}Node();
 
 private:
-    // Callback functions
+    // ROS2 publishers and subscribers
     {% for input in stage.content.inputs %}
-    void on_{{ input.input_name }}_received(const std_msgs::msg::String::SharedPtr msg);
+    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr {{ input.input_name }}_sub_;
     {% endfor %}
+    
+    {% for output in stage.content.outputs %}
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr {{ output.output_name }}_pub_;
+    {% endfor %}
+    
+    // Timer for periodic processing
+    rclcpp::TimerBase::SharedPtr timer_;
+    
+    {% if has_cuda %}
+    // CUDA integration
+    std::unique_ptr<{{ stage.name }}CudaManager> cuda_manager_;
+    {% endif %}
+    
+    {% if has_onnx %}
+    // ONNX integration
+    std::unique_ptr<{{ stage.name }}OnnxManager> onnx_manager_;
+    {% endif %}
+    
+    // Callback methods
+    {% for input in stage.content.inputs %}
+    void {{ input.input_name }}_callback(const std_msgs::msg::String::SharedPtr msg);
+    {% endfor %}
+    
+    void timer_callback();
     
     // Processing methods
     {% for method in stage.content.methods %}
     void {{ method.method_name }}();
     {% endfor %}
     
-    // Publishers
-    {% for output in stage.content.outputs %}
-    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr {{ output.output_name }}_publisher_;
+    // Model processing methods
+    {% for model in stage.content.models %}
+    void process_{{ model.model_name }}_model();
     {% endfor %}
     
-    // Subscribers
-    {% for input in stage.content.inputs %}
-    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr {{ input.input_name }}_subscriber_;
-    {% endfor %}
-    
-    // Timer for periodic processing
-    rclcpp::TimerBase::SharedPtr timer_;
-    void timer_callback();
-    
-    // Parameters
-    {% for topic in stage.content.topics %}
-    std::string {{ topic.topic_path.split('/')[-1] }}_topic_;
-    {% endfor %}
-    
-    // Internal state
-    bool initialized_;
-    int processing_count_;
+    // Initialize components
+    void initialize_ros_components();
+    {% if has_cuda %}
+    bool initialize_cuda();
+    {% endif %}
+    {% if has_onnx %}
+    bool initialize_onnx();
+    {% endif %}
 };
 
 } // namespace {{ project_name }}

@@ -93,14 +93,36 @@ class MainGenerator(BaseGenerator):
         all_generated_files.extend(onnx_files)
         print(f"Generated {len(onnx_files)} ONNX integration files")
         
-        # Generate pipeline files
+        # Generate pipeline files (including per-stage CUDA/ONNX integration)
         print("Generating pipeline files...")
-        pipeline_files = self._generate_pipelines(ast)
+        pipeline_files = []
+        if hasattr(ast, 'pipelines') and ast.pipelines:
+            for pipeline in ast.pipelines:
+                # Use the project name if available, else fallback
+                project_name = getattr(ast, 'project_name', 'robodsl_project')
+                print(f"DEBUG: Processing pipeline '{pipeline.name}' with project_name '{project_name}'")
+                for idx, stage in enumerate(pipeline.content.stages):
+                    print(f"DEBUG: Processing stage '{stage.name}' (index {idx})")
+                    files = self.pipeline_generator._generate_stage_node(stage, pipeline.name, idx, project_name)
+                    print(f"DEBUG: Stage '{stage.name}' generated files: {list(files.keys())}")
+                    # Write files to disk and collect their paths
+                    for rel_path, content in files.items():
+                        abs_path = Path(self.output_dir) / rel_path
+                        abs_path.parent.mkdir(parents=True, exist_ok=True)
+                        abs_path.write_text(content)
+                        pipeline_files.append(abs_path)
         all_generated_files.extend(pipeline_files)
         print(f"Generated {len(pipeline_files)} pipeline files")
         
         # Generate README
-        readme_path = self._generate_readme(ast)
+        print("Generating README.md...")
+        try:
+            readme_content = self.render_template('README.md.jinja2', self._prepare_readme_context(ast))
+        except Exception as e:
+            print(f"Template error for README.md: {e}")
+            readme_content = self._generate_fallback_readme(ast)
+        readme_path = Path(self.output_dir) / 'README.md'
+        readme_path.write_text(readme_content)
         all_generated_files.append(readme_path)
         print("Generated README.md")
         

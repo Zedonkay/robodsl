@@ -32,7 +32,7 @@ def create_test_ast(ros2_enabled=True):
             ServiceNode(service="/test_service", srv_type="std_srvs/srv/Trigger", qos=None)
         ],
         parameters=[
-            ParameterNode(name="test_param", value=ValueNode(value=42))
+            ParameterNode(name="test_param", type="int", value=ValueNode(value=42))
         ]
     )
     
@@ -220,7 +220,7 @@ def test_parameter_generation():
         subscribers=[],
         services=[],
         parameters=[
-            ParameterNode(name="test_param", value=ValueNode(value=42))
+            ParameterNode(name="test_param", type="int", value=ValueNode(value=42))
         ]
     )
     
@@ -232,6 +232,7 @@ def test_parameter_generation():
         assert len(ast.nodes[0].content.parameters) == 1
         param = ast.nodes[0].content.parameters[0]
         assert param.name == "test_param"
+        assert param.type == "int"
         assert param.value.value == 42
         print("✓ Parameter generation test passed")
     except Exception as e:

@@ -165,8 +165,8 @@ if __name__ == '__main__':
         for param in node.content.parameters:
             parameters.append({
                 'name': param.name,
-                'type': param.param_type,
-                'default_value': param.default_value
+                'type': param.type,
+                'default_value': param.value.value
             })
         
         return {

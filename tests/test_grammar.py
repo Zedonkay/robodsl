@@ -22,7 +22,7 @@ def test_grammar():
         # Test with a simple input
         test_input = """
         node test_node {
-            parameter test_param: 42
+            parameter int: test_param = 42
             publisher /test_topic "std_msgs/String"
             subscriber /input_topic "std_msgs/String"
         }

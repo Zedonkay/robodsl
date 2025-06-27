@@ -194,6 +194,7 @@ class ValueNode(ASTNode):
 class ParameterNode(ASTNode):
     """Parameter node."""
     name: str
+    type: str
     value: ValueNode
 
 
@@ -494,6 +495,18 @@ class StageTopicNode(ASTNode):
 
 
 @dataclass
+class StageCudaKernelNode(ASTNode):
+    """Pipeline stage CUDA kernel node."""
+    kernel_name: str
+
+
+@dataclass
+class StageOnnxModelNode(ASTNode):
+    """Pipeline stage ONNX model node."""
+    model_name: str
+
+
+@dataclass
 class StageContentNode(ASTNode):
     """Pipeline stage content node."""
     inputs: List[StageInputNode] = field(default_factory=list)
@@ -501,6 +514,8 @@ class StageContentNode(ASTNode):
     methods: List[StageMethodNode] = field(default_factory=list)
     models: List[StageModelNode] = field(default_factory=list)
     topics: List[StageTopicNode] = field(default_factory=list)
+    cuda_kernels: List[StageCudaKernelNode] = field(default_factory=list)
+    onnx_models: List[StageOnnxModelNode] = field(default_factory=list)
 
 
 @dataclass

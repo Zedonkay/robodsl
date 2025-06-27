@@ -57,7 +57,9 @@ class PipelineGenerator(BaseGenerator):
             pipeline_name=pipeline_name,
             stage_namespace=stage_namespace,
             project_name=project_name,
-            stage_index=stage_index
+            stage_index=stage_index,
+            has_cuda=len(stage.content.cuda_kernels) > 0,
+            has_onnx=len(stage.content.onnx_models) > 0
         )
         files[f"include/{project_name}/{stage.name}_node.hpp"] = header_content
         
@@ -68,7 +70,9 @@ class PipelineGenerator(BaseGenerator):
             pipeline_name=pipeline_name,
             stage_namespace=stage_namespace,
             project_name=project_name,
-            stage_index=stage_index
+            stage_index=stage_index,
+            has_cuda=len(stage.content.cuda_kernels) > 0,
+            has_onnx=len(stage.content.onnx_models) > 0
         )
         files[f"src/{stage.name}_node.cpp"] = impl_content
         
@@ -79,9 +83,65 @@ class PipelineGenerator(BaseGenerator):
             pipeline_name=pipeline_name,
             stage_namespace=stage_namespace,
             project_name=project_name,
-            stage_index=stage_index
+            stage_index=stage_index,
+            has_cuda=len(stage.content.cuda_kernels) > 0,
+            has_onnx=len(stage.content.onnx_models) > 0
         )
         files[f"src/{stage.name}_node.py"] = py_content
+        
+        # Generate CUDA kernel integration if needed
+        if stage.content.cuda_kernels:
+            cuda_files = self._generate_cuda_integration(stage, project_name)
+            files.update(cuda_files)
+        
+        # Generate ONNX integration if needed
+        if stage.content.onnx_models:
+            onnx_files = self._generate_onnx_integration(stage, project_name)
+            files.update(onnx_files)
+        
+        return files
+    
+    def _generate_cuda_integration(self, stage: StageNode, project_name: str) -> Dict[str, str]:
+        """Generate CUDA kernel integration files for a stage."""
+        files = {}
+        
+        # Generate CUDA kernel wrapper header
+        cuda_header_template = self.template_env.get_template("cuda_integration.hpp.jinja2")
+        cuda_header_content = cuda_header_template.render(
+            stage=stage,
+            project_name=project_name
+        )
+        files[f"include/{project_name}/{stage.name}_cuda.hpp"] = cuda_header_content
+        
+        # Generate CUDA kernel wrapper implementation
+        cuda_impl_template = self.template_env.get_template("cuda_integration.cpp.jinja2")
+        cuda_impl_content = cuda_impl_template.render(
+            stage=stage,
+            project_name=project_name
+        )
+        files[f"src/{stage.name}_cuda.cpp"] = cuda_impl_content
+        
+        return files
+    
+    def _generate_onnx_integration(self, stage: StageNode, project_name: str) -> Dict[str, str]:
+        """Generate ONNX model integration files for a stage."""
+        files = {}
+        
+        # Generate ONNX integration header
+        onnx_header_template = self.template_env.get_template("onnx_integration.hpp.jinja2")
+        onnx_header_content = onnx_header_template.render(
+            stage=stage,
+            project_name=project_name
+        )
+        files[f"include/{project_name}/{stage.name}_onnx.hpp"] = onnx_header_content
+        
+        # Generate ONNX integration implementation
+        onnx_impl_template = self.template_env.get_template("onnx_integration.cpp.jinja2")
+        onnx_impl_content = onnx_impl_template.render(
+            stage=stage,
+            project_name=project_name
+        )
+        files[f"src/{stage.name}_onnx.cpp"] = onnx_impl_content
         
         return files
     

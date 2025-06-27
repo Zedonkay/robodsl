@@ -330,4 +330,162 @@ if __name__ == "__main__":
         return template.render(
             node_name=node_name,
             model=model
+        )
+
+    def generate_cuda_integration(self, model: OnnxModelNode, node_name: str) -> str:
+        """Generate CUDA integration code for ONNX models."""
+        template_str = """
+// CUDA Integration for {{ node_name }} ONNX Model
+// This code provides CUDA-specific optimizations for the {{ model.name }} ONNX model
+
+#include <cuda_runtime.h>
+#include <memory>
+#include <string>
+
+class {{ node_name }}CudaManager {
+private:
+    // CUDA device management
+    int device_id_;
+    cudaStream_t cuda_stream_;
+    
+    // Model configuration
+    std::string model_path_;
+    std::string device_type_;
+    
+    // CUDA memory management
+    void* d_input_buffer_;
+    void* d_output_buffer_;
+    size_t input_size_;
+    size_t output_size_;
+    
+public:
+    {{ node_name }}CudaManager() : device_id_(0), d_input_buffer_(nullptr), d_output_buffer_(nullptr) {
+        // Initialize CUDA device
+        cudaError_t cuda_status = cudaSetDevice(device_id_);
+        if (cuda_status != cudaSuccess) {
+            throw std::runtime_error("Failed to set CUDA device: " + std::string(cudaGetErrorString(cuda_status)));
+        }
+        
+        // Create CUDA stream
+        cuda_status = cudaStreamCreate(&cuda_stream_);
+        if (cuda_status != cudaSuccess) {
+            throw std::runtime_error("Failed to create CUDA stream: " + std::string(cudaGetErrorString(cuda_status)));
+        }
+        
+        device_type_ = "{{ model.config.device.device if model.config.device else 'cpu' }}";
+        model_path_ = "{{ model.name }}.onnx";
+        
+        RCLCPP_INFO(rclcpp::get_logger("{{ node_name }}"), "CUDA manager initialized for device: %s", device_type_.c_str());
+    }
+    
+    ~{{ node_name }}CudaManager() {
+        // Clean up CUDA resources
+        if (d_input_buffer_) {
+            cudaFree(d_input_buffer_);
+        }
+        if (d_output_buffer_) {
+            cudaFree(d_output_buffer_);
+        }
+        if (cuda_stream_) {
+            cudaStreamDestroy(cuda_stream_);
+        }
+    }
+    
+    bool initialize_cuda_memory(size_t input_size, size_t output_size) {
+        input_size_ = input_size;
+        output_size_ = output_size;
+        
+        // Allocate input buffer
+        cudaError_t status = cudaMalloc(&d_input_buffer_, input_size);
+        if (status != cudaSuccess) {
+            RCLCPP_ERROR(rclcpp::get_logger("{{ node_name }}"), "Failed to allocate input buffer: %s", cudaGetErrorString(status));
+            return false;
+        }
+        
+        // Allocate output buffer
+        status = cudaMalloc(&d_output_buffer_, output_size);
+        if (status != cudaSuccess) {
+            RCLCPP_ERROR(rclcpp::get_logger("{{ node_name }}"), "Failed to allocate output buffer: %s", cudaGetErrorString(status));
+            cudaFree(d_input_buffer_);
+            d_input_buffer_ = nullptr;
+            return false;
+        }
+        
+        RCLCPP_INFO(rclcpp::get_logger("{{ node_name }}"), "CUDA memory allocated successfully");
+        return true;
+    }
+    
+    bool copy_input_to_gpu(const void* input_data) {
+        cudaError_t status = cudaMemcpyAsync(d_input_buffer_, input_data, input_size_, 
+                                           cudaMemcpyHostToDevice, cuda_stream_);
+        if (status != cudaSuccess) {
+            RCLCPP_ERROR(rclcpp::get_logger("{{ node_name }}"), "Failed to copy input to GPU: %s", cudaGetErrorString(status));
+            return false;
+        }
+        return true;
+    }
+    
+    bool copy_output_from_gpu(void* output_data) {
+        cudaError_t status = cudaMemcpyAsync(output_data, d_output_buffer_, output_size_, 
+                                           cudaMemcpyDeviceToHost, cuda_stream_);
+        if (status != cudaSuccess) {
+            RCLCPP_ERROR(rclcpp::get_logger("{{ node_name }}"), "Failed to copy output from GPU: %s", cudaGetErrorString(status));
+            return false;
+        }
+        return true;
+    }
+    
+    void synchronize() {
+        cudaStreamSynchronize(cuda_stream_);
+    }
+    
+    cudaStream_t get_stream() const { return cuda_stream_; }
+    void* get_input_buffer() const { return d_input_buffer_; }
+    void* get_output_buffer() const { return d_output_buffer_; }
+};
+
+// Integration with ONNX Runtime for CUDA
+class {{ node_name }}CudaOnnxIntegration {
+private:
+    std::unique_ptr<{{ node_name }}CudaManager> cuda_manager_;
+    // Add ONNX Runtime session here
+    
+public:
+    {{ node_name }}CudaOnnxIntegration() {
+        cuda_manager_ = std::make_unique<{{ node_name }}CudaManager>();
+    }
+    
+    bool initialize() {
+        // Initialize CUDA manager
+        // Initialize ONNX Runtime with CUDA execution provider
+        // Set up model session with CUDA optimization
+        
+        RCLCPP_INFO(rclcpp::get_logger("{{ node_name }}"), "CUDA ONNX integration initialized");
+        return true;
+    }
+    
+    bool run_inference_cuda(const std::vector<float>& input_data, std::vector<float>& output_data) {
+        // Copy input to GPU
+        if (!cuda_manager_->copy_input_to_gpu(input_data.data())) {
+            return false;
+        }
+        
+        // Run ONNX inference on GPU
+        // This would integrate with ONNX Runtime's CUDA execution provider
+        
+        // Copy output from GPU
+        if (!cuda_manager_->copy_output_from_gpu(output_data.data())) {
+            return false;
+        }
+        
+        cuda_manager_->synchronize();
+        return true;
+    }
+};
+"""
+        
+        template = Template(template_str)
+        return template.render(
+            node_name=node_name,
+            model=model
         ) 

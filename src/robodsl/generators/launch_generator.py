@@ -88,7 +88,7 @@ class LaunchGenerator(BaseGenerator):
             for param in node.content.parameters:
                 node_config['parameters'].append({
                     'name': param.name,
-                    'value': param.default_value or 'null'
+                    'value': param.value.value or 'null'
                 })
             
             nodes.append(node_config)
@@ -109,7 +109,7 @@ class LaunchGenerator(BaseGenerator):
         for param in node.content.parameters:
             parameters.append({
                 'name': param.name,
-                'value': param.default_value or 'null'
+                'value': param.value.value or 'null'
             })
         
         # Determine if this is a lifecycle node
@@ -151,7 +151,7 @@ def generate_launch_description():
             if node.content.parameters:
                 content += "            parameters=[\n"
                 for param in node.content.parameters:
-                    value = param.default_value or 'null'
+                    value = param.value.value or 'null'
                     content += f"                {{'{param.name}': {value}}},\n"
                 content += "            ],\n"
             
@@ -183,7 +183,7 @@ def generate_launch_description():
         if node.content.parameters:
             content += "            parameters=[\n"
             for param in node.content.parameters:
-                value = param.default_value or 'null'
+                value = param.value.value or 'null'
                 content += f"                {{'{param.name}': {value}}},\n"
             content += "            ],\n"
         

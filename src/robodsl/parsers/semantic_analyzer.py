@@ -136,7 +136,7 @@ class SemanticAnalyzer:
         content = node.content
         
         # Check parameters
-        self._analyze_parameters(content.parameters)
+        self._analyze_parameters(content.parameters, node.name)
         
         # Check publishers
         self._analyze_publishers(content.publishers)
@@ -183,7 +183,7 @@ class SemanticAnalyzer:
             if act.qos:
                 self._analyze_qos_config(act.qos, f"action {act.name}")
     
-    def _analyze_parameters(self, parameters: List[ParameterNode]):
+    def _analyze_parameters(self, parameters: List[ParameterNode], node_name: str):
         """Analyze parameter configurations."""
         param_names = set()
         
@@ -201,26 +201,13 @@ class SemanticAnalyzer:
             if param.value.value is None:
                 self.errors.append(f"Parameter '{param.name}' has no value")
             
-            # Add to symbol table with inferred type
-            param_type = self._infer_parameter_type(param.value.value)
-            self.symbol_table.add_parameter(param.name, param_type)
+            # Strong type checking: validate declared type matches value
+            if param.type and param.value.value is not None:
+                self._validate_parameter_type(param.name, param.type, param.value.value)
             
-            # Type check: value matches inferred type (basic check)
-            if param_type in ("int", "float"):
-                if not isinstance(param.value.value, (int, float)):
-                    self.errors.append(f"Parameter '{param.name}' value does not match inferred type '{param_type}'")
-            elif param_type == "str":
-                if not isinstance(param.value.value, str):
-                    self.errors.append(f"Parameter '{param.name}' value does not match inferred type 'str'")
-            elif param_type == "bool":
-                if not isinstance(param.value.value, bool):
-                    self.errors.append(f"Parameter '{param.name}' value does not match inferred type 'bool'")
-            elif param_type == "list":
-                if not isinstance(param.value.value, list):
-                    self.errors.append(f"Parameter '{param.name}' value does not match inferred type 'list'")
-            elif param_type == "dict":
-                if not isinstance(param.value.value, dict):
-                    self.errors.append(f"Parameter '{param.name}' value does not match inferred type 'dict'")
+            # Add to symbol table with declared type (preferred) or inferred type
+            param_type = param.type if param.type else self._infer_parameter_type(param.value.value)
+            self.symbol_table.add_parameter(param.name, param_type)
 
     def _infer_parameter_type(self, value: Any) -> str:
         """Infer the type of a parameter value."""
@@ -420,38 +407,26 @@ class SemanticAnalyzer:
                 self.errors.append("Remap 'to' topic cannot be empty")
     
     def _analyze_qos_config(self, qos: QoSNode, context: str):
-        """Analyze QoS configuration for validity and compatibility."""
-        # Check reliability settings
-        if qos.reliability:
-            if qos.reliability not in ["reliable", "best_effort"]:
-                self.errors.append(f"Invalid reliability setting '{qos.reliability}' in {context}")
+        """Analyze QoS configuration."""
+        if not qos:
+            return
         
-        # Check durability settings
-        if qos.durability:
-            if qos.durability not in ["volatile", "transient_local"]:
-                self.errors.append(f"Invalid durability setting '{qos.durability}' in {context}")
-        
-        # Check history settings
-        if qos.history:
-            if qos.history not in ["keep_last", "keep_all"]:
-                self.errors.append(f"Invalid history setting '{qos.history}' in {context}")
-        
-        # Check liveliness settings
-        if qos.liveliness:
-            if qos.liveliness not in ["automatic", "manual_by_topic", "manual_by_namespace"]:
-                self.errors.append(f"Invalid liveliness setting '{qos.liveliness}' in {context}")
-        
-        # Check depth settings
-        if qos.depth is not None:
-            if not isinstance(qos.depth, int) or qos.depth < 0:
-                self.errors.append(f"Invalid depth setting '{qos.depth}' in {context}")
-        
-        # Check QoS compatibility
-        if qos.reliability == "best_effort" and qos.durability == "transient_local":
-            self.warnings.append(f"QoS configuration in {context} may cause issues: best_effort reliability with transient_local durability")
-        
-        if qos.history == "keep_all" and qos.depth is not None:
-            self.warnings.append(f"QoS configuration in {context}: keep_all history with depth setting may be ignored")
+        # Check for duplicate QoS settings
+        setting_names = set()
+        for setting in qos.settings:
+            if setting.name in setting_names:
+                self.errors.append(f"Duplicate QoS setting '{setting.name}' in {context}")
+            setting_names.add(setting.name)
+            
+            # Strong type checking for QoS settings
+            self._validate_qos_setting(setting.name, setting.value, context)
+            
+            # Check for large values that might cause performance issues
+            if setting.name == "depth" and isinstance(setting.value, (int, float)) and setting.value > 100:
+                self.warnings.append(f"Large QoS depth ({setting.value}) in {context} may cause memory issues")
+            
+            if setting.name == "lease_duration" and isinstance(setting.value, (int, float)) and setting.value > 30:
+                self.warnings.append(f"Long QoS lease duration ({setting.value}s) in {context} may cause timeout issues")
     
     def _analyze_cpp_methods(self, cpp_methods, node_name: str):
         """Analyze enhanced C++ method configurations."""
@@ -843,24 +818,76 @@ class SemanticAnalyzer:
         """Check if there are any semantic warnings."""
         return len(self.warnings) > 0
     
-    def _is_valid_ros_type(self, type_name: str) -> bool:
-        """Check if a type is valid for ROS messages/services/actions."""
-        # Basic check: must contain a package and type (e.g., std_msgs.String)
-        if '.' in type_name or '::' in type_name:
-            return True
+    def _is_valid_ros_type(self, msg_type: str) -> bool:
+        """Check if a ROS message type is valid."""
+        if not msg_type or msg_type.strip() == "":
+            return False
         
-        # Allow common ROS types
-        common_types = {
-            "std_msgs", "geometry_msgs", "sensor_msgs", "nav_msgs", "tf2_msgs",
-            "String", "Int32", "Float32", "Bool", "Header", "Pose", "Twist",
-            "Image", "Point", "Quaternion", "Vector3", "Transform"
-        }
+        # ROS message type format: package/msg/Type or package/srv/Type or package/action/Type
+        parts = msg_type.split('/')
+        if len(parts) != 3:
+            return False
         
-        if type_name in common_types:
-            return True
+        package, msg_type_category, type_name = parts
         
-        # Allow types that look like valid ROS types (alphanumeric with underscores)
-        if type_name.replace('_', '').replace('/', '').isalnum():
-            return True
+        # Check package name
+        if not package or not package.replace('_', '').isalnum():
+            return False
         
-        return False 
+        # Check message type category
+        if msg_type_category not in ['msg', 'srv', 'action']:
+            return False
+        
+        # Check type name (should be PascalCase)
+        if not type_name or not type_name[0].isupper():
+            return False
+        
+        return True
+    
+    def _validate_parameter_type(self, param_name: str, param_type: str, value: Any) -> None:
+        """Validate parameter type consistency."""
+        # Check if declared type matches value type
+        if param_type == "int":
+            if not isinstance(value, int):
+                self.errors.append(f"Parameter '{param_name}' declared as 'int' but value '{value}' is not an integer")
+        elif param_type == "float":
+            if not isinstance(value, (int, float)):
+                self.errors.append(f"Parameter '{param_name}' declared as 'float' but value '{value}' is not a number")
+        elif param_type == "bool":
+            if not isinstance(value, bool):
+                self.errors.append(f"Parameter '{param_name}' declared as 'bool' but value '{value}' is not a boolean")
+        elif param_type == "string":
+            if not isinstance(value, str):
+                self.errors.append(f"Parameter '{param_name}' declared as 'string' but value '{value}' is not a string")
+        elif param_type == "list":
+            if not isinstance(value, list):
+                self.errors.append(f"Parameter '{param_name}' declared as 'list' but value '{value}' is not a list")
+        elif param_type == "dict":
+            if not isinstance(value, dict):
+                self.errors.append(f"Parameter '{param_name}' declared as 'dict' but value '{value}' is not a dictionary")
+    
+    def _validate_qos_setting(self, setting_name: str, setting_value: Any, context: str) -> None:
+        """Validate QoS setting values."""
+        if setting_name == "reliability":
+            valid_values = ["reliable", "best_effort"]
+            if setting_value not in valid_values:
+                self.errors.append(f"QoS reliability in {context} must be one of {valid_values}, got '{setting_value}'")
+        
+        elif setting_name == "durability":
+            valid_values = ["volatile", "transient_local"]
+            if setting_value not in valid_values:
+                self.errors.append(f"QoS durability in {context} must be one of {valid_values}, got '{setting_value}'")
+        
+        elif setting_name == "history":
+            valid_values = ["keep_last", "keep_all"]
+            if setting_value not in valid_values:
+                self.errors.append(f"QoS history in {context} must be one of {valid_values}, got '{setting_value}'")
+        
+        elif setting_name == "liveliness":
+            valid_values = ["automatic", "manual_by_topic", "manual_by_node"]
+            if setting_value not in valid_values:
+                self.errors.append(f"QoS liveliness in {context} must be one of {valid_values}, got '{setting_value}'")
+        
+        elif setting_name in ["depth", "lease_duration", "deadline"]:
+            if not isinstance(setting_value, (int, float)) or setting_value <= 0:
+                self.errors.append(f"QoS {setting_name} in {context} must be a positive number, got '{setting_value}'") 

@@ -1,0 +1,48 @@
+#ifndef {{ project_name.upper() }}_{{ stage.name.upper() }}_CUDA_HPP
+#define {{ project_name.upper() }}_{{ stage.name.upper() }}_CUDA_HPP
+
+#include <cuda_runtime.h>
+#include <memory>
+#include <vector>
+#include <string>
+
+namespace {{ project_name }} {
+
+class {{ stage.name }}CudaManager {
+public:
+    {{ stage.name }}CudaManager();
+    ~{{ stage.name }}CudaManager();
+    
+    // Initialize CUDA context and load kernels
+    bool initialize();
+    
+    // Execute CUDA kernels for this stage
+    bool process_data(const std::vector<float>& input_data, 
+                     std::vector<float>& output_data);
+    
+    // Cleanup CUDA resources
+    void cleanup();
+
+private:
+    // CUDA kernel handles
+    {% for kernel in stage.content.cuda_kernels %}
+    void* {{ kernel.kernel_name }}_kernel_;
+    {% endfor %}
+    
+    // CUDA stream for asynchronous execution
+    cudaStream_t stream_;
+    
+    // Memory buffers
+    float* d_input_buffer_;
+    float* d_output_buffer_;
+    size_t buffer_size_;
+    
+    // Helper methods
+    bool allocate_buffers(size_t data_size);
+    void free_buffers();
+    bool load_kernels();
+};
+
+} // namespace {{ project_name }}
+
+#endif // {{ project_name.upper() }}_{{ stage.name.upper() }}_CUDA_HPP 
