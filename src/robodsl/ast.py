@@ -5,8 +5,12 @@ a clean representation of parsed configurations.
 """
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Any, Literal, Union
+from typing import List, Dict, Optional, Any, Literal, Union, Set
 from enum import Enum
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .ast import KernelNode
 
 
 class QoSReliability(Enum):
@@ -327,9 +331,19 @@ class ActionNode(ASTNode):
 
 @dataclass
 class CppMethodNode(ASTNode):
-    """C++ method node."""
+    """Enhanced C++ method node with input/output parameters."""
     name: str
-    code: str
+    inputs: List['MethodParamNode'] = field(default_factory=list)
+    outputs: List['MethodParamNode'] = field(default_factory=list)
+    code: str = ""
+
+
+@dataclass
+class MethodParamNode(ASTNode):
+    """Method parameter node."""
+    param_type: str
+    param_name: str
+    size_expr: Optional[str] = None
 
 
 @dataclass
@@ -347,6 +361,7 @@ class NodeContentNode(ASTNode):
     clients: List[ClientNode] = field(default_factory=list)
     actions: List[ActionNode] = field(default_factory=list)
     cpp_methods: List[CppMethodNode] = field(default_factory=list)
+    cuda_kernels: List['KernelNode'] = field(default_factory=list)
 
 
 @dataclass
@@ -396,4 +411,4 @@ class RoboDSLAST(ASTNode):
     """Root AST node."""
     includes: List[IncludeNode] = field(default_factory=list)
     nodes: List[NodeNode] = field(default_factory=list)
-    cuda_kernels: Optional[CudaKernelsNode] = None 
+    cuda_kernels: Optional[CudaKernelsNode] = None  # Standalone kernels outside nodes 

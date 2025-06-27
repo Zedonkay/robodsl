@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 # Add the src directory to the Python path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
-from robodsl.parser import RoboDSLAST, KernelNode, KernelContentNode, KernelParamNode, KernelParameterDirection
-from robodsl.generator import CodeGenerator
+from robodsl.ast import RoboDSLAST, KernelNode, KernelContentNode, KernelParamNode, KernelParameterDirection
+from robodsl.generators import CudaKernelGenerator
 
 class TestCudaGenerator(unittest.TestCase):
     def setUp(self):
@@ -49,46 +49,38 @@ class TestCudaGenerator(unittest.TestCase):
         self.ast.cuda_kernels.kernels = [self.kernel]
         
         # Create generator
-        self.generator = CodeGenerator()
+        self.generator = CudaKernelGenerator(str(self.test_dir))
 
-    def test_generate_cuda_kernel_header(self):
-        """Test CUDA kernel header generation."""
-        header_content = self.generator.generate_cuda_kernel_header(self.kernel)
+    def test_generate_cuda_kernel_files(self):
+        """Test CUDA kernel file generation."""
+        generated_files = self.generator.generate(self.ast)
         
-        # Check that the header contains expected content
-        self.assertIn("__global__", header_content)
-        self.assertIn("test_kernel", header_content)
-        # Note: Current placeholder doesn't include parameter types
-        # self.assertIn("Image", header_content)
-
-    def test_generate_cuda_kernel_implementation(self):
-        """Test CUDA kernel implementation generation."""
-        impl_content = self.generator.generate_cuda_kernel_implementation(self.kernel)
+        # Check that files were generated
+        self.assertGreater(len(generated_files), 0)
         
-        # Check that the implementation contains expected content
-        self.assertIn("__global__", impl_content)
-        self.assertIn("test_kernel", impl_content)
-        # Note: Current placeholder doesn't include parameter types
-        # self.assertIn("Image", impl_content)
-
-    def test_generate_cuda_kernel_cpp_header(self):
-        """Test CUDA kernel C++ header generation."""
-        cpp_header = self.generator.generate_cuda_kernel_cpp_header(self.kernel)
+        # Check that expected files exist
+        cuh_file = self.test_dir / 'include' / 'test_kernel_kernel.cuh'
+        cu_file = self.test_dir / 'src' / 'test_kernel_kernel.cu'
+        hpp_file = self.test_dir / 'include' / 'test_kernel_wrapper.hpp'
         
-        # Check that the C++ header contains expected content
-        self.assertIn("class", cpp_header)
-        self.assertIn("test_kernel", cpp_header)
-        # Note: Current placeholder doesn't include parameter types
-        # self.assertIn("Image", cpp_header)
-
-    def test_generate_cuda_source_file(self):
-        """Test complete CUDA source file generation."""
-        cuda_source = self.generator.generate_cuda_source_file(self.ast)
+        self.assertTrue(cuh_file.exists())
+        self.assertTrue(cu_file.exists())
+        self.assertTrue(hpp_file.exists())
         
-        # Check that the source file contains expected content
-        self.assertIn("#include", cuda_source)
-        self.assertIn("__global__", cuda_source)
-        self.assertIn("test_kernel", cuda_source)
+        # Check file contents
+        with open(cuh_file, 'r') as f:
+            cuh_content = f.read()
+            self.assertIn("test_kernel", cuh_content)
+            self.assertIn("Image", cuh_content)
+        
+        with open(cu_file, 'r') as f:
+            cu_content = f.read()
+            self.assertIn("__global__", cu_content)
+            self.assertIn("test_kernel", cu_content)
+        
+        with open(hpp_file, 'r') as f:
+            hpp_content = f.read()
+            self.assertIn("test_kernel", hpp_content)
 
     def test_generate_with_multiple_kernels(self):
         """Test generation with multiple kernels."""
@@ -115,12 +107,15 @@ class TestCudaGenerator(unittest.TestCase):
         
         self.ast.cuda_kernels.kernels.append(kernel2)
         
-        # Generate source
-        cuda_source = self.generator.generate_cuda_source_file(self.ast)
+        # Generate files
+        generated_files = self.generator.generate(self.ast)
         
-        # Check that both kernels are included
-        self.assertIn("test_kernel", cuda_source)
-        self.assertIn("filter_kernel", cuda_source)
+        # Check that files for both kernels were generated
+        test_kernel_files = [f for f in generated_files if 'test_kernel' in str(f)]
+        filter_kernel_files = [f for f in generated_files if 'filter_kernel' in str(f)]
+        
+        self.assertGreater(len(test_kernel_files), 0)
+        self.assertGreater(len(filter_kernel_files), 0)
 
     def test_kernel_parameter_direction_enum(self):
         """Test that kernel parameter directions are correctly handled."""
@@ -157,6 +152,14 @@ class TestCudaGenerator(unittest.TestCase):
         # Test block size validation
         self.assertEqual(valid_content.block_size, (256, 1, 1))
         self.assertEqual(valid_content.grid_size, (1, 1, 1))
+
+    def test_generator_without_kernels(self):
+        """Test generator behavior when no kernels are present."""
+        empty_ast = RoboDSLAST()
+        empty_ast.cuda_kernels = None
+        
+        generated_files = self.generator.generate(empty_ast)
+        self.assertEqual(len(generated_files), 0)
 
     def tearDown(self):
         # Clean up test output directory

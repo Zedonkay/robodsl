@@ -151,40 +151,85 @@ RoboDSL is a Domain-Specific Language (DSL) and compiler designed to simplify th
 
 ---
 
-### Phase 1.5: Enhanced Editor Features
+### Phase 1.5: Enhanced Compiler Features
 **Priority**: 1 (Parallel Track)  
-**Estimated Time**: 4-5 days  
-**Goal**: Add intelligent code completion and documentation
+**Estimated Time**: 3-4 weeks  
+**Goal**: Build upon the existing Lark-based parser to add essential compiler features
 
-#### Tasks
-1. **Inline Completions**
-   - Implement `CompletionItemProvider` for `.cuif` files
-   - Add context-aware suggestions based on cursor position
-   - Create rich snippets for common blocks (kernel, node, type, implementation)
-   - Support type-based completions
+#### Core Enhancements
+1. **Semantic Analysis**
+   - Symbol table implementation for tracking variables and types
+   - Type checking for ROS message types and C++ types
+   - Name resolution for node components (publishers, subscribers, etc.)
+   - Validation of QoS configurations
+   - Cross-reference checking for remapped topics
 
-2. **Hover Documentation**
-   - Implement `HoverProvider` for inline documentation
-   - Create documentation mapping for built-in types and functions
-   - Add support for custom documentation in comments
-   - Implement quick info tooltips
+2. **Code Generation Improvements**
+   - Enhanced error handling in generated code
+   - Support for C++ method generation in nodes (from Phase 2)
+   - Template specialization for different ROS2 DDS implementations
+   - Generation of component lifecycle documentation
 
-3. **Schema Validation**
-   - Define JSON schema for CUIF files
-   - Add real-time validation
-   - Provide quick fixes for common errors
+3. **Build System Integration**
+   - Support for custom CMake modules
+   - Dependency tracking for generated code
+   - Incremental build support
+   - Cross-compilation toolchain configuration
+
+#### Development Tools
+1. **VSCode Extension**
+   - Syntax highlighting for `.robodsl` files
+   - Code completion for ROS2 message types and node components
+   - Hover documentation for DSL keywords and ROS2 concepts
+   - Quick fixes for common errors
+
+2. **Validation & Linting**
+   - Semantic validation of node configurations
+   - Performance anti-pattern detection
+   - Best practices for CUDA-ROS2 integration
+   - QoS compatibility checking
+
+#### Testing Infrastructure
+1. **Unit Testing**
+   - Parser and semantic analysis tests
+   - Code generation verification
+   - Template rendering tests
+
+2. **Integration Testing**
+   - End-to-end compilation tests
+   - ROS2 node lifecycle testing
+   - CUDA kernel execution validation
 
 #### Files to Create/Modify
-- `src/providers/completionProvider.ts`
-- `src/providers/hoverProvider.ts`
-- `schema/cuif.schema.json`
-- `docs/dsl-reference.json`
+- `src/robodsl/semantic/` - Semantic analysis
+  - `symbol_table.py` - Symbol table implementation
+  - `type_checker.py` - Type checking rules
+  - `validator.py` - Semantic validation
+- `src/robodsl/generators/` - Enhanced code generation
+  - `base_generator.py` - Common generation utilities
+  - `cpp_method_generator.py` - C++ method support
+- `vscode/` - VSCode extension
+  - `syntaxes/robodsl.tmLanguage.json` - Syntax highlighting
+  - `package.json` - Extension manifest
+  - `src/extension.ts` - Extension code
+- `test/` - Test infrastructure
+  - `unit/` - Unit tests
+  - `integration/` - Integration tests
+  - `fixtures/` - Test data
 
 #### Deliverables
-- Intelligent code completion in VSCode
-- Inline documentation on hover
-- Real-time schema validation
-- Quick fixes for common issues
+1. Enhanced semantic validation for RoboDSL files
+2. Improved code generation with better error handling
+3. VSCode extension with basic language features
+4. Comprehensive test suite
+5. Updated documentation
+
+#### Success Criteria
+1. All existing `.robodsl` files pass semantic validation
+2. Clear error messages for common mistakes
+3. Improved developer experience with VSCode integration
+4. Maintained backward compatibility with existing code
+5. Comprehensive test coverage (>80%)
 
 ---
 
