@@ -1,7 +1,9 @@
 """Tests for the RoboDSL parser."""
 
 import pytest
-from robodsl.parser import parse_robodsl, RoboDSLAST, NodeNode, PublisherNode, SubscriberNode, ServiceNode, ParameterNode, KernelNode
+from robodsl.parsers.lark_parser import parse_robodsl
+from robodsl.core.ast import RoboDSLAST, NodeNode, PublisherNode, SubscriberNode, ServiceNode, ParameterNode, KernelNode
+from robodsl.parsers.semantic_analyzer import SemanticAnalyzer, SemanticError
 
 def get_param(node, name):
     for p in node.content.parameters:
@@ -262,9 +264,6 @@ def test_parse_complex_config():
 
 def test_cross_reference_validation():
     """Test cross-reference validation with various scenarios."""
-    from robodsl.parser.semantic_analyzer import SemanticAnalyzer, SemanticError
-    from robodsl.parser.lark_parser import parse_robodsl
-    
     # Test 1: Valid configuration with matching publisher/subscriber
     valid_config = """
     node publisher_node {

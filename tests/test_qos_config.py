@@ -1,7 +1,8 @@
 """Tests for QoS configuration in RoboDSL."""
 
 import pytest
-from robodsl.parser import parse_robodsl, RoboDSLAST, NodeNode, PublisherNode, SubscriberNode, ServiceNode, ActionNode, QoSNode, QoSSettingNode
+from robodsl.parsers.lark_parser import parse_robodsl
+from robodsl.core.ast import RoboDSLAST, NodeNode, PublisherNode, SubscriberNode, ServiceNode, ActionNode, QoSNode, QoSSettingNode
 
 def test_qos_config_parsing():
     """Test parsing of QoS configurations for different entities."""

@@ -23,7 +23,7 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'robodsl = robodsl.cli:main',
+            'robodsl = robodsl.cli.cli:main',
         ],
     },
     classifiers=[

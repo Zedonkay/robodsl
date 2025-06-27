@@ -33,7 +33,7 @@ dependencies = [
 Homepage = "https://github.com/Zedonkay/robodsl"
 
 [project.scripts]
-robodsl = "robodsl.cli:main"
+robodsl = "robodsl.cli.cli:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
