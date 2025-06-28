@@ -1,0 +1,5 @@
+node sample_node {
+    parameter sample_param: int = 42;
+    publisher sample_pub: std_msgs/String;
+    subscriber sample_sub: std_msgs/String;
+} 

@@ -159,3 +159,42 @@ Thumbs.db
 
 # Allow example RoboDSL files
 !examples/**/*.robodsl
+
+# VS Code Extension Build Artifacts
+tools/extension/robodsl-extension/out/
+tools/extension/robodsl-extension/client/out/
+tools/extension/robodsl-extension/server/out/
+tools/extension/robodsl-extension/*.vsix
+tools/extension/robodsl-extension/node_modules/
+tools/extension/robodsl-extension/.vscode-test/
+tools/extension/robodsl-extension/test/
+tools/extension/robodsl-extension/test-files/
+tools/extension/robodsl-extension/test-*.js
+tools/extension/robodsl-extension/test-*.py
+tools/extension/robodsl-extension/test-*.sh
+tools/extension/robodsl-extension/*-test.robodsl
+tools/extension/robodsl-extension/example-*.robodsl
+tools/extension/robodsl-extension/comprehensive_*.robodsl
+tools/extension/robodsl-extension/cuda_*.robodsl
+tools/extension/robodsl-extension/ml_*.robodsl
+tools/extension/robodsl-extension/onnx_*.robodsl
+tools/extension/robodsl-extension/pipeline_*.robodsl
+tools/extension/robodsl-extension/simple_*.robodsl
+tools/extension/robodsl-extension/grammar-correct-*.robodsl
+tools/extension/robodsl-extension/in-depth-*.robodsl
+tools/extension/robodsl-extension/debug-*.sh
+tools/extension/robodsl-extension/diagnose-*.sh
+tools/extension/robodsl-extension/DEBUGGING_GUIDE.md
+tools/extension/robodsl-extension/EXTENSION_STATUS.md
+tools/extension/robodsl-extension/FEATURES_SUMMARY.md
+tools/extension/robodsl-extension/MANUAL_QA_CHECKLIST.md
+tools/extension/robodsl-extension/TESTING_GUIDE.md
+tools/extension/robodsl-extension/README.md
+tools/extension/robodsl-extension/package-lock.json
+tools/extension/robodsl-extension/**/*.js.map
+tools/extension/robodsl-extension/**/*.ts.map
+tools/extension/robodsl-extension/**/*.ts
+!tools/extension/robodsl-extension/**/*.d.ts
+
+# Allow extension sample file
+!tools/extension/robodsl-extension/sample.robodsl
