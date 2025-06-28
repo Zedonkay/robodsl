@@ -2,6 +2,9 @@
   "iconDefinitions": {
     "_file_robodsl": {
       "iconPath": "../images/robodsl.png"
+    },
+    "_folder_robodsl": {
+      "iconPath": "../images/robodsl.png"
     }
   },
   "fileExtensions": {
@@ -9,5 +12,17 @@
   },
   "fileNames": {
     "*.robodsl": "_file_robodsl"
+  },
+  "languageIds": {
+    "robodsl": "_file_robodsl"
+  },
+  "folderNames": {
+    "robodsl": "_folder_robodsl"
+  },
+  "folderNamesExpanded": {
+    "robodsl": "_folder_robodsl"
+  },
+  "default": {
+    "file": "_file_robodsl"
   }
 }

@@ -1,73 +1,134 @@
 {
     "name": "robodsl",
     "displayName": "RoboDSL Language Support",
-    "description": "Syntax highlighting and language support for RoboDSL files",
+    "description": "Syntax highlighting, intellisense, and language support for RoboDSL files",
     "version": "0.1.1",
     "publisher": "Zedonkay",
     "license": "MIT",
     "repository": {
-      "type": "git",
-      "url": "https://github.com/Zedonkay/robodsl"
+        "type": "git",
+        "url": "https://github.com/Zedonkay/robodsl"
     },
     "homepage": "https://github.com/Zedonkay/robodsl#readme",
     "bugs": {
-      "url": "https://github.com/Zedonkay/robodsl/issues"
+        "url": "https://github.com/Zedonkay/robodsl/issues"
     },
     "engines": {
-      "vscode": "^1.75.0"
+        "vscode": "^1.101.0"
     },
-    "extensionDependencies": [
-      "ms-vscode.cpptools-extension-pack",
-      "twxs.cmake"
-    ],
     "categories": [
-      "Programming Languages",
-      "Snippets",
-      "Extension Packs"
+        "Programming Languages",
+        "Snippets"
     ],
     "keywords": [
-      "robodsl",
-      "ros2",
-      "cuda",
-      "syntax",
-      "highlighting",
-      "language",
-      "gpu",
-      "parallel",
-      "robotics"
+        "robodsl",
+        "ros2",
+        "cuda",
+        "syntax",
+        "highlighting",
+        "language",
+        "gpu",
+        "parallel",
+        "robotics",
+        "intellisense"
     ],
     "icon": "images/icon.png",
     "galleryBanner": {
-      "color": "2b2b2b",
-      "theme": "dark"
+        "color": "2b2b2b",
+        "theme": "dark"
     },
+    "main": "./client/out/extension",
     "contributes": {
-      "languages": [{
-        "id": "robodsl",
-        "aliases": ["RoboDSL", "robodsl"],
-        "extensions": [".robodsl"],
-        "configuration": "./language-configuration.json"
-      }],
-      "grammars": [{
-        "language": "robodsl",
-        "scopeName": "source.robodsl",
-        "path": "./syntaxes/robodsl.tmLanguage.json",
-        "embeddedLanguages": {
-          "source.cpp": "cpp",
-          "source.cuda-c++": "cuda-cpp"
-        }
-      }],
-      "iconThemes": [{
-        "id": "robodsl-icon-theme",
-        "label": "RoboDSL Icons",
-        "path": "./fileicons/robodsl-icon-theme.json"
-      }]
+        "languages": [
+            {
+                "id": "robodsl",
+                "aliases": [
+                    "RoboDSL",
+                    "robodsl"
+                ],
+                "extensions": [
+                    ".robodsl"
+                ],
+                "configuration": "./language-configuration.json"
+            }
+        ],
+        "grammars": [
+            {
+                "language": "robodsl",
+                "scopeName": "source.robodsl",
+                "path": "./syntaxes/robodsl.tmLanguage.json",
+                "embeddedLanguages": {
+                    "source.cpp": "cpp",
+                    "source.cuda-c++": "cuda-cpp"
+                }
+            }
+        ],
+        "iconThemes": [
+            {
+                "id": "robodsl-icon-theme",
+                "label": "RoboDSL Icons",
+                "path": "./fileicons/robodsl-icon-theme.json"
+            }
+        ],
+        "configuration": {
+            "title": "RoboDSL Language Server",
+            "properties": {
+                "robodslLanguageServer.maxNumberOfProblems": {
+                    "type": "number",
+                    "default": 1000,
+                    "description": "Controls the maximum number of problems produced by the server."
+                }
+            }
+        },
+        "commands": [
+            {
+                "command": "robodsl.activate",
+                "title": "Activate RoboDSL Extension",
+                "category": "RoboDSL"
+            },
+            {
+                "command": "robodsl.test",
+                "title": "Test RoboDSL Extension",
+                "category": "RoboDSL"
+            }
+        ]
     },
+    "activationEvents": [
+        "onLanguage:robodsl",
+        "onStartupFinished",
+        "onCommand:robodsl.activate"
+    ],
     "scripts": {
-      "package": "vsce package",
-      "publish": "vsce publish"
+        "vscode:prepublish": "npm run compile",
+        "compile": "tsc -b",
+        "watch": "tsc -b -w",
+        "package": "vsce package",
+        "publish": "vsce publish",
+        "test": "node ./test/runTest.js"
     },
     "devDependencies": {
-      "@vscode/vsce": "^2.24.0"
+        "@types/mocha": "^10.0.10",
+        "@types/node": "^16.0.0",
+        "@types/vscode": "^1.101.0",
+        "@vscode/vsce": "^2.24.0",
+        "mocha": "^11.7.1",
+        "typescript": "^4.9.0",
+        "vscode-test": "^1.6.1"
+    },
+    "dependencies": {
+        "vscode-languageclient": "^8.0.0",
+        "vscode-languageserver": "^8.0.0",
+        "vscode-languageserver-textdocument": "^1.0.8"
+    },
+    "extensionDependencies": [],
+    "extensionPack": [],
+    "extensionKind": [
+        "workspace"
+    ],
+    "capabilities": {
+        "untrustedWorkspaces": {
+            "supported": true,
+            "description": "RoboDSL extension works in untrusted workspaces"
+        }
     }
-  }
+}

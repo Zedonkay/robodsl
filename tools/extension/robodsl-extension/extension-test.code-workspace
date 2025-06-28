@@ -1,0 +1,16 @@
+{
+    "folders": [
+        {
+            "path": "."
+        }
+    ],
+    "settings": {
+        "files.associations": {
+            "*.robodsl": "robodsl"
+        },
+        "extensions.ignoreRecommendations": true
+    },
+    "extensions": {
+        "recommendations": []
+    }
+} 
