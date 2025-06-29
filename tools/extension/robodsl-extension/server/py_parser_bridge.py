@@ -8,6 +8,7 @@ import sys
 import json
 import traceback
 from pathlib import Path
+import re
 
 # Add the main project to the path so we can import the parser
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "src"))
@@ -37,27 +38,32 @@ def parse_robodsl_content(content: str):
         # Parse with issues
         ast, issues = parser.parse_with_issues(content)
         
-        # Convert issues to VS Code diagnostics format
+        # Convert issues to diagnostics with positions if available
         for issue in issues:
-            diagnostic = {
-                "level": issue["level"],
-                "message": issue["message"],
-                "rule_id": issue["rule_id"],
-                "line": 0,  # Default to line 0, will be improved later
-                "column": 0  # Default to column 0, will be improved later
-            }
-            diagnostics.append(diagnostic)
+            line = issue.get("line")
+            col = issue.get("column")
+            if line is None or col is None:
+                # Attempt to parse "line X column Y" from the message
+                m = re.search(r"line\s+(\d+)\s+column\s+(\d+)", issue.get("message", ""))
+                if m:
+                    line = int(m.group(1)) - 1
+                    col = int(m.group(2)) - 1
+            diagnostics.append({
+                "level": issue.get("level", "error"),
+                "message": issue.get("message", ""),
+                "rule_id": issue.get("rule_id", "unknown"),
+                "line": line if line is not None else 0,
+                "column": col if col is not None else 0
+            })
             
-    except Exception as e:
-        # Handle any unexpected errors
-        error_diagnostic = {
+    except ParseError as e:
+        diagnostics.append({
             "level": "error",
-            "message": f"Parser error: {str(e)}",
-            "rule_id": "parser_error",
-            "line": 0,
-            "column": 0
-        }
-        diagnostics.append(error_diagnostic)
+            "message": f"Parse error: {str(e)}",
+            "rule_id": "parse_error",
+            "line": getattr(e, "line", 0) - 1 if hasattr(e, "line") else 0,
+            "column": getattr(e, "column", 0) - 1 if hasattr(e, "column") else 0
+        })
     
     return diagnostics
 

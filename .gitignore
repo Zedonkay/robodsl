@@ -161,9 +161,10 @@ Thumbs.db
 !examples/**/*.robodsl
 
 # VS Code Extension Build Artifacts
-tools/extension/robodsl-extension/out/
-tools/extension/robodsl-extension/client/out/
-tools/extension/robodsl-extension/server/out/
+# (Disabled) Ignore RoboDSL extension build output directories to allow debugging
+# tools/extension/robodsl-extension/out/
+# tools/extension/robodsl-extension/client/out/
+# tools/extension/robodsl-extension/server/out/
 tools/extension/robodsl-extension/*.vsix
 tools/extension/robodsl-extension/node_modules/
 tools/extension/robodsl-extension/.vscode-test/

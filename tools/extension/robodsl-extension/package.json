@@ -77,6 +77,11 @@
                     "type": "number",
                     "default": 1000,
                     "description": "Controls the maximum number of problems produced by the server."
+                },
+                "robodslLanguageServer.enableBracketValidation": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Controls whether bracket validation is enabled. Disable this if you experience issues with bracket pair colorization."
                 }
             }
         },
@@ -94,9 +99,7 @@
         ]
     },
     "activationEvents": [
-        "onLanguage:robodsl",
-        "onStartupFinished",
-        "onCommand:robodsl.activate"
+        "onStartupFinished"
     ],
     "scripts": {
         "vscode:prepublish": "npm run compile",

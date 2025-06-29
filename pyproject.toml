@@ -21,16 +21,55 @@ classifiers = [
     'Programming Language :: Python :: 3.8',
     'Programming Language :: Python :: 3.9',
     'Programming Language :: Python :: 3.10',
+    'Programming Language :: Python :: 3.11',
+    'Programming Language :: Python :: 3.12',
     'Topic :: Software Development :: Code Generators',
     'Topic :: Scientific/Engineering',
+    'Topic :: Scientific/Engineering :: Artificial Intelligence',
+    'Topic :: Scientific/Engineering :: Image Processing',
 ]
 dependencies = [
     "click>=8.0.0",
     "jinja2>=3.0.0",
+    "lark>=1.1.0",
+    "onnxruntime>=1.15.0",
+    "opencv-python>=4.8.0",
+    "numpy>=1.21.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+    "pre-commit>=3.0.0",
+    "sphinx>=6.0.0",
+    "sphinx-rtd-theme>=1.2.0",
+]
+cuda = [
+    "onnxruntime>=1.15.0",
+]
+tensorrt = [
+    "tensorrt>=8.6.0",
+    "pycuda>=2022.2.0",
+]
+docs = [
+    "sphinx>=6.0.0",
+    "sphinx-rtd-theme>=1.2.0",
+    "myst-parser>=1.0.0",
+]
+all = [
+    "robodsl[dev,cuda,tensorrt,docs]",
 ]
 
 [project.urls]
 Homepage = "https://github.com/Zedonkay/robodsl"
+Documentation = "https://robodsl.readthedocs.io"
+Repository = "https://github.com/Zedonkay/robodsl.git"
+"Bug Tracker" = "https://github.com/Zedonkay/robodsl/issues"
 
 [project.scripts]
 robodsl = "robodsl.cli.cli:main"
@@ -40,4 +79,47 @@ package-dir = { "" = "src" }
 packages = { find = { where = ["src"] } }
 
 [tool.setuptools.package-data]
-"*" = ["*.robodsl"]
+"*" = ["*.robodsl", "*.lark"]
+
+[tool.black]
+line-length = 88
+target-version = ['py38', 'py39', 'py310', 'py311', 'py312']
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--cov=robodsl",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "cuda: marks tests that require CUDA",
+    "onnx: marks tests that require ONNX Runtime",
+]

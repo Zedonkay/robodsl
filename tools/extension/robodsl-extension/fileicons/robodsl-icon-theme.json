@@ -1,28 +1,16 @@
 {
   "iconDefinitions": {
-    "_file_robodsl": {
-      "iconPath": "../images/robodsl.png"
-    },
-    "_folder_robodsl": {
-      "iconPath": "../images/robodsl.png"
+    "robodsl-icon": {
+      "iconPath": "./images/robodsl.png"
     }
   },
   "fileExtensions": {
-    ".robodsl": "_file_robodsl"
-  },
-  "fileNames": {
-    "*.robodsl": "_file_robodsl"
+    "robodsl": "robodsl-icon"
   },
   "languageIds": {
-    "robodsl": "_file_robodsl"
+    "robodsl": "robodsl-icon"
   },
-  "folderNames": {
-    "robodsl": "_folder_robodsl"
-  },
-  "folderNamesExpanded": {
-    "robodsl": "_folder_robodsl"
-  },
-  "default": {
-    "file": "_file_robodsl"
-  }
+  "fileNames": {},
+  "folderNames": {},
+  "rootFolder": ""
 }

@@ -15,7 +15,9 @@ const keywords = [
     'flag', 'lifecycle', 'timer', 'client', 'publisher', 'subscriber', 'service',
     'action', 'include', 'input', 'output', 'code', 'in', 'out', 'inout',
     'block_size', 'grid_size', 'shared_memory', 'use_thrust', 'qos', 'onnx_model',
-    'device', 'optimization', 'pipeline', 'stage', 'config', 'true', 'false'
+    'device', 'optimization', 'pipeline', 'stage', 'config', 'project_name',
+    'parameter_callbacks', 'lifecycle_config', 'queue_size', 'autostart',
+    'cleanup_on_shutdown', 'oneshot', 'no_autostart', 'true', 'false'
 ];
 const rosTypes = [
     'std_msgs/String', 'std_msgs/Int32', 'std_msgs/Float64', 'std_msgs/Bool',
@@ -45,76 +47,156 @@ class RoboDSLParser {
     parse(text) {
         this.errors = [];
         const lines = text.split('\n');
-        let braceCount = 0;
-        let inNode = false;
-        let inMethod = false;
-        let inKernel = false;
-        let inCudaKernels = false;
-        let inOnnxModel = false;
-        let inPipeline = false;
+        // Use a stack-based approach for proper bracket matching
+        const bracketStack = [];
+        let inString = false;
+        let inComment = false;
+        let inBlockComment = false;
+        let stringChar = '';
         for (let i = 0; i < lines.length; i++) {
-            const line = lines[i].trim();
+            const line = lines[i];
             const lineNumber = i + 1;
-            // Skip comments and empty lines
-            if (line.startsWith('//') || line === '' || line.startsWith('/*')) {
+            const trimmedLine = line.trim();
+            // Skip empty lines
+            if (trimmedLine === '') {
                 continue;
             }
-            // Count braces
-            const openBraces = (line.match(/\{/g) || []).length;
-            const closeBraces = (line.match(/\}/g) || []).length;
-            braceCount += openBraces - closeBraces;
-            // Check for syntax errors
-            this.checkLineSyntax(line, lineNumber, i);
-            // Track context
-            if (line.includes('node ')) {
-                inNode = true;
-                inMethod = false;
-                inKernel = false;
-                inCudaKernels = false;
-                inOnnxModel = false;
-                inPipeline = false;
+            // Process the line character by character for proper context awareness
+            for (let j = 0; j < line.length; j++) {
+                const char = line[j];
+                const nextChar = j < line.length - 1 ? line[j + 1] : '';
+                // Handle comments
+                if (!inString && !inBlockComment) {
+                    if (char === '/' && nextChar === '/') {
+                        // Line comment - skip rest of line
+                        break;
+                    }
+                    else if (char === '/' && nextChar === '*') {
+                        // Start block comment
+                        inBlockComment = true;
+                        j++; // Skip next character
+                        continue;
+                    }
+                }
+                if (inBlockComment) {
+                    if (char === '*' && nextChar === '/') {
+                        // End block comment
+                        inBlockComment = false;
+                        j++; // Skip next character
+                        continue;
+                    }
+                    continue; // Skip everything in block comment
+                }
+                // Handle strings
+                if (!inComment && !inBlockComment) {
+                    if ((char === '"' || char === "'") && !inString) {
+                        // Start string
+                        inString = true;
+                        stringChar = char;
+                        continue;
+                    }
+                    else if (inString && char === stringChar) {
+                        // End string
+                        inString = false;
+                        stringChar = '';
+                        continue;
+                    }
+                }
+                // Only process brackets if not in string or comment
+                if (!inString && !inComment && !inBlockComment) {
+                    if (char === '{') {
+                        bracketStack.push({
+                            type: '{',
+                            line: lineNumber,
+                            column: j
+                        });
+                    }
+                    else if (char === '}') {
+                        if (bracketStack.length === 0) {
+                            // Extra closing brace
+                            this.errors.push({
+                                line: lineNumber,
+                                column: j,
+                                message: 'Unexpected closing brace }'
+                            });
+                        }
+                        else {
+                            const lastBracket = bracketStack.pop();
+                            if (lastBracket.type !== '{') {
+                                // Mismatched bracket type
+                                this.errors.push({
+                                    line: lineNumber,
+                                    column: j,
+                                    message: `Mismatched bracket: expected ${lastBracket.type === '[' ? ']' : ')'} but found }`
+                                });
+                            }
+                        }
+                    }
+                    else if (char === '[') {
+                        bracketStack.push({
+                            type: '[',
+                            line: lineNumber,
+                            column: j
+                        });
+                    }
+                    else if (char === ']') {
+                        if (bracketStack.length === 0) {
+                            this.errors.push({
+                                line: lineNumber,
+                                column: j,
+                                message: 'Unexpected closing bracket ]'
+                            });
+                        }
+                        else {
+                            const lastBracket = bracketStack.pop();
+                            if (lastBracket.type !== '[') {
+                                this.errors.push({
+                                    line: lineNumber,
+                                    column: j,
+                                    message: `Mismatched bracket: expected ${lastBracket.type === '{' ? '}' : ')'} but found ]`
+                                });
+                            }
+                        }
+                    }
+                    else if (char === '(') {
+                        bracketStack.push({
+                            type: '(',
+                            line: lineNumber,
+                            column: j
+                        });
+                    }
+                    else if (char === ')') {
+                        if (bracketStack.length === 0) {
+                            this.errors.push({
+                                line: lineNumber,
+                                column: j,
+                                message: 'Unexpected closing parenthesis )'
+                            });
+                        }
+                        else {
+                            const lastBracket = bracketStack.pop();
+                            if (lastBracket.type !== '(') {
+                                this.errors.push({
+                                    line: lineNumber,
+                                    column: j,
+                                    message: `Mismatched bracket: expected ${lastBracket.type === '{' ? '}' : ']'} but found )`
+                                });
+                            }
+                        }
+                    }
+                }
             }
-            else if (line.includes('method ')) {
-                inMethod = true;
-                inKernel = false;
-            }
-            else if (line.includes('kernel ')) {
-                inKernel = true;
-                inMethod = false;
-            }
-            else if (line.includes('cuda_kernels')) {
-                inCudaKernels = true;
-                inNode = false;
-                inMethod = false;
-                inKernel = false;
-                inOnnxModel = false;
-                inPipeline = false;
-            }
-            else if (line.includes('onnx_model')) {
-                inOnnxModel = true;
-                inNode = false;
-                inMethod = false;
-                inKernel = false;
-                inCudaKernels = false;
-                inPipeline = false;
-            }
-            else if (line.includes('pipeline ')) {
-                inPipeline = true;
-                inNode = false;
-                inMethod = false;
-                inKernel = false;
-                inCudaKernels = false;
-                inOnnxModel = false;
-            }
+            // Check for syntax errors in this line
+            this.checkLineSyntax(trimmedLine, lineNumber, i);
         }
-        // Check for unmatched braces
-        if (braceCount !== 0) {
+        // Check for unmatched opening brackets
+        bracketStack.forEach(bracket => {
             this.errors.push({
-                line: lines.length,
-                column: 0,
-                message: `Unmatched braces: ${braceCount > 0 ? 'missing' : 'extra'} ${Math.abs(braceCount)} closing brace(s)`
+                line: bracket.line,
+                column: bracket.column,
+                message: `Unmatched opening ${bracket.type}`
             });
-        }
+        });
         return this.errors.length === 0;
     }
     checkLineSyntax(line, lineNumber, lineIndex) {
@@ -202,7 +284,7 @@ connection.onInitialized(() => {
 // The global settings, used when the `workspace/configuration` request is not supported by the client.
 // Please note that this is not the case when using this server with the client provided in this example
 // but could happen with other clients.
-const defaultSettings = { maxNumberOfProblems: 1000 };
+const defaultSettings = { maxNumberOfProblems: 1000, enableBracketValidation: true };
 let globalSettings = defaultSettings;
 // Cache the settings of all open documents
 const documentSettings = new Map();
@@ -247,8 +329,17 @@ async function validateTextDocument(textDocument) {
     // Parse the document
     const isValid = parser.parse(text);
     const errors = parser.getErrors();
-    // Convert parser errors to diagnostics
+    // Convert parser errors to diagnostics, respecting the bracket validation setting
     errors.forEach(error => {
+        // Skip bracket validation errors if disabled
+        if (!settings.enableBracketValidation &&
+            (error.message.includes('brace') ||
+                error.message.includes('bracket') ||
+                error.message.includes('parenthesis') ||
+                error.message.includes('Unmatched') ||
+                error.message.includes('Unexpected'))) {
+            return;
+        }
         diagnostics.push({
             severity: node_1.DiagnosticSeverity.Error,
             range: {
@@ -488,7 +579,15 @@ function getKeywordDocumentation(keyword) {
         'cuda_kernels': 'Block containing CUDA kernel definitions',
         'onnx_model': 'Defines an ONNX model for machine learning inference',
         'pipeline': 'Defines a processing pipeline with multiple stages',
-        'stage': 'Defines a stage within a pipeline'
+        'stage': 'Defines a stage within a pipeline',
+        'project_name': 'Defines the name of a project',
+        'parameter_callbacks': 'Defines callbacks for node parameters',
+        'lifecycle_config': 'Defines the lifecycle configuration for a node',
+        'queue_size': 'Defines the queue size for a ROS topic',
+        'autostart': 'Defines whether a node should start automatically',
+        'cleanup_on_shutdown': 'Defines whether a node should clean up on shutdown',
+        'oneshot': 'Defines whether a node should run only once',
+        'no_autostart': 'Defines whether a node should not start automatically'
     };
     return documentation[keyword] || `RoboDSL keyword: ${keyword}`;
 }

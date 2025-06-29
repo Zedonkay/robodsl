@@ -124,11 +124,13 @@ async function getDiagnosticsFromPython(text: string): Promise<any[]> {
 // Convert Python diagnostics to VS Code diagnostics
 function convertToVSCodeDiagnostics(pythonDiagnostics: any[], textDocument: TextDocument): Diagnostic[] {
     const diagnostics: Diagnostic[] = [];
+    const totalLines = textDocument.getText().split('\n');
     
     for (const pyDiag of pythonDiagnostics) {
-        // For now, put all diagnostics at the beginning of the document
-        // TODO: Parse line/column from error messages for better positioning
-        const range = Range.create(0, 0, 0, 1);
+        const line = Math.max(0, pyDiag.line || 0);
+        const character = Math.max(0, pyDiag.column || 0);
+        const lineText = totalLines[line] || '';
+        const range = Range.create(line, character, line, Math.min(lineText.length, character + 1));
         
         const severity = pyDiag.level === 'error' ? DiagnosticSeverity.Error : DiagnosticSeverity.Warning;
         

@@ -40,10 +40,94 @@
             "include": "#topic-paths"
         },
         {
+            "include": "#topic-path"
+        },
+        {
             "include": "#expressions"
         },
         {
             "include": "#values"
+        },
+        {
+            "include": "#pipeline-definition"
+        },
+        {
+            "include": "#stage-definition"
+        },
+        {
+            "include": "#stage-content"
+        },
+        {
+            "include": "#stage-input"
+        },
+        {
+            "include": "#stage-output"
+        },
+        {
+            "include": "#stage-method"
+        },
+        {
+            "include": "#stage-model"
+        },
+        {
+            "include": "#stage-topic"
+        },
+        {
+            "include": "#stage-cuda-kernel"
+        },
+        {
+            "include": "#stage-onnx-model"
+        },
+        {
+            "include": "#onnx-input-def"
+        },
+        {
+            "include": "#onnx-output-def"
+        },
+        {
+            "include": "#onnx-device"
+        },
+        {
+            "include": "#onnx-optimization"
+        },
+        {
+            "include": "#cuda-block-size"
+        },
+        {
+            "include": "#cuda-grid-size"
+        },
+        {
+            "include": "#cuda-shared-memory"
+        },
+        {
+            "include": "#cuda-use-thrust"
+        },
+        {
+            "include": "#cuda-kernel-input"
+        },
+        {
+            "include": "#cuda-kernel-output"
+        },
+        {
+            "include": "#cpp-input-param"
+        },
+        {
+            "include": "#cpp-output-param"
+        },
+        {
+            "include": "#binary-operators"
+        },
+        {
+            "include": "#dotted-name"
+        },
+        {
+            "include": "#topic-type-string"
+        },
+        {
+            "include": "#signed-number"
+        },
+        {
+            "include": "#type-with-array"
         }
     ],
     "repository": {
@@ -51,7 +135,7 @@
             "patterns": [
                 {
                     "name": "meta.preprocessor.include.robodsl",
-                    "match": "^\\s*include\\s*(<[^>]+>|\\\"[^\"]+\")",
+                    "match": "\\b(include)\\s*(<[^>]+>|\\\"[^\"]+\")",
                     "captures": {
                         "1": { "name": "keyword.control.import.include.robodsl" },
                         "2": { "name": "string.quoted.other.lt-gt.include.robodsl" }
@@ -85,7 +169,16 @@
                     "include": "#parameter"
                 },
                 {
+                    "include": "#parameter-simple"
+                },
+                {
+                    "include": "#parameter-callbacks"
+                },
+                {
                     "include": "#lifecycle"
+                },
+                {
+                    "include": "#lifecycle-simple"
                 },
                 {
                     "include": "#timer"
@@ -109,7 +202,16 @@
         },
         "parameter": {
             "name": "meta.parameter.robodsl",
-            "match": "\\b(parameter)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*:",
+            "match": "\\b(parameter)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*=",
+            "captures": {
+                "1": { "name": "keyword.control.robodsl" },
+                "2": { "name": "storage.type.robodsl" },
+                "3": { "name": "variable.parameter.robodsl" }
+            }
+        },
+        "parameter-simple": {
+            "name": "meta.parameter.robodsl",
+            "match": "\\b(parameter)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*=",
             "captures": {
                 "1": { "name": "keyword.control.robodsl" },
                 "2": { "name": "variable.parameter.robodsl" }
@@ -206,7 +308,7 @@
         },
         "input-param": {
             "name": "meta.input-param.robodsl",
-            "match": "\\b(input)\\s*:\\s*([a-zA-Z_:<>\\*\\s]+)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+            "match": "\\b(input)\\s+([a-zA-Z_:<>\\*\\s\\[\\]]+)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
             "captures": {
                 "1": { "name": "keyword.control.robodsl" },
                 "2": { "name": "storage.type.robodsl" },
@@ -215,7 +317,7 @@
         },
         "output-param": {
             "name": "meta.output-param.robodsl",
-            "match": "\\b(output)\\s*:\\s*([a-zA-Z_:<>\\*\\s]+)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+            "match": "\\b(output)\\s+([a-zA-Z_:<>\\*\\s\\[\\]]+)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
             "captures": {
                 "1": { "name": "keyword.control.robodsl" },
                 "2": { "name": "storage.type.robodsl" },
@@ -228,7 +330,13 @@
                     "include": "#publisher"
                 },
                 {
+                    "include": "#publisher-simple"
+                },
+                {
                     "include": "#subscriber"
+                },
+                {
+                    "include": "#subscriber-simple"
                 },
                 {
                     "include": "#service"
@@ -243,47 +351,60 @@
         },
         "publisher": {
             "name": "meta.publisher.robodsl",
-            "match": "\\b(publisher)\\s+([\\/][a-zA-Z_][a-zA-Z0-9_\\/\\.]*)\\s*:\\s*\\\"([^\"]+)\\\"",
+            "match": "\\b(publisher)\\s+([\\/][a-zA-Z_][a-zA-Z0-9_\\/\\.]*)\\s*:",
+            "captures": {
+                "1": { "name": "keyword.control.robodsl" },
+                "2": { "name": "string.other.robodsl" }
+            }
+        },
+        "publisher-simple": {
+            "name": "meta.publisher.robodsl",
+            "match": "\\b(publisher)\\s+([\\/][a-zA-Z_][a-zA-Z0-9_\\/\\.]*)\\s+([a-zA-Z_][a-zA-Z0-9_]*(?:\\/[a-zA-Z_][a-zA-Z0-9_]*)*)",
             "captures": {
                 "1": { "name": "keyword.control.robodsl" },
                 "2": { "name": "string.other.robodsl" },
-                "3": { "name": "string.quoted.double.robodsl" }
+                "3": { "name": "support.type.robodsl" }
             }
         },
         "subscriber": {
             "name": "meta.subscriber.robodsl",
-            "match": "\\b(subscriber)\\s+([\\/][a-zA-Z_][a-zA-Z0-9_\\/\\.]*)\\s*:\\s*\\\"([^\"]+)\\\"",
+            "match": "\\b(subscriber)\\s+([\\/][a-zA-Z_][a-zA-Z0-9_\\/\\.]*)\\s*:",
+            "captures": {
+                "1": { "name": "keyword.control.robodsl" },
+                "2": { "name": "string.other.robodsl" }
+            }
+        },
+        "subscriber-simple": {
+            "name": "meta.subscriber.robodsl",
+            "match": "\\b(subscriber)\\s+([\\/][a-zA-Z_][a-zA-Z0-9_\\/\\.]*)\\s+([a-zA-Z_][a-zA-Z0-9_]*(?:\\/[a-zA-Z_][a-zA-Z0-9_]*)*)",
             "captures": {
                 "1": { "name": "keyword.control.robodsl" },
                 "2": { "name": "string.other.robodsl" },
-                "3": { "name": "string.quoted.double.robodsl" }
+                "3": { "name": "support.type.robodsl" }
             }
         },
         "service": {
             "name": "meta.service.robodsl",
-            "match": "\\b(service)\\s+([\\/][a-zA-Z_][a-zA-Z0-9_\\/\\.]*)\\s*:\\s*\\\"([^\"]+)\\\"",
+            "match": "\\b(service)\\s+([\\/][a-zA-Z_][a-zA-Z0-9_\\/\\.]*)\\s*:",
             "captures": {
                 "1": { "name": "keyword.control.robodsl" },
-                "2": { "name": "string.other.robodsl" },
-                "3": { "name": "string.quoted.double.robodsl" }
+                "2": { "name": "string.other.robodsl" }
             }
         },
         "client": {
             "name": "meta.client.robodsl",
-            "match": "\\b(client)\\s+([\\/][a-zA-Z_][a-zA-Z0-9_\\/\\.]*)\\s*:\\s*\\\"([^\"]+)\\\"",
+            "match": "\\b(client)\\s+([\\/][a-zA-Z_][a-zA-Z0-9_\\/\\.]*)\\s*:",
             "captures": {
                 "1": { "name": "keyword.control.robodsl" },
-                "2": { "name": "string.other.robodsl" },
-                "3": { "name": "string.quoted.double.robodsl" }
+                "2": { "name": "string.other.robodsl" }
             }
         },
         "action": {
             "name": "meta.action.robodsl",
-            "match": "\\b(action)\\s+([\\/][a-zA-Z_][a-zA-Z0-9_\\/\\.]*)\\s*:\\s*\\\"([^\"]+)\\\"",
+            "match": "\\b(action)\\s+([\\/][a-zA-Z_][a-zA-Z0-9_\\/\\.]*)\\s*:",
             "captures": {
                 "1": { "name": "keyword.control.robodsl" },
-                "2": { "name": "string.other.robodsl" },
-                "3": { "name": "string.quoted.double.robodsl" }
+                "2": { "name": "string.other.robodsl" }
             }
         },
         "cuda-kernels-block": {
@@ -339,7 +460,7 @@
         },
         "kernel-param": {
             "name": "meta.kernel-param.robodsl",
-            "match": "\\b(input|output)\\s*:\\s*([a-zA-Z_:<>\\*\\s]+)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+            "match": "\\b(input|output)\\s+([a-zA-Z_:<>\\*\\s\\[\\]]+)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
             "captures": {
                 "1": { "name": "keyword.control.robodsl" },
                 "2": { "name": "storage.type.robodsl" },
@@ -412,7 +533,7 @@
             "patterns": [
                 {
                     "name": "keyword.control.robodsl",
-                    "match": "\\b(node|cuda_kernels|kernel|method|param|remap|namespace|flag|lifecycle|timer|client|publisher|subscriber|service|action|parameter|include|input|output|code|in|out|inout|block_size|grid_size|shared_memory|use_thrust|qos|onnx_model|device|optimization)\\b"
+                    "match": "\\b(node|cuda_kernels|kernel|method|parameter|remap|namespace|flag|lifecycle|timer|client|publisher|subscriber|service|action|include|input|output|code|in|out|inout|block_size|grid_size|shared_memory|use_thrust|qos|onnx_model|device|optimization|pipeline|stage|config|project_name|parameter_callbacks|lifecycle_config|queue_size|autostart|cleanup_on_shutdown|oneshot|no_autostart)\\b"
                 },
                 {
                     "name": "constant.language.boolean.robodsl",
@@ -433,6 +554,10 @@
             ]
         },
         "topic-paths": {
+            "name": "string.other.robodsl",
+            "match": "\\/[a-zA-Z_][a-zA-Z0-9_\\/\\.]*"
+        },
+        "topic-path": {
             "name": "string.other.robodsl",
             "match": "\\/[a-zA-Z_][a-zA-Z0-9_\\/\\.]*"
         },
@@ -554,37 +679,250 @@
         },
         "onnx-input-def": {
             "name": "meta.onnx-input-def.robodsl",
-            "match": "\\b(input)\\s*:\\s*\\\"([^\"]+)\\\"\\s*->\\s*\\\"([^\"]+)\\\"",
+            "match": "\\b(input)\\s*:\\s*([\"'][^\"']*[\"'])\\s*->\\s*([\"'][^\"']*[\"'])",
             "captures": {
                 "1": { "name": "keyword.control.robodsl" },
-                "2": { "name": "string.quoted.double.robodsl" },
-                "3": { "name": "string.quoted.double.robodsl" }
+                "2": { "name": "string.quoted.robodsl" },
+                "3": { "name": "string.quoted.robodsl" }
             }
         },
         "onnx-output-def": {
             "name": "meta.onnx-output-def.robodsl",
-            "match": "\\b(output)\\s*:\\s*\\\"([^\"]+)\\\"\\s*->\\s*\\\"([^\"]+)\\\"",
+            "match": "\\b(output)\\s*:\\s*([\"'][^\"']*[\"'])\\s*->\\s*([\"'][^\"']*[\"'])",
             "captures": {
                 "1": { "name": "keyword.control.robodsl" },
-                "2": { "name": "string.quoted.double.robodsl" },
-                "3": { "name": "string.quoted.double.robodsl" }
+                "2": { "name": "string.quoted.robodsl" },
+                "3": { "name": "string.quoted.robodsl" }
             }
         },
         "onnx-device": {
             "name": "meta.onnx-device.robodsl",
-            "match": "\\b(device)\\s*:\\s*(cpu|cuda)\\b",
+            "match": "\\b(device)\\s*:\\s*([a-zA-Z_][a-zA-Z0-9_]*)",
             "captures": {
                 "1": { "name": "keyword.control.robodsl" },
-                "2": { "name": "constant.language.robodsl" }
+                "2": { "name": "support.type.robodsl" }
             }
         },
         "onnx-optimization": {
             "name": "meta.onnx-optimization.robodsl",
-            "match": "\\b(optimization)\\s*:\\s*(tensorrt|openvino)\\b",
+            "match": "\\b(optimization)\\s*:\\s*([a-zA-Z_][a-zA-Z0-9_]*)",
             "captures": {
                 "1": { "name": "keyword.control.robodsl" },
-                "2": { "name": "constant.language.robodsl" }
+                "2": { "name": "support.type.robodsl" }
             }
+        },
+        "qos-block": {
+            "name": "meta.qos-block.robodsl",
+            "begin": "\\b(qos)\\s*:\\s*\\{",
+            "end": "\\}",
+            "beginCaptures": {
+                "1": { "name": "keyword.control.robodsl" }
+            },
+            "patterns": [
+                { "include": "#qos-settings" },
+                { "include": "#comments" }
+            ]
+        },
+        "queue-size": {
+            "name": "meta.queue-size.robodsl",
+            "match": "\\b(queue_size)\\s*:\\s*([0-9]+)",
+            "captures": {
+                "1": { "name": "keyword.control.robodsl" },
+                "2": { "name": "constant.numeric.robodsl" }
+            }
+        },
+        "parameter-callbacks": {
+            "name": "meta.parameter-callbacks.robodsl",
+            "match": "\\b(parameter_callbacks)\\s*:\\s*(true|false)\\b",
+            "captures": {
+                "1": { "name": "keyword.control.robodsl" },
+                "2": { "name": "constant.language.boolean.robodsl" }
+            }
+        },
+        "lifecycle-simple": {
+            "name": "meta.lifecycle.robodsl",
+            "match": "\\b(lifecycle)\\s*:\\s*(true|false)\\b",
+            "captures": {
+                "1": { "name": "keyword.control.robodsl" },
+                "2": { "name": "constant.language.boolean.robodsl" }
+            }
+        },
+        "pipeline-definition": {
+            "name": "meta.pipeline-definition.robodsl",
+            "begin": "\\b(pipeline)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+            "end": "\\}",
+            "beginCaptures": {
+                "1": { "name": "keyword.control.robodsl" },
+                "2": { "name": "entity.name.class.robodsl" }
+            },
+            "patterns": [
+                { "include": "#stage-definition" },
+                { "include": "#comments" }
+            ]
+        },
+        "stage-definition": {
+            "name": "meta.stage-definition.robodsl",
+            "begin": "\\b(stage)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+            "end": "\\}",
+            "beginCaptures": {
+                "1": { "name": "keyword.control.robodsl" },
+                "2": { "name": "entity.name.function.robodsl" }
+            },
+            "patterns": [
+                { "include": "#stage-content" },
+                { "include": "#comments" }
+            ]
+        },
+        "stage-content": {
+            "patterns": [
+                { "include": "#stage-input" },
+                { "include": "#stage-output" },
+                { "include": "#stage-method" },
+                { "include": "#stage-model" },
+                { "include": "#stage-topic" },
+                { "include": "#stage-cuda-kernel" },
+                { "include": "#stage-onnx-model" }
+            ]
+        },
+        "stage-input": {
+            "name": "meta.stage-input.robodsl",
+            "match": "\\b(input)\\s*:\\s*([\"'][^\"']*[\"'])",
+            "captures": {
+                "1": { "name": "keyword.control.robodsl" },
+                "2": { "name": "string.quoted.robodsl" }
+            }
+        },
+        "stage-output": {
+            "name": "meta.stage-output.robodsl",
+            "match": "\\b(output)\\s*:\\s*([\"'][^\"']*[\"'])",
+            "captures": {
+                "1": { "name": "keyword.control.robodsl" },
+                "2": { "name": "string.quoted.robodsl" }
+            }
+        },
+        "stage-method": {
+            "name": "meta.stage-method.robodsl",
+            "match": "\\b(method)\\s*:\\s*([\"'][^\"']*[\"'])",
+            "captures": {
+                "1": { "name": "keyword.control.robodsl" },
+                "2": { "name": "string.quoted.robodsl" }
+            }
+        },
+        "stage-model": {
+            "name": "meta.stage-model.robodsl",
+            "match": "\\b(model)\\s*:\\s*([\"'][^\"']*[\"'])",
+            "captures": {
+                "1": { "name": "keyword.control.robodsl" },
+                "2": { "name": "string.quoted.robodsl" }
+            }
+        },
+        "stage-topic": {
+            "name": "meta.stage-topic.robodsl",
+            "match": "\\b(topic)\\s*:\\s*([\\/][a-zA-Z_][a-zA-Z0-9_\\/\\.]*)",
+            "captures": {
+                "1": { "name": "keyword.control.robodsl" },
+                "2": { "name": "string.other.robodsl" }
+            }
+        },
+        "stage-cuda-kernel": {
+            "name": "meta.stage-cuda-kernel.robodsl",
+            "match": "\\b(cuda_kernel)\\s*:\\s*([\"'][^\"']*[\"'])",
+            "captures": {
+                "1": { "name": "keyword.control.robodsl" },
+                "2": { "name": "string.quoted.robodsl" }
+            }
+        },
+        "stage-onnx-model": {
+            "name": "meta.stage-onnx-model.robodsl",
+            "match": "\\b(onnx_model)\\s*:\\s*([\"'][^\"']*[\"'])",
+            "captures": {
+                "1": { "name": "keyword.control.robodsl" },
+                "2": { "name": "string.quoted.robodsl" }
+            }
+        },
+        "cuda-block-size": {
+            "name": "meta.cuda-block-size.robodsl",
+            "match": "\\b(block_size)\\s*:\\s*\\([^)]*\\)",
+            "captures": {
+                "1": { "name": "keyword.control.robodsl" }
+            }
+        },
+        "cuda-grid-size": {
+            "name": "meta.cuda-grid-size.robodsl",
+            "match": "\\b(grid_size)\\s*:\\s*\\([^)]*\\)",
+            "captures": {
+                "1": { "name": "keyword.control.robodsl" }
+            }
+        },
+        "cuda-shared-memory": {
+            "name": "meta.cuda-shared-memory.robodsl",
+            "match": "\\b(shared_memory)\\s*:",
+            "captures": {
+                "1": { "name": "keyword.control.robodsl" }
+            }
+        },
+        "cuda-use-thrust": {
+            "name": "meta.cuda-use-thrust.robodsl",
+            "match": "\\b(use_thrust)\\s*:",
+            "captures": {
+                "1": { "name": "keyword.control.robodsl" }
+            }
+        },
+        "cuda-kernel-input": {
+            "name": "meta.cuda-kernel-input.robodsl",
+            "match": "\\b(input)\\s*:\\s*([a-zA-Z_][a-zA-Z0-9_]*)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+            "captures": {
+                "1": { "name": "keyword.control.robodsl" },
+                "2": { "name": "support.type.robodsl" },
+                "3": { "name": "variable.parameter.robodsl" }
+            }
+        },
+        "cuda-kernel-output": {
+            "name": "meta.cuda-kernel-output.robodsl",
+            "match": "\\b(output)\\s*:\\s*([a-zA-Z_][a-zA-Z0-9_]*)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+            "captures": {
+                "1": { "name": "keyword.control.robodsl" },
+                "2": { "name": "support.type.robodsl" },
+                "3": { "name": "variable.parameter.robodsl" }
+            }
+        },
+        "cpp-input-param": {
+            "name": "meta.cpp-input-param.robodsl",
+            "match": "\\b(input)\\s*:\\s*([a-zA-Z_][a-zA-Z0-9_]*)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+            "captures": {
+                "1": { "name": "keyword.control.robodsl" },
+                "2": { "name": "support.type.robodsl" },
+                "3": { "name": "variable.parameter.robodsl" }
+            }
+        },
+        "cpp-output-param": {
+            "name": "meta.cpp-output-param.robodsl",
+            "match": "\\b(output)\\s*:\\s*([a-zA-Z_][a-zA-Z0-9_]*)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+            "captures": {
+                "1": { "name": "keyword.control.robodsl" },
+                "2": { "name": "support.type.robodsl" },
+                "3": { "name": "variable.parameter.robodsl" }
+            }
+        },
+        "binary-operators": {
+            "name": "keyword.operator.robodsl",
+            "match": "\\b(\\+|\\-|\\*|\\/|\\%|\\^)\\b"
+        },
+        "dotted-name": {
+            "name": "variable.other.robodsl",
+            "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)(\\.([a-zA-Z_][a-zA-Z0-9_]*)|(\\([^)]*\\)))+"
+        },
+        "topic-type-string": {
+            "name": "string.quoted.robodsl",
+            "match": "\"[a-zA-Z0-9_\\/]+\""
+        },
+        "signed-number": {
+            "name": "constant.numeric.robodsl",
+            "match": "\\-?[0-9]+(\\.[0-9]+)?"
+        },
+        "type-with-array": {
+            "name": "support.type.robodsl",
+            "match": "[a-zA-Z_][a-zA-Z0-9_]*(\\[[0-9,]*\\])?"
         }
     }
 }

@@ -1,0 +1,46 @@
+# Include README and license
+include README.md
+include LICENSE
+include INSTALL.md
+include requirements-dev.txt
+
+# Include grammar files
+include src/robodsl/grammar/*.lark
+
+# Include templates
+recursive-include src/robodsl/templates *.jinja2
+
+# Include configuration files
+include config/deployment/debian/*
+include pytest.ini
+include pyproject.toml
+
+# Include documentation
+recursive-include docs *.md *.html *.css *.js
+recursive-include docs *.png *.jpg *.gif *.svg
+
+# Include examples
+recursive-include examples *.robodsl *.py *.cpp *.hpp *.cu *.cuh
+
+# Include tests
+recursive-include tests *.py *.robodsl
+
+# Include scripts
+include scripts/*.py
+include scripts/*.sh
+
+# Include build configuration
+include CMakeLists.txt
+include package.xml
+
+# Exclude development files
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude __pycache__
+global-exclude .DS_Store
+global-exclude .git*
+global-exclude .pytest_cache
+global-exclude .venv
+global-exclude build
+global-exclude dist
+global-exclude *.egg-info 

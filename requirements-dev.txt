@@ -1,0 +1,60 @@
+# Development dependencies for RoboDSL
+# Install with: pip install -r requirements-dev.txt
+
+# Core dependencies
+click>=8.0.0
+jinja2>=3.0.0
+lark>=1.1.0
+onnxruntime>=1.15.0
+opencv-python>=4.8.0
+numpy>=1.21.0
+
+# Testing
+pytest>=7.0.0
+pytest-cov>=4.0.0
+pytest-mock>=3.10.0
+pytest-xdist>=3.0.0
+pytest-timeout>=2.1.0
+
+# Code quality
+black>=23.0.0
+isort>=5.12.0
+flake8>=6.0.0
+flake8-docstrings>=1.7.0
+mypy>=1.0.0
+pre-commit>=3.0.0
+
+# Documentation
+sphinx>=6.0.0
+sphinx-rtd-theme>=1.2.0
+myst-parser>=1.0.0
+sphinx-autodoc-typehints>=1.23.0
+
+# Development tools
+ipython>=8.0.0
+jupyter>=1.0.0
+notebook>=6.5.0
+
+# Optional: CUDA support
+# onnxruntime-gpu>=1.15.0
+# cupy-cuda11x>=12.0.0; cuda_version == '11'
+# cupy-cuda12x>=12.0.0; cuda_version == '12'
+
+# Optional: TensorRT support
+# tensorrt>=8.6.0
+# pycuda>=2022.2.0
+
+# Build tools
+setuptools>=42.0
+wheel>=0.37.0
+build>=0.10.0
+
+# Type checking
+types-requests>=2.28.0
+types-PyYAML>=6.0.0
+
+# Utilities
+pyyaml>=6.0
+requests>=2.28.0
+tqdm>=4.64.0
+rich>=13.0.0 

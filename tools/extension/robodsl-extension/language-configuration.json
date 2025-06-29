@@ -21,5 +21,12 @@
         ["(", ")"],
         ["\"", "\""],
         ["'", "'"]
-    ]
+    ],
+    "autoClosingBrackets": "always",
+    "autoClosingQuotes": "always",
+    "autoClosingOvertype": "always",
+    "bracketPairColorization": {
+        "enabled": true,
+        "independentColorPoolPerBracketType": true
+    }
 }

@@ -31,7 +31,7 @@ let client;
 function activate(context) {
     console.log('RoboDSL extension is now active!');
     // The server is implemented in node
-    const serverModule = context.asAbsolutePath(path.join('out', 'language-server.js'));
+    const serverModule = context.asAbsolutePath(path.join('server', 'out', 'server.js'));
     console.log('Server module path:', serverModule);
     // The debug options for the server
     // --inspect=6009: runs the server in Node's Inspector mode so VS Code can attach to the server for debugging
