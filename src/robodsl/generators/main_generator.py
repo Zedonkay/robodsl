@@ -21,14 +21,16 @@ from ..core.ast import RoboDSLAST
 class MainGenerator(BaseGenerator):
     """Main generator that orchestrates all other generators."""
     
-    def __init__(self, output_dir: str = ".", template_dirs: Optional[List[Path]] = None):
+    def __init__(self, output_dir: str = ".", template_dirs: Optional[List[Path]] = None, debug: bool = False):
         """Initialize the main generator.
         
         Args:
             output_dir: Base directory for generated files
             template_dirs: Additional template directories to search
+            debug: Whether to enable debug mode
         """
         super().__init__(output_dir, template_dirs)
+        self.debug = debug
         
         # Initialize all sub-generators
         self.cpp_generator = CppNodeGenerator(output_dir, template_dirs)
@@ -100,11 +102,14 @@ class MainGenerator(BaseGenerator):
             for pipeline in ast.pipelines:
                 # Use the project name if available, else fallback
                 project_name = getattr(ast, 'project_name', 'robodsl_project')
-                print(f"DEBUG: Processing pipeline '{pipeline.name}' with project_name '{project_name}'")
+                if self.debug:
+                    print(f"DEBUG: Processing pipeline '{pipeline.name}' with project_name '{project_name}'")
                 for idx, stage in enumerate(pipeline.content.stages):
-                    print(f"DEBUG: Processing stage '{stage.name}' (index {idx})")
+                    if self.debug:
+                        print(f"DEBUG: Processing stage '{stage.name}' (index {idx})")
                     files = self.pipeline_generator._generate_stage_node(stage, pipeline.name, idx, project_name)
-                    print(f"DEBUG: Stage '{stage.name}' generated files: {list(files.keys())}")
+                    if self.debug:
+                        print(f"DEBUG: Stage '{stage.name}' generated files: {list(files.keys())}")
                     # Write files to disk and collect their paths
                     for rel_path, content in files.items():
                         abs_path = Path(self.output_dir) / rel_path

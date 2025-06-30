@@ -25,7 +25,8 @@ from ..core.ast import (
 class ASTBuilder:
     """Builds AST from Lark parse tree."""
     
-    def __init__(self):
+    def __init__(self, debug: bool = False):
+        self.debug = debug
         self.ast = RoboDSLAST()
     
     def build(self, tree: Tree) -> RoboDSLAST:
@@ -410,10 +411,12 @@ class ASTBuilder:
     
     def _handle_qos_config(self, tree: Tree) -> QoSNode:
         """Handle QoS configuration."""
-        print('DEBUG: _handle_qos_config children:', tree.children)
+        if self.debug:
+            print('DEBUG: _handle_qos_config children:', tree.children)
         settings = []
         for child in tree.children:
-            print('DEBUG: child type:', type(child), 'data:', getattr(child, 'data', None))
+            if self.debug:
+                print('DEBUG: child type:', type(child), 'data:', getattr(child, 'data', None))
             if isinstance(child, Tree) and child.data == 'qos_setting':
                 name, value = self._extract_qos_setting(child)
                 if name is not None and value is not None:
@@ -903,11 +906,12 @@ class ASTBuilder:
         
         for child in tree.children:
             if isinstance(child, Token):
-                if child.type == 'STRING':
+                if child.type in ['STRING', 'NAME']:  # Handle both types
+                    value = child.value.strip('"') if child.type == 'STRING' else child.value
                     if input_name is None:
-                        input_name = child.value.strip('"')
+                        input_name = value
                     else:
-                        input_type = child.value.strip('"')
+                        input_type = value
         
         return InputDefNode(name=input_name or "", type=input_type or "")
 
@@ -918,11 +922,12 @@ class ASTBuilder:
         
         for child in tree.children:
             if isinstance(child, Token):
-                if child.type == 'STRING':
+                if child.type in ['STRING', 'NAME']:  # Handle both types
+                    value = child.value.strip('"') if child.type == 'STRING' else child.value
                     if output_name is None:
-                        output_name = child.value.strip('"')
+                        output_name = value
                     else:
-                        output_type = child.value.strip('"')
+                        output_type = value
         
         return OutputDefNode(name=output_name or "", type=output_type or "")
 
@@ -931,14 +936,9 @@ class ASTBuilder:
         device_name = None
         
         for child in tree.children:
-            if isinstance(child, Tree) and child.data == 'device_type':
-                # Extract the device type from the device_type rule
-                for device_child in child.children:
-                    if isinstance(device_child, Token):
-                        device_name = device_child.value
-                        break
-            elif isinstance(child, Token) and child.type == 'NAME':
-                device_name = child.value
+            if isinstance(child, Token) and child.type in ['NAME', 'STRING']:
+                device_name = child.value.strip('"') if child.type == 'STRING' else child.value
+                break
         
         return DeviceNode(device=device_name or "")
 
@@ -947,14 +947,9 @@ class ASTBuilder:
         optimization_name = None
         
         for child in tree.children:
-            if isinstance(child, Tree) and child.data == 'optimization_type':
-                # Extract the optimization type from the optimization_type rule
-                for opt_child in child.children:
-                    if isinstance(opt_child, Token):
-                        optimization_name = opt_child.value
-                        break
-            elif isinstance(child, Token) and child.type == 'NAME':
-                optimization_name = child.value
+            if isinstance(child, Token) and child.type in ['NAME', 'STRING']:
+                optimization_name = child.value.strip('"') if child.type == 'STRING' else child.value
+                break
         
         return OptimizationNode(optimization=optimization_name or "")
 

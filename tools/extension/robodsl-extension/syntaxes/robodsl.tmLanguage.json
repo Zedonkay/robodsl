@@ -679,7 +679,7 @@
         },
         "onnx-input-def": {
             "name": "meta.onnx-input-def.robodsl",
-            "match": "\\b(input)\\s*:\\s*([\"'][^\"']*[\"'])\\s*->\\s*([\"'][^\"']*[\"'])",
+            "match": "\\b(input)\\s*:\\s*([\"'][^\"']*[\"']|[a-zA-Z_][a-zA-Z0-9_]*)\\s*->\\s*([\"'][^\"']*[\"']|[a-zA-Z_][a-zA-Z0-9_]*)",
             "captures": {
                 "1": { "name": "keyword.control.robodsl" },
                 "2": { "name": "string.quoted.robodsl" },
@@ -688,7 +688,7 @@
         },
         "onnx-output-def": {
             "name": "meta.onnx-output-def.robodsl",
-            "match": "\\b(output)\\s*:\\s*([\"'][^\"']*[\"'])\\s*->\\s*([\"'][^\"']*[\"'])",
+            "match": "\\b(output)\\s*:\\s*([\"'][^\"']*[\"']|[a-zA-Z_][a-zA-Z0-9_]*)\\s*->\\s*([\"'][^\"']*[\"']|[a-zA-Z_][a-zA-Z0-9_]*)",
             "captures": {
                 "1": { "name": "keyword.control.robodsl" },
                 "2": { "name": "string.quoted.robodsl" },

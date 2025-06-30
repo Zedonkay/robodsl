@@ -71,19 +71,17 @@ def test_add_nested_subnode(test_output_dir):
 
 
 def test_add_subnode_with_pubsub(test_output_dir):
-    """Test adding a subnode with publishers and subscribers."""
+    """Test adding a subnode (without deprecated pubsub options)."""
     runner = CliRunner()
     project_dir = test_output_dir / "test_project"
     project_dir.mkdir()
     
-    # Add a subnode with publishers and subscribers
+    # Add a subnode (without deprecated publisher/subscriber options)
     result = runner.invoke(
         main,
         [
             "add-node",
             "perception.object_detector",
-            "--publisher", "/detections", "vision_msgs/msg/Detection3DArray",
-            "--subscriber", "/image", "sensor_msgs/msg/Image",
             "--language", "python",
             "--project-dir", str(project_dir)
         ]
@@ -91,11 +89,15 @@ def test_add_subnode_with_pubsub(test_output_dir):
     
     assert result.exit_code == 0
     
+    # Check that files were created in the correct locations
+    assert (project_dir / "robodsl" / "nodes" / "perception" / "object_detector.robodsl").exists()
+    assert (project_dir / "src" / "perception" / "object_detector_node.py").exists()
+    assert (project_dir / "launch" / "perception" / "object_detector.launch.py").exists()
+    
     # Check robodsl file content
     with open(project_dir / "robodsl" / "nodes" / "perception" / "object_detector.robodsl", 'r') as f:
         content = f.read()
-        assert 'publisher /detections: "vision_msgs/msg/Detection3DArray"' in content
-        assert 'subscriber /image: "sensor_msgs/msg/Image"' in content
+        assert "node object_detector" in content
 
 
 def test_invalid_node_name(test_output_dir):

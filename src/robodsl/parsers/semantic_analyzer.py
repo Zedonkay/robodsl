@@ -69,10 +69,11 @@ class SymbolTable:
 class SemanticAnalyzer:
     """Analyzes semantic correctness of RoboDSL configurations."""
     
-    def __init__(self):
+    def __init__(self, debug: bool = False):
         self.errors: List[str] = []
         self.warnings: List[str] = []
         self.symbol_table = SymbolTable()
+        self.debug = debug
     
     def analyze(self, ast: RoboDSLAST) -> bool:
         """Analyze the AST for semantic errors.
@@ -383,13 +384,15 @@ class SemanticAnalyzer:
                 self.errors.append(f"Duplicate timer callback name: {timer.name}")
             timer_names.add(timer.name)
             
-            # Check timer period
-            if timer.period <= 0:
-                self.errors.append(f"Timer {timer.name} period must be positive")
-            
-            # Check for negative timer periods
-            if isinstance(timer.period, (int, float)) and timer.period < 0:
-                self.errors.append(f"Timer {timer.name} period cannot be negative")
+            # Check timer period (only if it's a number)
+            if isinstance(timer.period, (int, float)):
+                if timer.period <= 0:
+                    self.errors.append(f"Timer {timer.name} period must be positive")
+                if timer.period < 0:
+                    self.errors.append(f"Timer {timer.name} period cannot be negative")
+            else:
+                # If it's an expression or variable, skip the numeric check
+                self.warnings.append(f"Timer {timer.name} period is an expression or variable; skipping numeric validation.")
             
             # Check callback name
             if not timer.name or timer.name.strip() == "":
@@ -715,7 +718,8 @@ class SemanticAnalyzer:
                 if len(pub_types) > 1:
                     pub_nodes = [node_name for node_name, _ in publishers]
                     msg = f"Topic '{topic}' has multiple publishers with different message types: {pub_types} from nodes {pub_nodes}"
-                    print("DEBUG: ", msg)
+                    if self.debug:
+                        print("DEBUG: ", msg)
                     self.errors.append(msg)
             
             # Check for subscribers without publishers (warn, not error - could be external)
@@ -823,26 +827,31 @@ class SemanticAnalyzer:
         if not msg_type or msg_type.strip() == "":
             return False
         
-        # ROS message type format: package/msg/Type or package/srv/Type or package/action/Type
+        # Accept common ROS message type formats:
+        # 1. package/msg/Type (standard format)
+        # 2. package/Type (short format)
+        # 3. package/srv/Type (service format)
+        # 4. package/action/Type (action format)
+        # 5. Just Type (basic format)
+        
         parts = msg_type.split('/')
-        if len(parts) != 3:
-            return False
         
-        package, msg_type_category, type_name = parts
+        # Handle different formats
+        if len(parts) == 3:
+            # package/msg/Type or package/srv/Type or package/action/Type
+            package, msg_type_category, type_name = parts
+            if msg_type_category in ['msg', 'srv', 'action']:
+                return bool(package and type_name and type_name[0].isupper())
+        elif len(parts) == 2:
+            # package/Type
+            package, type_name = parts
+            return bool(package and type_name and type_name[0].isupper())
+        elif len(parts) == 1:
+            # Just Type
+            type_name = parts[0]
+            return bool(type_name and type_name[0].isupper())
         
-        # Check package name
-        if not package or not package.replace('_', '').isalnum():
-            return False
-        
-        # Check message type category
-        if msg_type_category not in ['msg', 'srv', 'action']:
-            return False
-        
-        # Check type name (should be PascalCase)
-        if not type_name or not type_name[0].isupper():
-            return False
-        
-        return True
+        return False
     
     def _validate_parameter_type(self, param_name: str, param_type: str, value: Any) -> None:
         """Validate parameter type consistency."""
@@ -869,24 +878,28 @@ class SemanticAnalyzer:
     def _validate_qos_setting(self, setting_name: str, setting_value: Any, context: str) -> None:
         """Validate QoS setting values."""
         if setting_name == "reliability":
-            valid_values = ["reliable", "best_effort"]
-            if setting_value not in valid_values:
-                self.errors.append(f"QoS reliability in {context} must be one of {valid_values}, got '{setting_value}'")
+            valid_string_values = ["reliable", "best_effort"]
+            valid_numeric_values = [1, 2]  # 1=reliable, 2=best_effort
+            if setting_value not in valid_string_values and setting_value not in valid_numeric_values:
+                self.errors.append(f"QoS reliability in {context} must be one of {valid_string_values} or {valid_numeric_values}, got '{setting_value}'")
         
         elif setting_name == "durability":
-            valid_values = ["volatile", "transient_local"]
-            if setting_value not in valid_values:
-                self.errors.append(f"QoS durability in {context} must be one of {valid_values}, got '{setting_value}'")
+            valid_string_values = ["volatile", "transient_local"]
+            valid_numeric_values = [1, 2]  # 1=volatile, 2=transient_local
+            if setting_value not in valid_string_values and setting_value not in valid_numeric_values:
+                self.errors.append(f"QoS durability in {context} must be one of {valid_string_values} or {valid_numeric_values}, got '{setting_value}'")
         
         elif setting_name == "history":
-            valid_values = ["keep_last", "keep_all"]
-            if setting_value not in valid_values:
-                self.errors.append(f"QoS history in {context} must be one of {valid_values}, got '{setting_value}'")
+            valid_string_values = ["keep_last", "keep_all"]
+            valid_numeric_values = [1, 2]  # 1=keep_last, 2=keep_all
+            if setting_value not in valid_string_values and setting_value not in valid_numeric_values:
+                self.errors.append(f"QoS history in {context} must be one of {valid_string_values} or {valid_numeric_values}, got '{setting_value}'")
         
         elif setting_name == "liveliness":
-            valid_values = ["automatic", "manual_by_topic", "manual_by_node"]
-            if setting_value not in valid_values:
-                self.errors.append(f"QoS liveliness in {context} must be one of {valid_values}, got '{setting_value}'")
+            valid_string_values = ["automatic", "manual_by_topic", "manual_by_node"]
+            valid_numeric_values = [1, 2, 3]  # 1=automatic, 2=manual_by_topic, 3=manual_by_node
+            if setting_value not in valid_string_values and setting_value not in valid_numeric_values:
+                self.errors.append(f"QoS liveliness in {context} must be one of {valid_string_values} or {valid_numeric_values}, got '{setting_value}'")
         
         elif setting_name in ["depth", "lease_duration", "deadline"]:
             if not isinstance(setting_value, (int, float)) or setting_value <= 0:

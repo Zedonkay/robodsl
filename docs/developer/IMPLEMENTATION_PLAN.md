@@ -187,67 +187,125 @@ This document outlines the implementation plan for RoboDSL and CUIF, combining t
 - Updated main generator to handle pipelines
 
 ---
+## Phase 5 — Cloud + Local GPU Development Integration
+
+**Priority**: 5  
+**Estimated Time**: 5–7 days  
+**Goal**: Provide GPU-enabled development environments via the cloud or local GPU servers, tightly integrated with RoboDSL's CLI and editor tooling.
+
+### 🧩 Motivation
+
+Robotics and CUDA development typically require:
+- Linux OS
+- NVIDIA GPU
+- ROS 2 and CUDA setup
+
+Most developers do not have this locally. This phase makes it possible to:
+- Write and test CUDA/ROS2 code without owning a Linux machine or NVIDIA GPU
+- Provide a one-click cloud-based developer environment
+- Allow local teams (e.g., CMU Racing) to expose their shared GPU machine for remote access
+
+
+### ✅ Deliverables
+
+- Hosted cloud development environment (via AWS/GCP with GPU instance)
+- VSCode extension or Web UI for editing and deploying `.robodsl` files
+- Remote execution backend with Docker/Podman and ROS 2
+- Local GPU server support with GUI access via browser
+- Developer API for compiling, deploying, running, and visualizing output
+
+
+### 🚀 Cloud Server Architecture (Option 1)
+
+Host development servers on AWS/GCP with GPU-backed VM instances (e.g., `g4dn.xlarge` or `a2-highgpu-1g`):
+
+#### Features
+- JupyterLab + VSCode Web UI via reverse proxy (e.g., NGINX)
+- Docker containers with preinstalled:
+  - ROS 2 Humble/Foxy
+  - CUDA Toolkit
+  - RoboDSL CLI and templates
+- GPU acceleration via `nvidia-docker`
+- RoboDSL CLI integrated into notebook + terminal
+
+#### User Workflow
+1. `robodsl cloud connect` opens VSCode or browser
+2. Developer edits `.robodsl` file
+3. RoboDSL auto-generates code
+4. User builds and runs via Docker container
+5. Simulators and visualizers are streamed via noVNC or WebRTC
+
+#### AWS/GCP Support
+- Provide helper script: `robodsl cloud deploy --provider aws`
+- Auto-deploy:
+  - VM with GPU
+  - Docker container
+  - Reverse proxy and authentication
+- Add `robodsl cloud start/stop/status` to manage VM lifecycle
+- Usage-based cost control (e.g., $0.40/hr when running, $0 when off)
+
+
+### 🖥️ Local GPU Server Support (Option 2)
+
+Allow organizations (e.g., CMU Racing) to expose a Linux GPU server on the local network:
+
+#### Features
+- Headless containerized development
+- Optional GUI via noVNC (e.g., Gazebo, RViz)
+- Developer connects via:
+  - `robodsl local connect` → opens local VSCode with remote container
+  - Or browser-based GUI
+- Sandbox each user session for isolation
+
+#### Deployment
+- Install RoboDSL runtime on server: `robodsl host init`
+- Start daemon: `robodsl host serve --gui`
+- Developers connect via:
+  - VSCode Remote SSH
+  - Web IDE (e.g., code-server)
+- Use `tmate` or `libvncserver` for collaborative development
+
+### 🧪 Tasks
+
+   #### Cloud Support
+   - [x] Create `robodsl cloud deploy`, `start`, `stop`, `connect` CLI
+   - [x] Terraform + Docker setup for AWS/GCP GPU VMs
+   - [x] Install CUDA, ROS2, RoboDSL toolchain on startup
+   - [x] Add VSCode Web + Jupyter + Terminal support
+   - [x] Add GPU availability check + usage monitoring
+
+   #### Local Server Support
+   - [x] `robodsl host init` to set up server
+   - [x] Launch `code-server` or VSCode Remote
+   - [x] Integrate graphical support via X11/VNC/WebRTC
+   - [x] Add auth + sandboxing for multiple users
+
+
+
+### ✅ Success Criteria
+
+- [ ] Users can connect to a GPU-hosted ROS2 + CUDA dev environment
+- [ ] They can write `.robodsl` files and test nodes in-browser or with VSCode
+- [ ] Cloud servers can be started/stopped from the CLI
+- [ ] Local GPU servers can run sessions with GUI (e.g., RViz/Gazebo)
+- [ ] Sessions are isolated per user
+
+### 🛠️ Future Extensions
+
+- User authentication + persistent storage
+- Session recording and debugging tools
+- Simulator streaming with GPU-accelerated rendering (WebRTC)
+- GPU utilization monitoring and quota enforcement
+
+### 🏁 Summary
+
+This phase transforms RoboDSL into a **cloud-native robotics IDE** that removes friction from CUDA + ROS2 development. Developers can build GPU-accelerated pipelines without worrying about setup, hardware, or dependencies—locally or in the cloud.
+
+
 ---
 
-### Phase 5: Cloud-Hosted Development Environment  
-**Priority**: 4  
-**Estimated Time**: 7–8 days  
-**Goal**: Build a cloud-hosted IDE and development platform that enables users to write, test, and deploy RoboDSL projects using CUDA + ROS2 without local hardware or OS constraints.
 
-#### Tasks  
-1. **Cloud IDE / Web Dashboard**
-   - Develop a web-based IDE (React/Next.js or similar) integrated with:
-     - Syntax highlighting and code completion for `.robodsl`
-     - Interactive terminals connected to cloud compute nodes
-     - File management and versioning
-   - Optionally build a VSCode extension that connects to the cloud backend for remote development
-
-2. **Remote Development Backend**
-   - Provision GPU-enabled Linux VMs or containers on-demand (NVIDIA GPUs)
-   - Preinstall ROS2 + CUDA + RoboDSL tooling in the environment
-   - Provide APIs for:
-     - File sync & storage (e.g., persistent volumes or cloud buckets)
-     - Remote code compilation & pipeline generation
-     - Remote build and launch of simulations or CUDA binaries
-     - Real-time logs and performance metrics streaming
-
-3. **Authentication & Multi-User Support**
-   - User accounts and workspace isolation
-   - Role-based access control for teams
-   - Secure SSH/websocket tunnels for remote terminals
-
-4. **Resource Management & Scaling**
-   - Autoscaling GPU resources based on demand
-   - Usage monitoring and billing integration (optional)
-   - Container or VM lifecycle management for ephemeral dev environments
-
-5. **Integration with RoboDSL CLI**
-   - Extend `cuif` CLI to connect and interact with cloud dev platform
-   - Commands for uploading code, triggering builds, running tests remotely
-   - Fetching logs, artifacts, and telemetry from cloud sessions
-
-#### Files to Create/Modify
-- `src/web/` — Web frontend code for IDE/dashboard  
-- `src/backend/` — Backend APIs for remote file management, build, run  
-- `src/robodsl/cli/cloud_ext.py` — Extended CLI commands for remote dev  
-- Dockerfiles and container images preconfigured with CUDA + ROS2 + RoboDSL tools
-
-#### Deliverables  
-- Fully functional cloud IDE or remote VSCode development environment  
-- Remote compute infrastructure with pre-installed CUDA + ROS2  
-- Transparent developer experience: write and test RoboDSL code without local CUDA/Linux  
-- Scalable resource provisioning and user management
-
-#### Success Criteria  
-- Users can write RoboDSL code on Mac/Windows browsers without local CUDA or Linux  
-- Compile, build, and run pipelines on powerful cloud GPUs remotely  
-- Real-time interaction with remote terminals, logs, and outputs  
-- Seamless sync between cloud IDE and local RoboDSL CLI tooling  
-
----
-
-
-### Phase 5: AI-Powered Development Tools
+### Phase 6: AI-Powered Development Tools
 **Priority**: 5  
 **Estimated Time**: 5-6 days  
 **Goal**: Integrate AI-assisted development features
@@ -285,7 +343,7 @@ This document outlines the implementation plan for RoboDSL and CUIF, combining t
 
 ---
 
-### Phase 6: Real-time Constraints
+### Phase 7: Real-time Constraints
 **Priority**: 5  
 **Estimated Time**: 4-5 days  
 **Goal**: Real-time guarantees and monitoring
@@ -326,7 +384,7 @@ This document outlines the implementation plan for RoboDSL and CUIF, combining t
 
 ---
 
-### Phase 7: Training Integration
+### Phase 8: Training Integration
 **Priority**: 7  
 **Estimated Time**: 3-4 days  
 **Goal**: Framework-agnostic training configuration
@@ -360,7 +418,7 @@ This document outlines the implementation plan for RoboDSL and CUIF, combining t
 
 ---
 
-### Phase 8: Advanced Features
+### Phase 9: Advanced Features
 **Priority**: 8  
 **Estimated Time**: 5-7 days  
 **Goal**: Enhanced functionality
