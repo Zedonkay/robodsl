@@ -13,7 +13,7 @@ include_path: STRING | NAME ("/" NAME)* ("." NAME)?
 
 // Node definitions
 node_def: "node" NAME LBRACE node_content RBRACE
-node_content: (parameter | lifecycle | timer | remap | namespace | ros_primitive | flag | cpp_method | kernel_def | onnx_model_ref | cuda_kernels_block)*
+node_content: (parameter | lifecycle | timer | remap | namespace | ros_primitive | flag | cpp_method | kernel_def | onnx_model_ref | cuda_kernels_block | use_kernel)*
 
 // Pipeline definitions (Phase 4) - Enhanced with CUDA/ONNX integration
 pipeline_def: "pipeline" NAME LBRACE pipeline_content RBRACE
@@ -33,12 +33,10 @@ onnx_model: "onnx_model" NAME LBRACE onnx_model_content RBRACE
 onnx_model_ref: "onnx_model" NAME LBRACE onnx_model_content RBRACE
 onnx_model_content: (config_block | input_def | output_def | device | optimization)*
 config_block: "config" LBRACE (input_def | output_def | device | optimization)* RBRACE
-input_def: "input" ":" STRING "->" STRING
-output_def: "output" ":" STRING "->" STRING
-device: "device" ":" device_type
-device_type: NAME
-optimization: "optimization" ":" optimization_type
-optimization_type: NAME
+input_def: "input" ":" (STRING | NAME) "->" (STRING | NAME)
+output_def: "output" ":" (STRING | NAME) "->" (STRING | NAME)
+device: "device" ":" (NAME | STRING)
+optimization: "optimization" ":" (NAME | STRING)
 
 // Parameters
 parameter: "parameter" TYPE NAME "=" value
@@ -103,7 +101,7 @@ method_param_size_item: SIGNED_NUMBER | NAME | STRING | dotted_name
 // CUDA kernels block - Developer-friendly with comma-separated parameters
 cuda_kernels_block: "cuda_kernels" LBRACE kernel_def* RBRACE
 kernel_def: "kernel" NAME LBRACE kernel_content RBRACE
-kernel_content: (block_size | grid_size | shared_memory | use_thrust | kernel_input_param | kernel_output_param | code_block)*
+kernel_content: (block_size | grid_size | shared_memory | use_thrust | kernel_input_param | kernel_output_param | code_block | cuda_include)*
 
 block_size: "block_size" ":" LPAR expr COMMA expr COMMA expr RPAR
 grid_size: "grid_size" ":" LPAR expr COMMA expr COMMA expr RPAR
@@ -113,8 +111,9 @@ kernel_input_param: "input" ":" kernel_param_list
 kernel_output_param: "output" ":" kernel_param_list
 kernel_param_list: kernel_param (COMMA kernel_param)*
 kernel_param: cpp_type NAME kernel_param_size?
+cuda_include: "include" ("<" include_path ">" | STRING)
 cpp_type: cpp_type_name
-cpp_type_name: /[a-zA-Z_][a-zA-Z0-9_]*(\**|\:\:[a-zA-Z_][a-zA-Z0-9_]*(\**)?)*(\<[^>]*\>)?/
+cpp_type_name: /[a-zA-Z_][a-zA-Z0-9_]*(\:\:[a-zA-Z_][a-zA-Z0-9_]*)*(\<[^<>]*(\<[^<>]*\>[^<>]*)*\>)?(\**)?/
 kernel_param_size: LPAR kernel_param_size_list RPAR
 kernel_param_size_list: kernel_param_size_item (COMMA kernel_param_size_item)*
 kernel_param_size_item: SIGNED_NUMBER | NAME | STRING
@@ -164,7 +163,7 @@ SIGNED_NUMBER: /-?[0-9]+(\.[0-9]+)?/
 BOOLEAN: "true" | "false"
 NAME: /[a-zA-Z_][a-zA-Z0-9_]*/
 STRING: /"([^"\\]|\\.)*"/
-TYPE: /[a-zA-Z_][a-zA-Z0-9_]*(\[[0-9,]*\])?/
+TYPE: /[a-zA-Z_][a-zA-Z0-9_]*(\[[0-9,]*\])*(\<[^>]*\>)?/
 
 // Block comments and line comments
 BLOCK_COMMENT: /\/\*[\s\S]*?\*\//
@@ -180,3 +179,6 @@ qos_setting: NAME ":" expr
 
 // Add this to the terminals section near STRING:
 TOPIC_TYPE_STRING: /"[a-zA-Z0-9_\/]+"/
+
+// Reference to a global CUDA kernel by name
+use_kernel: "use_kernel" ":" STRING

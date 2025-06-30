@@ -23,6 +23,7 @@ class CppNodeGenerator(BaseGenerator):
         Returns:
             List of Path objects for generated files
         """
+        self.ast = ast  # Store AST for use in _prepare_node_context
         generated_files = []
         
         # Create output directories
@@ -69,11 +70,13 @@ class CppNodeGenerator(BaseGenerator):
             return self.write_file(source_path, content)
     
     def _prepare_node_context(self, node: NodeNode) -> Dict[str, Any]:
-        """Prepare context for node template rendering."""
+        """Prepare context for node template rendering.
+        - Includes both embedded and referenced (global) CUDA kernels.
+        - Passes 'referenced_kernels' to the template context for info.
+        """
         # Prepare includes based on node content
         includes = []
         ros2_includes = []
-        cuda_includes = []
         
         # Add message includes for publishers/subscribers
         for pub in node.content.publishers:
@@ -85,19 +88,26 @@ class CppNodeGenerator(BaseGenerator):
         for action in node.content.actions:
             includes.append(f"#include <{action.action_type}.hpp>")
         
-        # Add CUDA includes if node has kernels
-        if node.content.cuda_kernels:
-            cuda_includes.extend([
-                "#include <cuda_runtime.h>",
-                "#include <vector>",
-                "#include <memory>"
-            ])
-        
         # Prepare CUDA kernel information
         cuda_kernels = []
+        # Embedded kernels
         for kernel in node.content.cuda_kernels:
             kernel_info = self._prepare_kernel_context(kernel)
             cuda_kernels.append(kernel_info)
+        # Referenced global kernels (if any)
+        referenced_kernels = []
+        ast = getattr(self, 'ast', None)
+        global_kernels = []
+        if ast and hasattr(ast, 'cuda_kernels') and ast.cuda_kernels:
+            global_kernels = ast.cuda_kernels.kernels
+        for kernel_name in getattr(node.content, 'used_kernels', []):
+            referenced_kernels.append(kernel_name)
+            # Find the global kernel definition
+            for kernel in global_kernels:
+                if kernel.name == kernel_name:
+                    kernel_info = self._prepare_kernel_context(kernel)
+                    cuda_kernels.append(kernel_info)
+                    break
         
         # Determine if this is a lifecycle node
         is_lifecycle = node.content.lifecycle is not None
@@ -129,7 +139,6 @@ class CppNodeGenerator(BaseGenerator):
             'include_guard': f"{node.name.upper()}_NODE_HPP",
             'includes': list(set(includes)),  # Remove duplicates
             'ros2_includes': ros2_includes,
-            'cuda_includes': cuda_includes,
             'is_lifecycle': is_lifecycle,
             'publishers': [{'name': pub.topic.split('/')[-1], 'msg_type': pub.msg_type} for pub in node.content.publishers],
             'subscribers': [{'name': sub.topic.split('/')[-1], 'msg_type': sub.msg_type, 'callback_name': f"on_{sub.topic.split('/')[-1]}"} for sub in node.content.subscribers],
@@ -138,6 +147,7 @@ class CppNodeGenerator(BaseGenerator):
             'timers': [{'name': timer.name, 'callback_name': f"on_{timer.name}"} for timer in node.content.timers],
             'parameters': [{'name': param.name, 'type': 'auto'} for param in node.content.parameters],
             'cuda_kernels': cuda_kernels,
+            'referenced_kernels': referenced_kernels,
             'cuda_default_input_type': 'float',
             'cuda_default_output_type': 'float',
             'cuda_default_param_type': 'CudaParams',

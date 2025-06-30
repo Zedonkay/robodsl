@@ -21,14 +21,16 @@ from ..core.ast import RoboDSLAST
 class MainGenerator(BaseGenerator):
     """Main generator that orchestrates all other generators."""
     
-    def __init__(self, output_dir: str = ".", template_dirs: Optional[List[Path]] = None):
+    def __init__(self, output_dir: str = ".", template_dirs: Optional[List[Path]] = None, debug: bool = False):
         """Initialize the main generator.
         
         Args:
             output_dir: Base directory for generated files
             template_dirs: Additional template directories to search
+            debug: Whether to enable debug mode
         """
         super().__init__(output_dir, template_dirs)
+        self.debug = debug
         
         # Initialize all sub-generators
         self.cpp_generator = CppNodeGenerator(output_dir, template_dirs)
@@ -100,11 +102,14 @@ class MainGenerator(BaseGenerator):
             for pipeline in ast.pipelines:
                 # Use the project name if available, else fallback
                 project_name = getattr(ast, 'project_name', 'robodsl_project')
-                print(f"DEBUG: Processing pipeline '{pipeline.name}' with project_name '{project_name}'")
+                if self.debug:
+                    print(f"DEBUG: Processing pipeline '{pipeline.name}' with project_name '{project_name}'")
                 for idx, stage in enumerate(pipeline.content.stages):
-                    print(f"DEBUG: Processing stage '{stage.name}' (index {idx})")
+                    if self.debug:
+                        print(f"DEBUG: Processing stage '{stage.name}' (index {idx})")
                     files = self.pipeline_generator._generate_stage_node(stage, pipeline.name, idx, project_name)
-                    print(f"DEBUG: Stage '{stage.name}' generated files: {list(files.keys())}")
+                    if self.debug:
+                        print(f"DEBUG: Stage '{stage.name}' generated files: {list(files.keys())}")
                     # Write files to disk and collect their paths
                     for rel_path, content in files.items():
                         abs_path = Path(self.output_dir) / rel_path
@@ -188,6 +193,9 @@ class MainGenerator(BaseGenerator):
                 }
                 standalone_kernels.append(kernel_info)
         
+        # Generate file tree
+        file_tree = self._generate_file_tree(ast)
+        
         return {
             'package_name': package_name,
             'version': '0.1.0',
@@ -196,8 +204,89 @@ class MainGenerator(BaseGenerator):
             'cuda_kernel_count': cuda_kernel_count,
             'nodes': nodes,
             'standalone_kernels': standalone_kernels,
-            'has_cuda': cuda_kernel_count > 0
+            'has_cuda': cuda_kernel_count > 0,
+            'file_tree': file_tree
         }
+    
+    def _generate_file_tree(self, ast: RoboDSLAST) -> str:
+        """Generate a file tree representation of the package structure."""
+        tree_lines = []
+        package_name = getattr(ast, 'package_name', 'robodsl_package')
+        
+        # Root package directory
+        tree_lines.append(f"{package_name}/")
+        
+        # CMake files
+        tree_lines.append("├── CMakeLists.txt")
+        tree_lines.append("├── package.xml")
+        tree_lines.append("├── README.md")
+        
+        # Source directory
+        tree_lines.append("├── src/")
+        tree_lines.append("│   └── " + package_name + "/")
+        
+        # Collect all files to determine proper tree structure
+        source_files = []
+        
+        # Node source files
+        for node in ast.nodes:
+            source_files.append(f"{node.name}.cpp")
+            source_files.append(f"{node.name}.hpp")
+            
+            # CUDA kernels for this node
+            if node.content.cuda_kernels:
+                for kernel in node.content.cuda_kernels:
+                    source_files.append(f"{kernel.name}.cu")
+                    source_files.append(f"{kernel.name}.cuh")
+        
+        # Standalone CUDA kernels
+        if ast.cuda_kernels:
+            for kernel in ast.cuda_kernels.kernels:
+                source_files.append(f"{kernel.name}.cu")
+                source_files.append(f"{kernel.name}.cuh")
+        
+        # Python nodes
+        python_nodes = [node for node in ast.nodes if hasattr(node.content, 'language') and node.content.language == 'python']
+        for node in python_nodes:
+            source_files.append(f"{node.name}.py")
+        
+        # Add source files with proper tree structure
+        for i, file in enumerate(source_files):
+            if i == len(source_files) - 1:
+                tree_lines.append(f"│       └── {file}")
+            else:
+                tree_lines.append(f"│       ├── {file}")
+        
+        # Launch files
+        launch_files = [f"{package_name}_launch.py"]
+        for node in ast.nodes:
+            launch_files.append(f"{node.name}_launch.py")
+        
+        tree_lines.append("├── launch/")
+        for i, file in enumerate(launch_files):
+            if i == len(launch_files) - 1:
+                tree_lines.append(f"│   └── {file}")
+            else:
+                tree_lines.append(f"│   ├── {file}")
+        
+        # Include directory
+        tree_lines.append("├── include/")
+        tree_lines.append(f"│   └── {package_name}/")
+        for i, node in enumerate(ast.nodes):
+            if i == len(ast.nodes) - 1:
+                tree_lines.append(f"│       └── {node.name}.hpp")
+            else:
+                tree_lines.append(f"│       ├── {node.name}.hpp")
+        
+        # Config directory
+        tree_lines.append("├── config/")
+        tree_lines.append("│   └── params.yaml")
+        
+        # Test directory
+        tree_lines.append("└── test/")
+        tree_lines.append("    └── test_" + package_name + ".py")
+        
+        return "\n".join(tree_lines)
     
     def _generate_fallback_readme(self, ast: RoboDSLAST) -> str:
         """Generate a fallback README.md if template fails."""
@@ -210,6 +299,12 @@ Generated ROS2 package from RoboDSL specification.
 ## Overview
 
 This package contains {len(ast.nodes)} ROS2 nodes and {len(ast.cuda_kernels.kernels) if ast.cuda_kernels else 0} standalone CUDA kernels.
+
+## Package Structure
+
+```
+{self._generate_file_tree(ast)}
+```
 
 ## Nodes
 

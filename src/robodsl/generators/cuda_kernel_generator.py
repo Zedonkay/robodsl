@@ -153,5 +153,6 @@ class CudaKernelGenerator(BaseGenerator):
             'grid_size': kernel.content.grid_size,
             'shared_memory': kernel.content.shared_memory or 0,
             'use_thrust': kernel.content.use_thrust,
-            'cuda_enabled': True
+            'cuda_enabled': True,
+            'cuda_includes': getattr(kernel.content, 'cuda_includes', []),
         } 

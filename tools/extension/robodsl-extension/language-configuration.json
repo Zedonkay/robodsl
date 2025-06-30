@@ -27,6 +27,6 @@
     "autoClosingOvertype": "always",
     "bracketPairColorization": {
         "enabled": true,
-        "independentColorPoolPerBracketType": true
+        "independentColorPoolPerBracketType": false
     }
 }

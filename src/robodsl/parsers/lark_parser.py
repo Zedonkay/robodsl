@@ -18,7 +18,7 @@ from ..core.ast import RoboDSLAST
 class RoboDSLParser:
     """Lark-based parser for RoboDSL configuration files."""
     
-    def __init__(self):
+    def __init__(self, debug: bool = False):
         # Load the grammar file
         grammar_file = Path(__file__).parent.parent / "grammar" / "robodsl.lark"
         with open(grammar_file, 'r') as f:
@@ -26,8 +26,8 @@ class RoboDSLParser:
         
         # Create Lark parser
         self.parser = Lark(grammar_content, parser='lalr', start='start')
-        self.ast_builder = ASTBuilder()
-        self.semantic_analyzer = SemanticAnalyzer()
+        self.ast_builder = ASTBuilder(debug=debug)
+        self.semantic_analyzer = SemanticAnalyzer(debug=debug)
     
     def parse(self, content: str) -> RoboDSLAST:
         """Parse RoboDSL content and return AST.
@@ -43,13 +43,7 @@ class RoboDSLParser:
             SemanticError: If semantic errors are found
         """
         try:
-            # Preprocess content to remove comments
-            # Remove line comments
-            content = re.sub(r'//.*$', '', content, flags=re.MULTILINE)
-            # Remove block comments
-            content = re.sub(r'/\*[\s\S]*?\*/', '', content)
-            
-            # Parse with Lark
+            # Parse with Lark (comments are handled by grammar)
             parse_tree = self.parser.parse(content)
 
             # Build AST
@@ -105,10 +99,7 @@ class RoboDSLParser:
         issues = []
         ast = None
         try:
-            # Preprocess content to remove comments
-            content = re.sub(r'//.*$', '', content, flags=re.MULTILINE)
-            content = re.sub(r'/\*[\s\S]*?\*/', '', content)
-            # Parse with Lark
+            # Parse with Lark (comments are handled by grammar)
             parse_tree = self.parser.parse(content)
             # Build AST
             ast = self.ast_builder.build(parse_tree)
@@ -149,7 +140,7 @@ class RoboDSLParser:
 _parser = None
 
 
-def parse_robodsl(content: str) -> RoboDSLAST:
+def parse_robodsl(content: str, debug: bool = False) -> RoboDSLAST:
     """Parse RoboDSL content using the Lark parser.
     
     This function maintains compatibility with the existing API while using
@@ -157,13 +148,17 @@ def parse_robodsl(content: str) -> RoboDSLAST:
     
     Args:
         content: The RoboDSL configuration content as a string
+        debug: Enable debug output during parsing
         
     Returns:
         RoboDSLAST: The parsed AST
     """
     global _parser
     if _parser is None:
-        _parser = RoboDSLParser()
+        _parser = RoboDSLParser(debug=debug)
+    elif debug and not _parser.ast_builder.debug:
+        # If debug flag changed, create new parser instance
+        _parser = RoboDSLParser(debug=debug)
     
     return _parser.parse(content)
 

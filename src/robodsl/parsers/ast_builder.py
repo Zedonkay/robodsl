@@ -25,7 +25,8 @@ from ..core.ast import (
 class ASTBuilder:
     """Builds AST from Lark parse tree."""
     
-    def __init__(self):
+    def __init__(self, debug: bool = False):
+        self.debug = debug
         self.ast = RoboDSLAST()
     
     def build(self, tree: Tree) -> RoboDSLAST:
@@ -142,6 +143,12 @@ class ASTBuilder:
                 elif child.data == 'onnx_model_ref':
                     # Handle ONNX models inside nodes
                     content.onnx_models.append(self._handle_onnx_model(child))
+                elif child.data == 'use_kernel':
+                    # Handle use_kernel reference
+                    for subchild in child.children:
+                        if hasattr(subchild, 'type') and subchild.type == 'STRING':
+                            kernel_name = subchild.value.strip('"')
+                            content.used_kernels.append(kernel_name)
         
         return content
     
@@ -410,10 +417,12 @@ class ASTBuilder:
     
     def _handle_qos_config(self, tree: Tree) -> QoSNode:
         """Handle QoS configuration."""
-        print('DEBUG: _handle_qos_config children:', tree.children)
+        if self.debug:
+            print('DEBUG: _handle_qos_config children:', tree.children)
         settings = []
         for child in tree.children:
-            print('DEBUG: child type:', type(child), 'data:', getattr(child, 'data', None))
+            if self.debug:
+                print('DEBUG: child type:', type(child), 'data:', getattr(child, 'data', None))
             if isinstance(child, Tree) and child.data == 'qos_setting':
                 name, value = self._extract_qos_setting(child)
                 if name is not None and value is not None:
@@ -490,6 +499,9 @@ class ASTBuilder:
                     # Handle comma-separated output parameters
                     params = self._handle_kernel_param_list(child, KernelParameterDirection.OUT)
                     content.parameters.extend(params)
+                elif child.data == 'cuda_include':
+                    include_path = self._extract_include(child)
+                    content.cuda_includes.append(include_path)
                 elif child.data == 'code_block':
                     content.code = self._extract_code_block(child)
         
@@ -624,8 +636,22 @@ class ASTBuilder:
         return ""
     
     def _extract_include(self, tree: Tree) -> str:
-        """Extract include path from include statement."""
-        return self._extract_string(tree)
+        # Handle both <...> and "..." includes
+        for child in tree.children:
+            if isinstance(child, Token) and child.type == 'STRING':
+                return child.value.strip('"')
+            elif isinstance(child, Tree) and child.data == 'include_path':
+                # Reconstruct the path from tokens
+                path_parts = []
+                for path_child in child.children:
+                    if isinstance(path_child, Token):
+                        path_parts.append(path_child.value)
+                # Handle .h, .hpp, etc.
+                if len(path_parts) > 1 and not '/' in path_parts[-1] and path_parts[-1].isalpha():
+                    return '/'.join(path_parts[:-2] + [path_parts[-2] + '.' + path_parts[-1]])
+                else:
+                    return '/'.join(path_parts)
+        return ""
     
     def _extract_define(self, tree: Tree) -> tuple[str, str]:
         """Extract define name and value."""
@@ -903,11 +929,12 @@ class ASTBuilder:
         
         for child in tree.children:
             if isinstance(child, Token):
-                if child.type == 'STRING':
+                if child.type in ['STRING', 'NAME']:  # Handle both types
+                    value = child.value.strip('"') if child.type == 'STRING' else child.value
                     if input_name is None:
-                        input_name = child.value.strip('"')
+                        input_name = value
                     else:
-                        input_type = child.value.strip('"')
+                        input_type = value
         
         return InputDefNode(name=input_name or "", type=input_type or "")
 
@@ -918,11 +945,12 @@ class ASTBuilder:
         
         for child in tree.children:
             if isinstance(child, Token):
-                if child.type == 'STRING':
+                if child.type in ['STRING', 'NAME']:  # Handle both types
+                    value = child.value.strip('"') if child.type == 'STRING' else child.value
                     if output_name is None:
-                        output_name = child.value.strip('"')
+                        output_name = value
                     else:
-                        output_type = child.value.strip('"')
+                        output_type = value
         
         return OutputDefNode(name=output_name or "", type=output_type or "")
 
@@ -931,14 +959,9 @@ class ASTBuilder:
         device_name = None
         
         for child in tree.children:
-            if isinstance(child, Tree) and child.data == 'device_type':
-                # Extract the device type from the device_type rule
-                for device_child in child.children:
-                    if isinstance(device_child, Token):
-                        device_name = device_child.value
-                        break
-            elif isinstance(child, Token) and child.type == 'NAME':
-                device_name = child.value
+            if isinstance(child, Token) and child.type in ['NAME', 'STRING']:
+                device_name = child.value.strip('"') if child.type == 'STRING' else child.value
+                break
         
         return DeviceNode(device=device_name or "")
 
@@ -947,14 +970,9 @@ class ASTBuilder:
         optimization_name = None
         
         for child in tree.children:
-            if isinstance(child, Tree) and child.data == 'optimization_type':
-                # Extract the optimization type from the optimization_type rule
-                for opt_child in child.children:
-                    if isinstance(opt_child, Token):
-                        optimization_name = opt_child.value
-                        break
-            elif isinstance(child, Token) and child.type == 'NAME':
-                optimization_name = child.value
+            if isinstance(child, Token) and child.type in ['NAME', 'STRING']:
+                optimization_name = child.value.strip('"') if child.type == 'STRING' else child.value
+                break
         
         return OptimizationNode(optimization=optimization_name or "")
 

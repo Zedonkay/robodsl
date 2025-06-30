@@ -127,7 +127,7 @@ def get_node_file_paths(project_path: Path, node_name: str, language: str) -> tu
             src_dir.mkdir(parents=True, exist_ok=True)
             src_file = src_dir / f"{node_base_name}_node.py"
             return src_file, None
-        return project_path / 'src' / f"{node_name}_node.py", None
+        return project_path / 'src' / f"{node_base_name}_node.py", None
     
     # For C++
     src_dir = project_path / 'src'
@@ -172,17 +172,13 @@ def _snake_to_camel(snake_str: str) -> str:
     return ''.join(x.capitalize() for x in components if x)
 
 
-def create_node_files(project_path: Path, node_name: str, language: str = 'python',
-                    publishers: List[Dict[str, str]] = None,
-                    subscribers: List[Dict[str, str]] = None) -> None:
+def create_node_files(project_path: Path, node_name: str, language: str = 'python') -> None:
     """Create node source files.
     
     Args:
         project_path: Path to the project directory
         node_name: Name of the node (can contain dots for subnodes)
         language: Programming language ('python' or 'cpp')
-        publishers: List of publisher configurations
-        subscribers: List of subscriber configurations
     """
     # Get base node name (without namespace)
     node_base_name = node_name.split('.')[-1]
@@ -438,9 +434,9 @@ def build(project_dir: str) -> None:
 @main.command()
 @click.argument('node_name')
 @click.option('--language', '-l', type=click.Choice(['cpp', 'python'], case_sensitive=False),
-              default='cpp', help='Programming language for the node')
+              default='python', help='Programming language for the node')
 @click.option('--project-dir', type=click.Path(file_okay=False, dir_okay=True, path_type=Path, exists=True),
-              default='.', help='Project directory (default: current directory)')
+              default=Path.cwd(), help='Project directory (default: current directory)')
 def create_launch_file(node_name: str, language: str, project_dir: Path) -> None:
     """Create a launch file for a node.
     
@@ -473,7 +469,8 @@ def create_launch_file(node_name: str, language: str, project_dir: Path) -> None
 @click.option('--output-dir', '-o', type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
               default=None, help='Output directory for generated files')
 @click.option('--force', '-f', is_flag=True, help='Overwrite existing files')
-def generate(input_file: Path, output_dir: Optional[Path], force: bool) -> None:
+@click.option('--debug', '-d', is_flag=True, help='Enable debug output during parsing')
+def generate(input_file: Path, output_dir: Optional[Path], force: bool, debug: bool) -> None:
     """
     Generate code from a RoboDSL file.
     
@@ -494,10 +491,10 @@ def generate(input_file: Path, output_dir: Optional[Path], force: bool) -> None:
         click.echo(f"Processing {input_file}...")
         
         # Parse the input file
-        config = parse_robodsl(input_file.read_text())
+        config = parse_robodsl(input_file.read_text(), debug=debug)
         
         # Generate code
-        generator = MainGenerator(output_dir=str(output_dir))
+        generator = MainGenerator(output_dir=str(output_dir), debug=debug)
         generated_files = generator.generate(config)
         
         click.echo(f"Generated {len(generated_files)} files in {output_dir}:")
@@ -517,10 +514,6 @@ def generate(input_file: Path, output_dir: Optional[Path], force: bool) -> None:
 
 @main.command()
 @click.argument('node_name')
-# @click.option('--publisher', '-p', multiple=True, nargs=2,
-#               help='Add a publisher with format: TOPIC MESSAGE_TYPE')
-# @click.option('--subscriber', '-s', multiple=True, nargs=2,
-#               help='Add a subscriber with format: TOPIC MESSAGE_TYPE')
 @click.option('--language', '-l', type=click.Choice(['cpp', 'python'], case_sensitive=False),
               default='python', help='Programming language for the node')
 @click.option('--project-dir', type=click.Path(file_okay=False, dir_okay=True, path_type=Path, exists=True),
@@ -573,21 +566,14 @@ def add_node(node_name: str, language: str, project_dir: Path) -> None:
             f.write("  ros__parameters:\n")
             f.write("    param1: value1\n")
     
-    # # Create node files
-    # create_node_files(project_path, node_name, language, 
-    #                  [{'topic': p[0], 'msg_type': p[1]} for p in publisher],
-    #                  [{'topic': s[0], 'msg_type': s[1]} for s in subscriber])
+    # Create node files
+    create_node_files(project_path, node_name, language)
     
     # Create launch file
     _create_launch_file_impl(project_path, node_name, language)
     
     # Create or update RoboDSL config
-    create_robodsl_config(
-        project_path,
-        node_name
- #       , [{'topic': p[0], 'msg_type': p[1]} for p in publisher]
- #       , [{'topic': s[0], 'msg_type': s[1]} for s in subscriber]
-    )
+    create_robodsl_config(project_path, node_name)
     
     try:
         click.echo(f"Node '{node_name}' added successfully!")

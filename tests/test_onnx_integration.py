@@ -15,7 +15,7 @@ class TestOnnxIntegration:
     
     def test_onnx_model_parsing(self, parser):
         """Test parsing of ONNX model definitions."""
-        # Test basic ONNX model
+        # Test basic ONNX model with quoted strings
         dsl_code = '''
         onnx_model test_model {
             input: "input" -> "float32[1,3,224,224]"
@@ -51,6 +51,37 @@ class TestOnnxIntegration:
         
         # Check optimization
         assert model.config.optimizations[0].optimization == "tensorrt"
+    
+    def test_onnx_model_parsing_with_names(self, parser):
+        """Test parsing of ONNX model definitions with unquoted names."""
+        # Test ONNX model with unquoted names
+        dsl_code = '''
+        onnx_model test_model_names {
+            input: input_tensor -> images
+            output: output_tensor -> detections
+            device: cuda
+            optimization: tensorrt
+        }
+        '''
+        
+        ast = parser.parse(dsl_code)
+        
+        assert len(ast.onnx_models) == 1
+        model = ast.onnx_models[0]
+        
+        assert model.name == "test_model_names"
+        assert len(model.config.inputs) == 1
+        assert len(model.config.outputs) == 1
+        
+        # Check input
+        input_def = model.config.inputs[0]
+        assert input_def.name == "input_tensor"
+        assert input_def.type == "images"
+        
+        # Check output
+        output_def = model.config.outputs[0]
+        assert output_def.name == "output_tensor"
+        assert output_def.type == "detections"
     
     def test_onnx_model_generation(self, test_output_dir):
         """Test ONNX integration code generation."""

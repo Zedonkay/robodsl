@@ -1,0 +1,60 @@
+// Test file for bracket highlighting
+include <ros/ros.h>
+
+node test_node {
+    parameter int test_param = 10
+    parameter string test_string = "hello"
+    
+    lifecycle {
+        configure: true
+        activate: false
+    }
+    
+    timer test_timer: 1.0
+    
+    method test_method {
+        input int input_var
+        output int output_var
+        code: {
+            int result = input_var * 2;
+            output_var = result;
+        }
+    }
+    
+    publisher /test_topic std_msgs/String
+    subscriber /input_topic sensor_msgs/Image
+}
+
+pipeline test_pipeline {
+    stage stage1 {
+        input: "input_data"
+        output: "output_data"
+        method: "process_data"
+    }
+    
+    stage stage2 {
+        input: "output_data"
+        output: "final_result"
+        model: onnx_model.onnx
+    }
+}
+
+cuda_kernels {
+    kernel test_kernel {
+        input: "input_data"
+        output: "output_data"
+        block_size: (256, 1, 1)
+        grid_size: (1024, 1, 1)
+        code: {
+            int idx = blockIdx.x * blockDim.x + threadIdx.x;
+            output_data[idx] = input_data[idx] * 2.0f;
+        }
+    }
+}
+
+onnx_model "test_model.onnx" {
+    input: "input_tensor" -> "input_name"
+    output: "output_tensor" -> "output_name"
+    device: "cuda"
+    optimization: "tensorrt"
+} 
