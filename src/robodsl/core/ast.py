@@ -333,8 +333,8 @@ class ClassContentNode(ASTNode):
 class ClassNode(ASTNode):
     """Class definition node."""
     name: str
-    inheritance: Optional[InheritanceNode] = None
     content: ClassContentNode
+    inheritance: Optional[InheritanceNode] = None
 
 
 @dataclass
@@ -354,8 +354,8 @@ class EnumContentNode(ASTNode):
 class EnumNode(ASTNode):
     """Enum definition node."""
     name: str
-    enum_type: Optional[str] = None  # "class" or "struct" for enum class
     content: EnumContentNode
+    enum_type: Optional[str] = None  # "class" or "struct" for enum class
 
 
 @dataclass
@@ -370,17 +370,6 @@ class UsingNode(ASTNode):
     """Using declaration node."""
     name: str
     type: str
-
-
-@dataclass
-class RoboDSLAST(ASTNode):
-    """Root AST node."""
-    includes: List[IncludeNode] = field(default_factory=list)
-    data_structures: List[Union[StructNode, ClassNode, EnumNode, TypedefNode, UsingNode]] = field(default_factory=list)
-    nodes: List[NodeNode] = field(default_factory=list)
-    cuda_kernels: Optional[CudaKernelsNode] = None  # Standalone kernels outside nodes 
-    onnx_models: List['OnnxModelNode'] = field(default_factory=list)  # ONNX models
-    pipelines: List['PipelineNode'] = field(default_factory=list)  # Pipeline definitions
 
 
 # ONNX Model AST Nodes (Phase 3)
@@ -499,3 +488,74 @@ class PipelineNode(ASTNode):
     """Pipeline definition node."""
     name: str
     content: PipelineContentNode 
+
+
+# Pythonic Class AST Nodes
+@dataclass
+class PyClassAttributeNode(ASTNode):
+    """Pythonic class attribute node."""
+    name: str
+    type: str
+    default_value: Optional[ValueNode] = None
+
+
+@dataclass
+class PyClassParamNode(ASTNode):
+    """Pythonic class parameter node."""
+    name: str
+    type: str
+    default_value: Optional[ValueNode] = None
+
+
+@dataclass
+class PyClassConstructorNode(ASTNode):
+    """Pythonic class constructor node."""
+    parameters: List[PyClassParamNode] = field(default_factory=list)
+    assignments: List[str] = field(default_factory=list)  # self.x = x; statements
+    code: str = ""
+
+
+@dataclass
+class PyClassMethodNode(ASTNode):
+    """Pythonic class method node."""
+    name: str
+    parameters: List[PyClassParamNode] = field(default_factory=list)
+    return_type: Optional[str] = None
+    code: str = ""
+
+
+@dataclass
+class PyClassAccessSectionNode(ASTNode):
+    """Pythonic class access section node."""
+    access_specifier: str  # "public", "private", "protected"
+    attributes: List[PyClassAttributeNode] = field(default_factory=list)
+    methods: List[PyClassMethodNode] = field(default_factory=list)
+    constructors: List[PyClassConstructorNode] = field(default_factory=list)
+
+
+@dataclass
+class PyClassContentNode(ASTNode):
+    """Pythonic class content node."""
+    attributes: List[PyClassAttributeNode] = field(default_factory=list)
+    methods: List[PyClassMethodNode] = field(default_factory=list)
+    constructors: List[PyClassConstructorNode] = field(default_factory=list)
+    access_sections: List[PyClassAccessSectionNode] = field(default_factory=list)
+
+
+@dataclass
+class PyClassNode(ASTNode):
+    """Pythonic class definition node."""
+    name: str
+    content: PyClassContentNode
+    inheritance: Optional[InheritanceNode] = None
+
+
+@dataclass
+class RoboDSLAST(ASTNode):
+    """Root AST node."""
+    includes: List[IncludeNode] = field(default_factory=list)
+    data_structures: List[Union[StructNode, ClassNode, PyClassNode, EnumNode, TypedefNode, UsingNode]] = field(default_factory=list)
+    nodes: List[NodeNode] = field(default_factory=list)
+    cuda_kernels: Optional[CudaKernelsNode] = None  # Standalone kernels outside nodes 
+    onnx_models: List['OnnxModelNode'] = field(default_factory=list)  # ONNX models
+    pipelines: List['PipelineNode'] = field(default_factory=list)  # Pipeline definitions 

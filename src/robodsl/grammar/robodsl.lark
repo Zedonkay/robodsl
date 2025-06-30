@@ -12,7 +12,12 @@ include_stmt: "include" ("<" include_path ">" | STRING)
 include_path: STRING | NAME ("/" NAME)* ("." NAME)?
 
 // Data structure definitions
-data_structure: struct_def | class_def | enum_def | typedef_def | using_def
+data_structure: struct_def SEMICOLON?
+              | class_def SEMICOLON?
+              | pyclass_def SEMICOLON?
+              | enum_def SEMICOLON?
+              | typedef_def SEMICOLON?
+              | using_def SEMICOLON?
 
 // Struct definitions
 struct_def: "struct" NAME LBRACE struct_content RBRACE
@@ -25,6 +30,29 @@ inheritance: ":" access_specifier? cpp_type (COMMA access_specifier? cpp_type)*
 access_specifier: "public" | "private" | "protected"
 class_content: (access_section | struct_member | cpp_method | include_stmt)*
 access_section: access_specifier ":" (struct_member | cpp_method)*
+
+// Pythonic class definition
+pyclass_def: "class" NAME inheritance? LBRACE pyclass_content RBRACE
+pyclass_content: (pyclass_attribute | pyclass_method | pyclass_constructor | pyclass_access_section)*
+
+// Pythonic class attributes (member variables)
+pyclass_attribute: NAME ":" cpp_type default_value?
+default_value: "=" value
+
+// Pythonic class constructor
+pyclass_constructor: "def" "__init__" LPAR pyclass_param_list RPAR LBRACE pyclass_constructor_content RBRACE
+pyclass_constructor_content: (pyclass_assign | code_block)*
+pyclass_assign: "self" "." NAME "=" NAME ";"
+
+// Pythonic class methods
+pyclass_method: "def" NAME LPAR pyclass_param_list RPAR return_type? LBRACE pyclass_method_content RBRACE
+pyclass_param_list: pyclass_param (COMMA pyclass_param)*
+pyclass_param: NAME ":" cpp_type default_value?
+return_type: "->" cpp_type
+pyclass_method_content: (code_block)*
+
+// Pythonic access sections
+pyclass_access_section: access_specifier ":" (pyclass_attribute | pyclass_method | pyclass_constructor)*
 
 // Enum definitions
 enum_def: "enum" enum_type? NAME LBRACE enum_content RBRACE
@@ -139,7 +167,7 @@ kernel_param_list: kernel_param (COMMA kernel_param)*
 kernel_param: cpp_type NAME kernel_param_size?
 cuda_include: "include" ("<" include_path ">" | STRING)
 cpp_type: cpp_type_name
-cpp_type_name: /[a-zA-Z_][a-zA-Z0-9_]*(\:\:[a-zA-Z_][a-zA-Z0-9_]*)*(\<[^<>]*(\<[^<>]*\>[^<>]*)*\>)?(\**)?/
+cpp_type_name: /((const\s+)?[a-zA-Z_][a-zA-Z0-9_]*(\:\:[a-zA-Z_][a-zA-Z0-9_]*)*(\<[^<>]*(\<[^<>]*\>[^<>]*)*\>)?(\s*const)?(\s*[\*&])*)/
 kernel_param_size: LPAR kernel_param_size_list RPAR
 kernel_param_size_list: kernel_param_size_item (COMMA kernel_param_size_item)*
 kernel_param_size_item: SIGNED_NUMBER | NAME | STRING
@@ -208,3 +236,5 @@ TOPIC_TYPE_STRING: /"[a-zA-Z0-9_\/]+"/
 
 // Reference to a global CUDA kernel by name
 use_kernel: "use_kernel" ":" STRING
+
+SEMICOLON: ";"

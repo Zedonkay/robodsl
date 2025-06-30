@@ -20,7 +20,8 @@ from ..core.ast import (
     OnnxModelNode, ModelConfigNode, InputDefNode, OutputDefNode, DeviceNode, OptimizationNode,
     PipelineNode, PipelineContentNode, StageNode, StageContentNode, StageInputNode, StageOutputNode, StageMethodNode, StageModelNode, StageTopicNode, StageCudaKernelNode, StageOnnxModelNode,
     StructNode, StructContentNode, StructMemberNode, ClassNode, ClassContentNode, AccessSectionNode, InheritanceNode,
-    EnumNode, EnumContentNode, EnumValueNode, TypedefNode, UsingNode
+    EnumNode, EnumContentNode, EnumValueNode, TypedefNode, UsingNode,
+    PyClassNode, PyClassContentNode, PyClassAttributeNode, PyClassMethodNode, PyClassConstructorNode, PyClassParamNode, PyClassAccessSectionNode
 )
 
 
@@ -43,6 +44,9 @@ class ASTBuilder:
                 elif child.data == 'data_structure':
                     data_structure_node = self._handle_data_structure(child)
                     self.ast.data_structures.append(data_structure_node)
+                elif child.data == 'pyclass_def':
+                    pyclass_node = self._handle_pyclass(child)
+                    self.ast.data_structures.append(pyclass_node)
                 elif child.data == 'node_def':
                     node_node = self._handle_node(child)
                     self.ast.nodes.append(node_node)
@@ -1336,4 +1340,189 @@ class ASTBuilder:
             elif isinstance(child, Tree) and child.data == 'cpp_type':
                 type_name = self._extract_cpp_type(child)
         
-        return UsingNode(name=name or "", type=type_name or "") 
+        return UsingNode(name=name or "", type=type_name or "")
+
+    # Pythonic Class Handling Methods
+    def _handle_pyclass(self, tree: Tree) -> PyClassNode:
+        """Handle Pythonic class definition."""
+        class_name = None
+        inheritance = None
+        class_content = None
+        
+        for child in tree.children:
+            if isinstance(child, Token) and child.type == 'NAME':
+                class_name = child.value
+            elif isinstance(child, Tree) and child.data == 'inheritance':
+                inheritance = self._handle_inheritance(child)
+            elif isinstance(child, Tree) and child.data == 'pyclass_content':
+                class_content = self._parse_pyclass_content(child)
+        
+        return PyClassNode(name=class_name or "", inheritance=inheritance, content=class_content or PyClassContentNode())
+
+    def _parse_pyclass_content(self, content_tree: Tree) -> PyClassContentNode:
+        """Parse Pythonic class content and return PyClassContentNode."""
+        content = PyClassContentNode()
+        
+        for child in content_tree.children:
+            if isinstance(child, Tree):
+                if child.data == 'pyclass_attribute':
+                    content.attributes.append(self._handle_pyclass_attribute(child))
+                elif child.data == 'pyclass_method':
+                    content.methods.append(self._handle_pyclass_method(child))
+                elif child.data == 'pyclass_constructor':
+                    content.constructors.append(self._handle_pyclass_constructor(child))
+                elif child.data == 'pyclass_access_section':
+                    content.access_sections.append(self._handle_pyclass_access_section(child))
+        
+        return content
+
+    def _handle_pyclass_attribute(self, tree: Tree) -> PyClassAttributeNode:
+        """Handle Pythonic class attribute definition."""
+        attr_name = None
+        attr_type = None
+        default_value = None
+        
+        for child in tree.children:
+            if isinstance(child, Token) and child.type == 'NAME':
+                attr_name = child.value
+            elif isinstance(child, Tree) and child.data == 'cpp_type':
+                attr_type = self._extract_cpp_type(child)
+            elif isinstance(child, Tree) and child.data == 'default_value':
+                default_value = self._extract_value(child)
+        
+        return PyClassAttributeNode(
+            name=attr_name or "", 
+            type=attr_type or "", 
+            default_value=ValueNode(default_value) if default_value is not None else None
+        )
+
+    def _handle_pyclass_constructor(self, tree: Tree) -> PyClassConstructorNode:
+        """Handle Pythonic class constructor definition."""
+        parameters = []
+        assignments = []
+        code = ""
+        
+        for child in tree.children:
+            if isinstance(child, Tree) and child.data == 'pyclass_param_list':
+                parameters = self._handle_pyclass_param_list(child)
+            elif isinstance(child, Tree) and child.data == 'pyclass_constructor_content':
+                assignments, code = self._parse_pyclass_constructor_content(child)
+        
+        return PyClassConstructorNode(parameters=parameters, assignments=assignments, code=code)
+
+    def _handle_pyclass_param_list(self, tree: Tree) -> List[PyClassParamNode]:
+        """Handle Pythonic class parameter list."""
+        params = []
+        
+        for child in tree.children:
+            if isinstance(child, Tree) and child.data == 'pyclass_param':
+                params.append(self._handle_pyclass_param(child))
+        
+        return params
+
+    def _handle_pyclass_param(self, tree: Tree) -> PyClassParamNode:
+        """Handle Pythonic class parameter definition."""
+        param_name = None
+        param_type = None
+        default_value = None
+        
+        for child in tree.children:
+            if isinstance(child, Token) and child.type == 'NAME':
+                param_name = child.value
+            elif isinstance(child, Tree) and child.data == 'cpp_type':
+                param_type = self._extract_cpp_type(child)
+            elif isinstance(child, Tree) and child.data == 'default_value':
+                default_value = self._extract_value(child)
+        
+        return PyClassParamNode(
+            name=param_name or "", 
+            type=param_type or "", 
+            default_value=ValueNode(default_value) if default_value is not None else None
+        )
+
+    def _parse_pyclass_constructor_content(self, content_tree: Tree) -> tuple[List[str], str]:
+        """Parse Pythonic class constructor content."""
+        assignments = []
+        code = ""
+        
+        for child in content_tree.children:
+            if isinstance(child, Tree):
+                if child.data == 'pyclass_assign':
+                    assignments.append(self._extract_pyclass_assign(child))
+                elif child.data == 'code_block':
+                    code = self._extract_code_block(child)
+        
+        return assignments, code
+
+    def _extract_pyclass_assign(self, tree: Tree) -> str:
+        """Extract Pythonic class assignment statement."""
+        parts = []
+        for child in tree.children:
+            if isinstance(child, Token):
+                parts.append(child.value)
+        return " ".join(parts)
+
+    def _handle_pyclass_method(self, tree: Tree) -> PyClassMethodNode:
+        """Handle Pythonic class method definition."""
+        method_name = None
+        parameters = []
+        return_type = None
+        code = ""
+        
+        for child in tree.children:
+            if isinstance(child, Token) and child.type == 'NAME':
+                method_name = child.value
+            elif isinstance(child, Tree) and child.data == 'pyclass_param_list':
+                parameters = self._handle_pyclass_param_list(child)
+            elif isinstance(child, Tree) and child.data == 'return_type':
+                return_type = self._extract_return_type(child)
+            elif isinstance(child, Tree) and child.data == 'pyclass_method_content':
+                code = self._parse_pyclass_method_content(child)
+        
+        return PyClassMethodNode(
+            name=method_name or "", 
+            parameters=parameters, 
+            return_type=return_type, 
+            code=code
+        )
+
+    def _extract_return_type(self, tree: Tree) -> str:
+        """Extract return type from return_type tree."""
+        for child in tree.children:
+            if isinstance(child, Tree) and child.data == 'cpp_type':
+                return self._extract_cpp_type(child)
+        return ""
+
+    def _parse_pyclass_method_content(self, content_tree: Tree) -> str:
+        """Parse Pythonic class method content."""
+        code = ""
+        for child in content_tree.children:
+            if isinstance(child, Tree) and child.data == 'code_block':
+                code = self._extract_code_block(child)
+        return code
+
+    def _handle_pyclass_access_section(self, tree: Tree) -> PyClassAccessSectionNode:
+        """Handle Pythonic class access section."""
+        access_specifier = "public"  # Default
+        attributes = []
+        methods = []
+        constructors = []
+        
+        for child in tree.children:
+            if isinstance(child, Token) and child.type == 'NAME':
+                if child.value in ['public', 'private', 'protected']:
+                    access_specifier = child.value
+            elif isinstance(child, Tree):
+                if child.data == 'pyclass_attribute':
+                    attributes.append(self._handle_pyclass_attribute(child))
+                elif child.data == 'pyclass_method':
+                    methods.append(self._handle_pyclass_method(child))
+                elif child.data == 'pyclass_constructor':
+                    constructors.append(self._handle_pyclass_constructor(child))
+        
+        return PyClassAccessSectionNode(
+            access_specifier=access_specifier, 
+            attributes=attributes, 
+            methods=methods, 
+            constructors=constructors
+        ) 
