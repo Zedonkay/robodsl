@@ -282,10 +282,101 @@ class CudaKernelsNode(ASTNode):
     kernels: List[KernelNode]
 
 
+# Data Structure AST Nodes
+@dataclass
+class StructMemberNode(ASTNode):
+    """Struct member node."""
+    type: str
+    name: str
+    array_spec: Optional[str] = None
+
+
+@dataclass
+class StructContentNode(ASTNode):
+    """Struct content node."""
+    members: List[StructMemberNode] = field(default_factory=list)
+    methods: List[CppMethodNode] = field(default_factory=list)
+    includes: List[IncludeNode] = field(default_factory=list)
+
+
+@dataclass
+class StructNode(ASTNode):
+    """Struct definition node."""
+    name: str
+    content: StructContentNode
+
+
+@dataclass
+class InheritanceNode(ASTNode):
+    """Inheritance specification node."""
+    base_classes: List[tuple[str, str]]  # List of (access_specifier, class_name) tuples
+
+
+@dataclass
+class AccessSectionNode(ASTNode):
+    """Access section node (public, private, protected)."""
+    access_specifier: str  # "public", "private", "protected"
+    members: List[StructMemberNode] = field(default_factory=list)
+    methods: List[CppMethodNode] = field(default_factory=list)
+
+
+@dataclass
+class ClassContentNode(ASTNode):
+    """Class content node."""
+    access_sections: List[AccessSectionNode] = field(default_factory=list)
+    members: List[StructMemberNode] = field(default_factory=list)
+    methods: List[CppMethodNode] = field(default_factory=list)
+    includes: List[IncludeNode] = field(default_factory=list)
+
+
+@dataclass
+class ClassNode(ASTNode):
+    """Class definition node."""
+    name: str
+    inheritance: Optional[InheritanceNode] = None
+    content: ClassContentNode
+
+
+@dataclass
+class EnumValueNode(ASTNode):
+    """Enum value node."""
+    name: str
+    value: Optional[str] = None
+
+
+@dataclass
+class EnumContentNode(ASTNode):
+    """Enum content node."""
+    values: List[EnumValueNode] = field(default_factory=list)
+
+
+@dataclass
+class EnumNode(ASTNode):
+    """Enum definition node."""
+    name: str
+    enum_type: Optional[str] = None  # "class" or "struct" for enum class
+    content: EnumContentNode
+
+
+@dataclass
+class TypedefNode(ASTNode):
+    """Typedef definition node."""
+    original_type: str
+    new_name: str
+
+
+@dataclass
+class UsingNode(ASTNode):
+    """Using declaration node."""
+    name: str
+    type: str
+
+
 @dataclass
 class RoboDSLAST(ASTNode):
     """Root AST node."""
     includes: List[IncludeNode] = field(default_factory=list)
+    data_structures: List[Union[StructNode, ClassNode, EnumNode, TypedefNode, UsingNode]] = field(default_factory=list)
     nodes: List[NodeNode] = field(default_factory=list)
     cuda_kernels: Optional[CudaKernelsNode] = None  # Standalone kernels outside nodes 
     onnx_models: List['OnnxModelNode'] = field(default_factory=list)  # ONNX models

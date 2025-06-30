@@ -6,17 +6,18 @@ import click
 from pathlib import Path
 from typing import Optional, List, Dict
 
-def get_node_paths(project_path: Path, node_name: str) -> tuple[Path, str]:
-    """Get the file path and node name, handling subnodes.
+def create_robodsl_node_file(project_path: Path, node_name: str, template: str = "basic") -> Path:
+    """Create a RoboDSL node definition file.
     
     Args:
-        project_path: Base project directory
-        node_name: Node name, potentially with dots for subnodes
+        project_path: Path to the project directory
+        node_name: Name of the node (can contain dots for subnodes)
+        template: Template type ('basic', 'publisher', 'subscriber', 'cuda', 'full', 'data_structures')
         
     Returns:
-        Tuple of (config_file_path, node_name_without_namespace)
+        Path to the created RoboDSL file
     """
-    # Split node name into components
+    # Split node name into components for directory structure
     parts = node_name.split('.')
     node_base_name = parts[-1]
     
@@ -25,292 +26,481 @@ def get_node_paths(project_path: Path, node_name: str) -> tuple[Path, str]:
         node_dir = project_path / 'robodsl' / 'nodes' / '/'.join(parts[:-1])
         node_dir.mkdir(parents=True, exist_ok=True)
         config_file = node_dir / f"{node_base_name}.robodsl"
-        return config_file, node_base_name
-    
-    return project_path / f"{node_name}.robodsl", node_name
-
-
-def create_robodsl_config(project_path: Path, node_name: str    ) -> None:
-    """Create or update a RoboDSL configuration file for a node.
-    
-    Args:
-        project_path: Path to the project directory
-        node_name: Name of the node (can contain dots for subnodes)
-        publishers: List of publisher configurations
-        subscribers: List of subscriber configurations
-    """
-    config_file, node_base_name = get_node_paths(project_path, node_name)
-    
-    # Read existing config if it exists
-    config_lines = []
-    if config_file.exists():
-        with open(config_file, 'r') as f:
-            config_lines = f.readlines()
-    
-    # Find or create node section - use base node name only
-    node_section = f"node {node_base_name}"
-    node_start = -1
-    node_end = -1
-    
-    for i, line in enumerate(config_lines):
-        if line.strip().startswith('node '):
-            if node_start == -1:  # First node found
-                node_start = i
-            current_node = line.split('{')[0].strip().split(' ')[1]
-            if current_node == node_name:
-                node_start = i
-                # Find the end of this node
-                brace_count = 0
-                for j in range(i, len(config_lines)):
-                    brace_count += config_lines[j].count('{')
-                    brace_count -= config_lines[j].count('}')
-                    if brace_count == 0 and j > i:
-                        node_end = j + 1
-                        break
-                break
-    
-    # Create or update node section
-    new_node_lines = []
-    if node_start == -1:  # Node doesn't exist, add it
-        new_node_lines.append(f"node {node_base_name} {{\n")
-    else:  # Node exists, update it
-        new_node_lines = config_lines[node_start:node_end]
-    
-    # # Add publishers
-    # for pub in (publishers or []):
-    #     pub_line = f"    publisher {pub['topic']}: \"{pub['msg_type']}\""
-    #     if not any(pub_line in line for line in new_node_lines):
-    #         new_node_lines.insert(-1, f"{pub_line}\n")
-    
-    # # Add subscribers
-    # for sub in (subscribers or []):
-    #     sub_line = f"    subscriber {sub['topic']}: \"{sub['msg_type']}\""
-    #     if not any(sub_line in line for line in new_node_lines):
-    #         new_node_lines.insert(-1, f"{sub_line}\n")
-    
-    # Close node if we created it
-    if node_start == -1:
-        new_node_lines.append("}\n")
-    
-    # Update config file
-    if node_start == -1:  # New node, append to file
-        # Create parent directories if they don't exist
-        config_file.parent.mkdir(parents=True, exist_ok=True)
-        
-        # Write the config file
-        with open(config_file, 'w') as f:
-            f.write(''.join(config_lines + new_node_lines) + '\n')
-    else:  # Update existing node
-        updated_lines = config_lines[:node_start] + new_node_lines + config_lines[node_end:]
-        with open(config_file, 'w') as f:
-            f.writelines(updated_lines)
-
-def get_node_file_paths(project_path: Path, node_name: str, language: str) -> tuple[Path, Path]:
-    """Get the source and include file paths for a node, handling subnodes.
-    
-    Args:
-        project_path: Base project directory
-        node_name: Node name (can contain dots for subnodes)
-        language: Programming language ('python' or 'cpp')
-        
-    Returns:
-        Tuple of (source_file_path, include_file_path or None if Python)
-    """
-    parts = node_name.split('.')
-    node_base_name = parts[-1]
-    
-    # For Python
-    if language == 'python':
-        if len(parts) > 1:
-            # For subnodes, create a package-like structure
-            src_dir = project_path / 'src' / '/'.join(parts[:-1])
-            src_dir.mkdir(parents=True, exist_ok=True)
-            src_file = src_dir / f"{node_base_name}_node.py"
-            return src_file, None
-        return project_path / 'src' / f"{node_base_name}_node.py", None
-    
-    # For C++
-    src_dir = project_path / 'src'
-    include_dir = project_path / 'include'
-    
-    # Create source and header file paths
-    if len(parts) > 1:
-        # For subnodes, create a directory structure in src
-        src_dir = src_dir / '/'.join(parts[:-1])
-        src_dir.mkdir(parents=True, exist_ok=True)
-    
-    src_file = src_dir / f"{node_base_name}_node.cpp"
-    
-    # For C++ headers, create a subdirectory matching the node path (without base name)
-    if len(parts) > 1:
-        node_include_dir = include_dir / '/'.join(parts[:-1])
     else:
-        node_include_dir = include_dir / node_name
-    node_include_dir.mkdir(parents=True, exist_ok=True)
+        config_file = project_path / f"{node_name}.robodsl"
     
-    header_file = node_include_dir / f"{node_base_name}_node.hpp"
+    # Create parent directories if they don't exist
+    config_file.parent.mkdir(parents=True, exist_ok=True)
     
-    return src_file, header_file
+    # Generate different templates based on type
+    if template == "basic":
+        content = f"""// {node_name} RoboDSL Configuration
 
-
-def _snake_to_camel(snake_str: str) -> str:
-    """Convert a snake_case string to CamelCase.
+// Node definition
+node {node_base_name} {{
+    // Node namespace
+    namespace: /{node_name.replace('.', '/')}
     
-    Args:
-        snake_str: The snake_case string to convert
-        
-    Returns:
-        The input string converted to CamelCase
-    """
-    # Handle empty or None input
-    if not snake_str:
-        return snake_str
-        
-    # Split on underscores and capitalize each word
-    components = snake_str.split('_')
-    # Capitalize the first letter of each component and join them
-    return ''.join(x.capitalize() for x in components if x)
-
-
-def create_node_files(project_path: Path, node_name: str, language: str = 'python') -> None:
-    """Create node source files.
+    // Parameters
+    parameter int count = 0
+    parameter double rate = 10.0
+    parameter string name = "{node_name}"
+    parameter bool enabled = true
     
-    Args:
-        project_path: Path to the project directory
-        node_name: Name of the node (can contain dots for subnodes)
-        language: Programming language ('python' or 'cpp')
-    """
-    # Get base node name (without namespace)
-    node_base_name = node_name.split('.')[-1]
+    // Timer for periodic processing
+    timer main_timer: 1.0 {{
+        callback: on_timer_callback
+    }}
     
-    # Get file paths
-    if language == 'python':
-        node_file, _ = get_node_file_paths(project_path, node_name, language)
-        
-        # Create parent directories if they don't exist
-        node_file.parent.mkdir(parents=True, exist_ok=True)
-        
-        # Generate Python imports based on node name parts
-        module_parts = node_name.split('.')
-        imports = []
-        if len(module_parts) > 1:
-            imports.append(f"from {' import '.join(module_parts[:-1])} import {module_parts[-2]}")
-        
-        with open(node_file, 'w') as f:
-            f.write(f"""#!/usr/bin/env python3
+    // C++ method for timer callback
+    method on_timer_callback {{
+        input: rclcpp::Time current_time
+        code {{
+            RCLCPP_INFO(this->get_logger(), "Timer callback executed");
+        }}
+    }}
+}}
+"""
+    elif template == "publisher":
+        content = f"""// {node_name} RoboDSL Configuration - Publisher Node
 
-import rclpy
-from rclpy.node import Node
+// Node definition
+node {node_base_name} {{
+    // Node namespace
+    namespace: /{node_name.replace('.', '/')}
+    
+    // Parameters
+    parameter double publish_rate = 10.0
+    parameter string message = "Hello from {node_name}"
+    
+    // Publisher
+    publisher /chatter: "std_msgs/msg/String" {{
+        qos {{
+            reliability: 1
+            history: 1
+            depth: 10
+        }}
+        queue_size: 10
+    }}
+    
+    // Timer for publishing
+    timer publish_timer: 1.0 / publish_rate {{
+        callback: on_publish_timer
+    }}
+    
+    // C++ method for timer callback
+    method on_publish_timer {{
+        input: rclcpp::Time current_time
+        code {{
+            auto message = std_msgs::msg::String();
+            message.data = this->get_parameter("message").as_string();
+            chatter_pub_->publish(message);
+        }}
+    }}
+}}
+"""
+    elif template == "subscriber":
+        content = f"""// {node_name} RoboDSL Configuration - Subscriber Node
 
-{''.join(imports)}
+// Node definition
+node {node_base_name} {{
+    // Node namespace
+    namespace: /{node_name.replace('.', '/')}
+    
+    // Parameters
+    parameter bool verbose = true
+    
+    // Subscriber
+    subscriber /chatter: "std_msgs/msg/String" {{
+        qos {{
+            reliability: 0
+            history: 1
+            depth: 10
+        }}
+        queue_size: 10
+    }}
+    
+    // C++ method for message callback
+    method on_message_received {{
+        input: const std_msgs::msg::String::SharedPtr msg
+        code {{
+            if (this->get_parameter("verbose").as_bool()) {{
+                RCLCPP_INFO(this->get_logger(), "Received: %s", msg->data.c_str());
+            }}
+        }}
+    }}
+}}
+"""
+    elif template == "cuda":
+        content = f"""// {node_name} RoboDSL Configuration - CUDA Node
 
-class {node_base_name.capitalize()}Node(Node):
-    def __init__(self):
-        super().__init__('{node_name}')
-        self.get_logger().info('{node_name} node started')
-        self.get_logger().info('{node_name} node has been started')
-
-def main(args=None):
-    rclpy.init(args=args)
-    node = {node_name.capitalize()}Node()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
-
-if __name__ == '__main__':
-    main()
-""")
-        
-        # Make the file executable
-        if os.name != 'nt':  # Only on Unix-like systems
-            os.chmod(node_file, 0o755)
-            
-    elif language == 'cpp':
-        node_file, include_file = get_node_file_paths(project_path, node_name, language)
-        
-        # Create parent directories if they don't exist
-        node_file.parent.mkdir(parents=True, exist_ok=True)
-        include_file.parent.mkdir(parents=True, exist_ok=True)
-        
-        # Generate include guard and class name
-        include_guard = f"{'_'.join(node_name.split('.')).upper()}_NODE_H_"
-        class_name = f"{_snake_to_camel(node_base_name)}Node"
-        
-        # Write header file
-        with open(include_file, 'w') as f:
-            f.write(f"""#ifndef {include_guard}
-#define {include_guard}
-
-#include <rclcpp/rclcpp.hpp>
-
-class {class_name} : public rclcpp::Node {{
-public:
-    {class_name}();
-
-private:
-    // Add your members and callbacks here
-}};
-
-#endif // {include_guard}
-""")
-        
-        # Write source file
-        with open(node_file, 'w') as f:
-            f.write(f"""#include "{node_name.replace('.', '/')}_node.hpp"
-
-{class_name}::{class_name}()
-: Node("{node_name}")
-{{
-    RCLCPP_INFO(this->get_logger(), "{node_name} node started");
+// Node definition
+node {node_base_name} {{
+    // Node namespace
+    namespace: /{node_name.replace('.', '/')}
+    
+    // Parameters
+    parameter int data_size = 1024
+    parameter double process_rate = 30.0
+    
+    // Subscriber for input data
+    subscriber /input_data: "std_msgs/msg/Float32MultiArray" {{
+        qos {{
+            reliability: 1
+            history: 1
+            depth: 10
+        }}
+    }}
+    
+    // Publisher for processed data
+    publisher /output_data: "std_msgs/msg/Float32MultiArray" {{
+        qos {{
+            reliability: 1
+            history: 1
+            depth: 10
+        }}
+    }}
+    
+    // Timer for processing
+    timer process_timer: 1.0 / process_rate {{
+        callback: on_process_timer
+    }}
+    
+    // C++ method for processing
+    method on_process_timer {{
+        input: rclcpp::Time current_time
+        code {{
+            // Process data using CUDA kernel
+            int size = this->get_parameter("data_size").as_int();
+            process_data_cuda(size);
+        }}
+    }}
+    
+    // C++ method for message callback
+    method on_input_received {{
+        input: const std_msgs::msg::Float32MultiArray::SharedPtr msg
+        code {{
+            // Store input data for processing
+            input_data_ = msg->data;
+        }}
+    }}
 }}
 
-int main(int argc, char * argv[])
-{{
-    rclcpp::init(argc, argv);
-    auto node = std::make_shared<{class_name}>();
-    rclcpp::spin(node);
-    rclcpp::shutdown();
-    return 0;
-}}""")
+// CUDA Kernels
+cuda_kernels {{
+    kernel process_data {{
+        input: float* input_data, int size
+        output: float* output_data
+        
+        block_size: (256, 1, 1)
+        
+        include <cuda_runtime.h>
+        include <device_launch_parameters.h>
+        
+        code {{
+            __global__ void process_data_kernel(const float* input, float* output, int size) {{
+                int i = blockIdx.x * blockDim.x + threadIdx.x;
+                if (i < size) {{
+                    // Example processing: multiply by 2
+                    output[i] = input[i] * 2.0f;
+                }}
+            }}
+        }}
+    }}
+}}
+"""
+    elif template == "full":
+        content = f"""// {node_name} RoboDSL Configuration - Full Featured Node
 
-def _create_launch_file_impl(project_path: Path, node_name: str, language: str = 'python') -> None:
-    """Internal implementation for creating a launch file for the node.
+// Node definition
+node {node_base_name} {{
+    // Node namespace
+    namespace: /{node_name.replace('.', '/')}
+    
+    // Lifecycle configuration
+    lifecycle {{
+        enabled: true
+        autostart: true
+        cleanup_on_shutdown: true
+    }}
+    
+    // Parameter callbacks
+    parameter_callbacks: true
+    
+    // Parameters
+    parameter int count = 0
+    parameter double rate = 10.0
+    parameter string name = "{node_name}"
+    parameter bool enabled = true
+    parameter int queue_size = 10
+    
+    // Topic remapping
+    remap /source_topic: /target_topic
+    
+    // Publishers
+    publisher /chatter: "std_msgs/msg/String" {{
+        qos {{
+            reliability: 1
+            history: 1
+            depth: 10
+        }}
+        queue_size: 10
+    }}
+    
+    publisher /status: "std_msgs/msg/String" {{
+        qos {{
+            reliability: 1
+            history: 1
+            depth: 5
+        }}
+    }}
+    
+    // Subscribers
+    subscriber /chatter: "std_msgs/msg/String" {{
+        qos {{
+            reliability: 0
+            history: 1
+            depth: 10
+        }}
+        queue_size: 10
+    }}
+    
+    // Services
+    service /get_status: "std_srvs/srv/Trigger"
+    
+    // Service clients
+    client /other_service: "std_srvs/srv/Trigger"
+    
+    // Actions
+    action /long_task: "example_interfaces/action/Fibonacci"
+    
+    // Timers
+    timer main_timer: 1.0 {{
+        callback: on_main_timer
+    }}
+    
+    timer status_timer: 5.0 {{
+        callback: on_status_timer
+    }}
+    
+    // C++ methods
+    method on_main_timer {{
+        input: rclcpp::Time current_time
+        code {{
+            auto message = std_msgs::msg::String();
+            message.data = "Timer tick from " + this->get_parameter("name").as_string();
+            chatter_pub_->publish(message);
+        }}
+    }}
+    
+    method on_status_timer {{
+        input: rclcpp::Time current_time
+        code {{
+            auto status_msg = std_msgs::msg::String();
+            status_msg.data = "Status: Running";
+            status_pub_->publish(status_msg);
+        }}
+    }}
+    
+    method on_message_received {{
+        input: const std_msgs::msg::String::SharedPtr msg
+        code {{
+            RCLCPP_INFO(this->get_logger(), "Received: %s", msg->data.c_str());
+        }}
+    }}
+    
+    method on_service_request {{
+        input: const std_srvs::srv::Trigger::Request::SharedPtr request
+        output: std_srvs::srv::Trigger::Response::SharedPtr response
+        code {{
+            response->success = true;
+            response->message = "Service called successfully";
+        }}
+    }}
+}}
+"""
+    elif template == "data_structures":
+        content = f"""// {node_name} RoboDSL Configuration - Data Structures Example
+
+// Type definitions
+typedef std::vector<float> FloatVector;
+using Point3D = geometry_msgs::msg::Point;
+
+// Enums
+enum class SensorType {{
+    CAMERA,
+    LIDAR,
+    IMU,
+    GPS
+}};
+
+enum ProcessingMode {{
+    FAST = 0,
+    ACCURATE = 1,
+    BALANCED = 2
+}};
+
+// Structs
+struct SensorConfig {{
+    std::string name;
+    SensorType type;
+    double frequency;
+    bool enabled;
+    
+    method initialize {{
+        input: const std::string& config_path
+        code {{
+            // Initialize sensor configuration
+            RCLCPP_INFO(this->get_logger(), "Initializing sensor: %s", name.c_str());
+        }}
+    }}
+}};
+
+struct ProcessingPipeline {{
+    std::vector<std::string> stages;
+    ProcessingMode mode;
+    double timeout;
+    
+    method add_stage {{
+        input: const std::string& stage_name
+        code {{
+            stages.push_back(stage_name);
+        }}
+    }}
+    
+    method get_stage_count {{
+        output: size_t count
+        code {{
+            count = stages.size();
+        }}
+    }}
+}};
+
+// Classes
+class DataProcessor {{
+public:
+    DataProcessor() {{
+        // Constructor
+    }}
+    
+private:
+    FloatVector buffer;
+    ProcessingPipeline pipeline;
+    
+    method process_data {{
+        input: const FloatVector& input_data
+        output: FloatVector& output_data
+        code {{
+            // Process the input data
+            output_data = input_data;
+            for (auto& value : output_data) {{
+                value *= 2.0f;
+            }}
+        }}
+    }}
+    
+    method setup_pipeline {{
+        input: ProcessingMode mode
+        code {{
+            pipeline.mode = mode;
+            pipeline.add_stage("preprocess");
+            pipeline.add_stage("compute");
+            pipeline.add_stage("postprocess");
+        }}
+    }}
+}};
+
+// Node definition
+node {node_base_name} {{
+    // Node namespace
+    namespace: /{node_name.replace('.', '/')}
+    
+    // Parameters
+    parameter string sensor_name = "default_sensor"
+    parameter int processing_mode = 1
+    parameter double frequency = 30.0
+    
+    // Publishers
+    publisher /processed_data: "std_msgs/msg/Float32MultiArray" {{
+        qos {{
+            reliability: 1
+            history: 1
+            depth: 10
+        }}
+    }}
+    
+    // Subscribers
+    subscriber /raw_data: "std_msgs/msg/Float32MultiArray" {{
+        qos {{
+            reliability: 0
+            history: 1
+            depth: 10
+        }}
+    }}
+    
+    // Timer
+    timer process_timer: 1.0 / frequency {{
+        callback: on_process_timer
+    }}
+    
+    // C++ methods
+    method on_process_timer {{
+        input: rclcpp::Time current_time
+        code {{
+            // Process data using our custom structures
+            DataProcessor processor;
+            processor.setup_pipeline(static_cast<ProcessingMode>(this->get_parameter("processing_mode").as_int()));
+            
+            // Process and publish data
+            FloatVector input_data = {{1.0f, 2.0f, 3.0f}};
+            FloatVector output_data;
+            processor.process_data(input_data, output_data);
+            
+            // Publish processed data
+            auto msg = std_msgs::msg::Float32MultiArray();
+            msg.data = output_data;
+            processed_data_pub_->publish(msg);
+        }}
+    }}
+    
+    method on_raw_data_received {{
+        input: const std_msgs::msg::Float32MultiArray::SharedPtr msg
+        code {{
+            // Handle incoming raw data
+            RCLCPP_INFO(this->get_logger(), "Received %zu data points", msg->data.size());
+        }}
+    }}
+}}
+"""
+    else:
+        raise ValueError(f"Unknown template: {template}")
+    
+    # Write the file
+    with open(config_file, 'w') as f:
+        f.write(content)
+    
+    return config_file
+
+def create_project_structure(project_path: Path) -> None:
+    """Create the standard RoboDSL project structure.
     
     Args:
         project_path: Path to the project directory
-        node_name: Name of the node (can contain dots for subnodes)
-        language: Programming language ('python' or 'cpp')
     """
-    parts = node_name.split('.')
-    node_base_name = parts[-1]
+    # Create main directories
+    directories = [
+        'src',
+        'include', 
+        'launch',
+        'config',
+        'robodsl',
+        'robodsl/nodes',
+        'build',
+        'docs'
+    ]
     
-    # Create launch directory if it doesn't exist
-    launch_dir = project_path / 'launch' / '/'.join(parts[:-1]) if len(parts) > 1 else project_path / 'launch'
-    launch_dir.mkdir(parents=True, exist_ok=True)
-    
-    # For Python, the package is the first part of the node name or project name
-    package_name = parts[0] if len(parts) > 1 else project_path.name
-    
-    # For C++, the executable is just the base name
-    executable_name = node_base_name + ('_node' if language == 'python' else '')
-    
-    launch_file = launch_dir / f"{node_base_name}.launch.py"
-    
-    with open(launch_file, 'w') as f:
-        f.write(f"""from launch import LaunchDescription
-from launch_ros.actions import Node
-
-def generate_launch_description():
-    return LaunchDescription([
-        Node(
-            package='{package_name}',
-            executable='{executable_name}',
-            name='{node_name}',
-            output='screen',
-            emulate_tty=True,
-        )
-    ])
-""")
+    for directory in directories:
+        (project_path / directory).mkdir(parents=True, exist_ok=True)
 
 @click.group()
 @click.version_option()
@@ -320,7 +510,9 @@ def main() -> None:
 
 @main.command()
 @click.argument('project_name')
-@click.option('--template', '-t', default='basic', help='Template to use for the project')
+@click.option('--template', '-t', default='basic', 
+              type=click.Choice(['basic', 'publisher', 'subscriber', 'cuda', 'full', 'data_structures']),
+              help='Template to use for the project')
 @click.option('--output-dir', '-o', default='.', help='Directory to create the project in')
 def init(project_name: str, template: str, output_dir: str) -> None:
     """Initialize a new RoboDSL project."""
@@ -330,89 +522,257 @@ def init(project_name: str, template: str, output_dir: str) -> None:
         project_path.mkdir(parents=True, exist_ok=False)
         click.echo(f"Created project directory: {project_path}")
         
-        # Create basic project structure
-        (project_path / 'src').mkdir()
-        (project_path / 'include').mkdir()
-        (project_path / 'launch').mkdir()
-        (project_path / 'config').mkdir()
-        (project_path / 'robodsl').mkdir()
+        # Create project structure
+        create_project_structure(project_path)
         
-        # Create a comprehensive robodsl file
-        (project_path / f"{project_name}.robodsl").write_text(
-            f"// {project_name} RoboDSL Configuration\n\n"
-            "// Project configuration\n"
-            f'project_name: {project_name}\n\n'
-            "// Global includes (will be added to all nodes)\n"
-            "include <rclcpp/rclcpp.hpp>\n"
-            "include <std_msgs/msg/string.hpp>\n"
-            "include <sensor_msgs/msg/image.hpp>\n\n"
-            "// Main node configuration\n"
-            "node main_node {\n"
-            "    // Node namespace (optional)\n"
-            f"    namespace: /{project_name}\n\n"
-            "    // Enable lifecycle (default: false)\n"
-            "    lifecycle {\n"
-            "        enabled: true\n"
-            "    }\n\n"
-            "    // Enable parameter callbacks (default: false)\n"
-            "    parameter_callbacks: true\n\n"
-            "    // Topic remapping (optional)\n"
-            "    remap /source_topic: /target_topic\n\n"
-            "    // Parameters with different types\n"
-            "    parameter int count = 0\n"
-            "    parameter double rate = 10.0\n"
-            f"    parameter string name = \"{project_name}\"\n"
-            "    parameter bool enabled = true\n\n"
-            "    // Publisher with QoS settings\n"
-            "    publisher /chatter: \"std_msgs/msg/String\" {\n"
-            "        qos {\n"
-            "            reliability: 1\n"
-            "            history: 1\n"
-            "            depth: 10\n"
-            "        }\n"
-            "        queue_size: 10\n"
-            "    }\n\n"
-            "    // Subscriber with QoS settings\n"
-            "    subscriber /chatter: \"std_msgs/msg/String\" {\n"
-            "        qos {\n"
-            "            reliability: 0\n"
-            "            history: 1\n"
-            "            depth: 10\n"
-            "        }\n"
-            "        queue_size: 10\n"
-            "    }\n\n"
-            "    // Timer example (1.0 second period)\n"
-            "    timer my_timer: 1.0 {\n"
-            "        callback: on_timer_callback\n"
-            "    }\n"
-            "}\n\n"
-            "// CUDA Kernels section\n"
-            "cuda_kernels {\n"
-            "    // Example vector addition kernel\n"
-            "    kernel vector_add {\n"
-            "        // Input parameters\n"
-            "        input: float* a, float* b, int size\n"
-            "        output: float* c\n\n"
-            "        // Kernel configuration\n"
-            "        block_size: (256, 1, 1)\n\n"
-            "        // Include additional headers\n"
-            "        include <cuda_runtime.h>\n"
-            "        include <device_launch_parameters.h>\n\n"
-            "        // Kernel code\n"
-            "        code {\n"
-            "            __global__ void vector_add(const float* a, const float* b, float* c, int size) {\n"
-            "                int i = blockIdx.x * blockDim.x + threadIdx.x;\n"
-            "                if (i < size) {\n"
-            "                    c[i] = a[i] + b[i];\n"
-            "                }\n"
-            "            }\n"
-            "        }\n"
-            "    }\n"
-            "}\n\n"
-            "// For more examples and documentation, see: examples/comprehensive_example.robodsl\n"
-        )
-        click.echo(f"Initialized RoboDSL project in {project_path}")
+        # Create main RoboDSL configuration file
+        main_config = project_path / f"{project_name}.robodsl"
+        with open(main_config, 'w') as f:
+            f.write(f"""// {project_name} RoboDSL Configuration
+
+// Project configuration
+project_name: {project_name}
+
+// Global includes (will be added to all nodes)
+include <rclcpp/rclcpp.hpp>
+include <std_msgs/msg/string.hpp>
+include <sensor_msgs/msg/image.hpp>
+
+// Main node configuration
+node main_node {{
+    // Node namespace
+    namespace: /{project_name}
+    
+    // Parameters
+    parameter int count = 0
+    parameter double rate = 10.0
+    parameter string name = "{project_name}"
+    parameter bool enabled = true
+    
+    // Publisher
+    publisher /chatter: "std_msgs/msg/String" {{
+        qos {{
+            reliability: 1
+            history: 1
+            depth: 10
+        }}
+        queue_size: 10
+    }}
+    
+    // Subscriber
+    subscriber /chatter: "std_msgs/msg/String" {{
+        qos {{
+            reliability: 0
+            history: 1
+            depth: 10
+        }}
+        queue_size: 10
+    }}
+    
+    // Timer
+    timer main_timer: 1.0 {{
+        callback: on_timer_callback
+    }}
+    
+    // C++ method for timer callback
+    method on_timer_callback {{
+        input: rclcpp::Time current_time
+        code {{
+            auto message = std_msgs::msg::String();
+            message.data = "Hello from {project_name}!";
+            chatter_pub_->publish(message);
+        }}
+    }}
+    
+    // C++ method for message callback
+    method on_message_received {{
+        input: const std_msgs::msg::String::SharedPtr msg
+        code {{
+            RCLCPP_INFO(this->get_logger(), "Received: %s", msg->data.c_str());
+        }}
+    }}
+}}
+
+// CUDA Kernels section (optional)
+cuda_kernels {{
+    // Example vector addition kernel
+    kernel vector_add {{
+        input: float* a, float* b, int size
+        output: float* c
+        
+        block_size: (256, 1, 1)
+        
+        include <cuda_runtime.h>
+        include <device_launch_parameters.h>
+        
+        code {{
+            __global__ void vector_add_kernel(const float* a, const float* b, float* c, int size) {{
+                int i = blockIdx.x * blockDim.x + threadIdx.x;
+                if (i < size) {{
+                    c[i] = a[i] + b[i];
+                }}
+            }}
+        }}
+    }}
+}}
+""")
+        
+        # Create CMakeLists.txt
+        cmake_file = project_path / 'CMakeLists.txt'
+        with open(cmake_file, 'w') as f:
+            f.write(f"""cmake_minimum_required(VERSION 3.8)
+project({project_name})
+
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
+# Find dependencies
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+
+# Find CUDA if available
+find_package(CUDA QUIET)
+if(CUDA_FOUND)
+  enable_language(CUDA)
+  set(CMAKE_CUDA_STANDARD 14)
+  set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+endif()
+
+# Include directories
+include_directories(include)
+
+# Add executable
+add_executable(${{PROJECT_NAME}}_node src/main_node.cpp)
+ament_target_dependencies(${{PROJECT_NAME}}_node rclcpp std_msgs sensor_msgs)
+
+# Install
+install(TARGETS
+  ${{PROJECT_NAME}}_node
+  DESTINATION lib/${{PROJECT_NAME}}
+)
+
+# Install launch files
+install(DIRECTORY
+  launch
+  DESTINATION share/${{PROJECT_NAME}}
+)
+
+# Install configuration files
+install(DIRECTORY
+  config
+  DESTINATION share/${{PROJECT_NAME}}
+)
+
+if(BUILD_TESTING)
+  find_package(ament_lint_auto REQUIRED)
+  ament_lint_auto_find_test_dependencies()
+endif()
+
+ament_package()
+""")
+        
+        # Create package.xml
+        package_file = project_path / 'package.xml'
+        with open(package_file, 'w') as f:
+            f.write(f"""<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>{project_name}</name>
+  <version>0.1.0</version>
+  <description>RoboDSL generated ROS2 package</description>
+  <maintainer email="user@example.com">Your Name</maintainer>
+  <license>Apache License 2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>std_msgs</depend>
+  <depend>sensor_msgs</depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
+""")
+        
+        # Create README
+        readme_file = project_path / 'README.md'
+        with open(readme_file, 'w') as f:
+            f.write(f"""# {project_name}
+
+A RoboDSL generated ROS2 package.
+
+## Building
+
+```bash
+# Build the package
+colcon build --packages-select {project_name}
+
+# Source the workspace
+source install/setup.bash
+```
+
+## Running
+
+```bash
+# Run the main node
+ros2 run {project_name} {project_name}_node
+
+# Or use the launch file
+ros2 launch {project_name} main_node.launch.py
+```
+
+## Development
+
+1. Edit the RoboDSL configuration in `{project_name}.robodsl`
+2. Regenerate the C++ code: `robodsl generate {project_name}.robodsl`
+3. Build and test your changes
+
+## Project Structure
+
+- `{project_name}.robodsl` - Main RoboDSL configuration
+- `src/` - Generated C++ source files
+- `include/` - Generated C++ header files
+- `launch/` - Launch files
+- `config/` - Configuration files
+- `robodsl/` - Additional RoboDSL node definitions
+
+## Data Structures
+
+RoboDSL supports defining custom data structures:
+- **Structs**: Simple data containers
+- **Classes**: Object-oriented data structures with methods
+- **Enums**: Enumerated types
+- **Typedefs**: Type aliases
+- **Using declarations**: Modern C++ type aliases
+
+Example:
+```robodsl
+struct SensorData {{
+    double timestamp;
+    std::vector<float> values;
+    bool valid;
+}};
+
+enum class SensorType {{
+    CAMERA,
+    LIDAR,
+    IMU
+}};
+
+typedef std::vector<SensorData> SensorDataArray;
+```
+""")
+        
+        click.echo(f"Initialized RoboDSL project '{project_name}' in {project_path}")
         click.echo(f"Edit {project_name}.robodsl to define your application")
+        click.echo(f"Run 'robodsl generate {project_name}.robodsl' to generate C++ code")
         
     except FileExistsError:
         click.echo(f"Error: Directory {project_path} already exists", err=True)
@@ -422,46 +782,46 @@ def init(project_name: str, template: str, output_dir: str) -> None:
         sys.exit(1)
 
 @main.command()
-@click.argument('project_dir', default='.')
-def build(project_dir: str) -> None:
-    """Build the RoboDSL project."""
-    project_dir = Path(project_dir).resolve()
-    click.echo(f"Building project in {project_dir}...")
-    
-    # TODO: Implement build logic
-    click.echo("Build command not yet implemented")
-
-@main.command()
 @click.argument('node_name')
-@click.option('--language', '-l', type=click.Choice(['cpp', 'python'], case_sensitive=False),
-              default='python', help='Programming language for the node')
+@click.option('--template', '-t', default='basic',
+              type=click.Choice(['basic', 'publisher', 'subscriber', 'cuda', 'full', 'data_structures']),
+              help='Template to use for the node')
 @click.option('--project-dir', type=click.Path(file_okay=False, dir_okay=True, path_type=Path, exists=True),
               default=Path.cwd(), help='Project directory (default: current directory)')
-def create_launch_file(node_name: str, language: str, project_dir: Path) -> None:
-    """Create a launch file for a node.
+def create_node(node_name: str, template: str, project_dir: Path) -> None:
+    """Create a new RoboDSL node definition.
     
-    Args:
-        node_name: Name of the node (can contain dots for subnodes)
-        language: Programming language of the node ('python' or 'cpp')
-        project_dir: Path to the project directory
+    This creates a .robodsl file that defines the node's complete configuration
+    including publishers, subscribers, parameters, timers, C++ methods, and data structures.
     """
-    project_path = Path(project_dir).resolve()
+    project_path = project_dir
+    
+    # Validate node name
+    if not node_name.replace('.', '_').replace('-', '_').isidentifier():
+        raise click.BadParameter(
+            f"Invalid node name: '{node_name}'. "
+            "Node names must be valid Python/C++ identifiers"
+        )
+        
+    # Validate project directory exists
+    if not project_dir.exists():
+        click.echo(f"Error: Directory '{project_dir}' does not exist", err=True)
+        sys.exit(1)
+    
     try:
-        click.echo(f"Creating launch file for node '{node_name}' in {project_path}...")
-        _create_launch_file_impl(project_path, node_name, language)
+        click.echo(f"Creating RoboDSL node '{node_name}' with template '{template}'...")
         
-        # Get the launch file path for the success message
-        parts = node_name.split('.')
-        node_base_name = parts[-1]
-        launch_dir = project_path / 'launch' / '/'.join(parts[:-1]) if len(parts) > 1 else project_path / 'launch'
-        launch_file = launch_dir / f"{node_base_name}.launch.py"
+        # Create the RoboDSL node file
+        config_file = create_robodsl_node_file(project_path, node_name, template)
         
-        click.echo(f"Created launch file: {launch_file.relative_to(project_path)}")
-        click.echo("\nTo use this launch file, run:")
-        click.echo(f"  ros2 launch {project_path.name} {node_base_name}.launch.py")
+        click.echo(f"Created RoboDSL node definition: {config_file.relative_to(project_path)}")
+        click.echo(f"\nNext steps:")
+        click.echo(f"1. Edit the node definition in: {config_file.relative_to(project_path)}")
+        click.echo(f"2. Generate C++ code: robodsl generate {config_file.relative_to(project_path)}")
+        click.echo(f"3. Build the project: colcon build")
         
     except Exception as e:
-        click.echo(f"Error: {str(e)}", err=True)
+        click.echo(f"Error: Failed to create node: {str(e)}", err=True)
         sys.exit(1)
 
 @main.command()
@@ -472,10 +832,10 @@ def create_launch_file(node_name: str, language: str, project_dir: Path) -> None
 @click.option('--debug', '-d', is_flag=True, help='Enable debug output during parsing')
 def generate(input_file: Path, output_dir: Optional[Path], force: bool, debug: bool) -> None:
     """
-    Generate code from a RoboDSL file.
+    Generate C++ code from a RoboDSL file.
     
     This command processes a .robodsl file and generates the corresponding
-    CUDA/ROS2 source files, headers, and build configuration.
+    C++ source files, headers, and build configuration.
     """
     try:
         from robodsl.parsers import parse_robodsl
@@ -513,81 +873,65 @@ def generate(input_file: Path, output_dir: Optional[Path], force: bool, debug: b
         sys.exit(1)
 
 @main.command()
-@click.argument('node_name')
-@click.option('--language', '-l', type=click.Choice(['cpp', 'python'], case_sensitive=False),
-              default='python', help='Programming language for the node')
-@click.option('--project-dir', type=click.Path(file_okay=False, dir_okay=True, path_type=Path, exists=True),
-              default=Path.cwd(), help='Project directory (default: current directory)')
-def add_node(node_name: str, language: str, project_dir: Path) -> None:
-    """Add a new node to an existing project.
+@click.argument('project_dir', default='.')
+def build(project_dir: str) -> None:
+    """Build the RoboDSL project."""
+    project_dir = Path(project_dir).resolve()
+    click.echo(f"Building project in {project_dir}...")
     
-    Node names can use dot notation for subdirectories, e.g., 'sensors.camera'.
-    This will create the appropriate directory structure.
+    # TODO: Implement build logic
+    click.echo("Build command not yet implemented")
+
+@main.command()
+@click.argument('input_file', type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option('--output-dir', '-o', type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
+              default=None, help='Output directory for generated files')
+def create_launch_file(input_file: Path, output_dir: Optional[Path]) -> None:
+    """Create a launch file for a RoboDSL node.
+    
+    This generates a ROS2 launch file based on the node definition in the RoboDSL file.
     """
-    project_path = project_dir
-    node_base_name = node_name.split('.')[-1]
-    
-    # Validate node name
-    if not node_name.replace('.', '_').replace('-', '_').isidentifier():
-        raise click.BadParameter(
-            f"Invalid node name: '{node_name}'. "
-            "Node names must be valid Python/C++ identifiers"
-        )
-        
-    # Validate project directory exists
-    if not project_dir.exists():
-        click.echo(f"Error: Directory '{project_dir}' does not exist", err=True)
-        sys.exit(1)
-    
-    # Create necessary directories
-    src_dir = project_path / 'src'
-    include_dir = project_path / 'include'
-    launch_dir = project_path / 'launch'
-    config_dir = project_path / 'config'
-    
-    # Ensure all required directories exist
-    for directory in [src_dir, include_dir, launch_dir, config_dir]:
-        directory.mkdir(parents=True, exist_ok=True)
-        
-    # Create include directory structure for C++
-    if language == 'cpp':
-        node_parts = node_name.split('.')
-        if len(node_parts) > 1:
-            include_node_dir = include_dir / '/'.join(node_parts)
-            include_node_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Create default config YAML
-    config_file = config_dir / f"{node_base_name}.yaml"
-    if not config_file.exists():
-        with open(config_file, 'w') as f:
-            f.write(f"# Configuration for {node_name} node\n")
-            f.write("# Add your node parameters here\n")
-            f.write(f"{node_base_name}:\n")
-            f.write("  ros__parameters:\n")
-            f.write("    param1: value1\n")
-    
-    # Create node files
-    create_node_files(project_path, node_name, language)
-    
-    # Create launch file
-    _create_launch_file_impl(project_path, node_name, language)
-    
-    # Create or update RoboDSL config
-    create_robodsl_config(project_path, node_name)
-    
     try:
-        click.echo(f"Node '{node_name}' added successfully!")
-        click.echo(f"\nNext steps:")
-        click.echo(
-            f"1. Edit the node implementation in: {src_dir}/" +
-            "/".join(node_name.split('.')) +
-            f"_node.{'py' if language == 'python' else 'cpp'}"
+        from robodsl.parsers import parse_robodsl
+        
+        # Set default output directory if not specified
+        if output_dir is None:
+            output_dir = input_file.parent / 'launch'
+            
+        # Create output directory if it doesn't exist
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        click.echo(f"Creating launch file for {input_file}...")
+        
+        # Parse the input file
+        config = parse_robodsl(input_file.read_text())
+        
+        # TODO: Implement launch file generation based on parsed config
+        # For now, create a basic launch file
+        node_name = input_file.stem
+        launch_file = output_dir / f"{node_name}.launch.py"
+        
+        with open(launch_file, 'w') as f:
+            f.write(f"""from launch import LaunchDescription
+from launch_ros.actions import Node
+
+def generate_launch_description():
+    return LaunchDescription([
+        Node(
+            package='{node_name}',
+            executable='{node_name}_node',
+            name='{node_name}',
+            output='screen',
+            emulate_tty=True,
         )
-        click.echo(f"2. Update the configuration in: {project_path}/robodsl/nodes/{'/'.join(node_name.split('.'))}.robodsl")
-        click.echo(f"3. Launch the node with: ros2 launch {project_path.name} {node_name}.launch.py")
+    ])
+""")
+        
+        click.echo(f"Created launch file: {launch_file}")
+        
     except Exception as e:
-        click.echo(f"Error: Failed to create node: {str(e)}", err=True)
+        click.echo(f"Error: {str(e)}", err=True)
         sys.exit(1)
 
 if __name__ == "__main__":
-    main()
+    main() 

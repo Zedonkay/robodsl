@@ -18,7 +18,9 @@ from ..core.ast import (
     QoSReliability, QoSDurability, QoSHistory, QoSLiveliness, KernelParameterDirection,
     CppMethodNode, ClientNode, MethodParamNode,
     OnnxModelNode, ModelConfigNode, InputDefNode, OutputDefNode, DeviceNode, OptimizationNode,
-    PipelineNode, PipelineContentNode, StageNode, StageContentNode, StageInputNode, StageOutputNode, StageMethodNode, StageModelNode, StageTopicNode, StageCudaKernelNode, StageOnnxModelNode
+    PipelineNode, PipelineContentNode, StageNode, StageContentNode, StageInputNode, StageOutputNode, StageMethodNode, StageModelNode, StageTopicNode, StageCudaKernelNode, StageOnnxModelNode,
+    StructNode, StructContentNode, StructMemberNode, ClassNode, ClassContentNode, AccessSectionNode, InheritanceNode,
+    EnumNode, EnumContentNode, EnumValueNode, TypedefNode, UsingNode
 )
 
 
@@ -38,6 +40,9 @@ class ASTBuilder:
                 if child.data == 'include_stmt':
                     include_node = self._handle_include(child)
                     self.ast.includes.append(include_node)
+                elif child.data == 'data_structure':
+                    data_structure_node = self._handle_data_structure(child)
+                    self.ast.data_structures.append(data_structure_node)
                 elif child.data == 'node_def':
                     node_node = self._handle_node(child)
                     self.ast.nodes.append(node_node)
@@ -1125,4 +1130,210 @@ class ASTBuilder:
                     return child.value.strip('"')
         if parts:
             return '/'.join(parts)
-        return "" 
+        return ""
+
+    # Data Structure Handling Methods
+    def _handle_data_structure(self, tree: Tree) -> Union[StructNode, ClassNode, EnumNode, TypedefNode, UsingNode]:
+        """Handle data structure definition."""
+        # The first child should be the specific data structure type
+        if tree.children and isinstance(tree.children[0], Tree):
+            child = tree.children[0]
+            if child.data == 'struct_def':
+                return self._handle_struct(child)
+            elif child.data == 'class_def':
+                return self._handle_class(child)
+            elif child.data == 'enum_def':
+                return self._handle_enum(child)
+            elif child.data == 'typedef_def':
+                return self._handle_typedef(child)
+            elif child.data == 'using_def':
+                return self._handle_using(child)
+        
+        # Fallback
+        raise ValueError("Unknown data structure type")
+
+    def _handle_struct(self, tree: Tree) -> StructNode:
+        """Handle struct definition."""
+        struct_name = None
+        struct_content = None
+        
+        for child in tree.children:
+            if isinstance(child, Token) and child.type == 'NAME':
+                struct_name = child.value
+            elif isinstance(child, Tree) and child.data == 'struct_content':
+                struct_content = self._parse_struct_content(child)
+        
+        return StructNode(name=struct_name or "", content=struct_content or StructContentNode())
+
+    def _parse_struct_content(self, content_tree: Tree) -> StructContentNode:
+        """Parse struct content and return StructContentNode."""
+        content = StructContentNode()
+        
+        for child in content_tree.children:
+            if isinstance(child, Tree):
+                if child.data == 'struct_member':
+                    content.members.append(self._handle_struct_member(child))
+                elif child.data == 'cpp_method':
+                    content.methods.append(self._handle_cpp_method(child))
+                elif child.data == 'include_stmt':
+                    content.includes.append(self._handle_include(child))
+        
+        return content
+
+    def _handle_struct_member(self, tree: Tree) -> StructMemberNode:
+        """Handle struct member definition."""
+        member_type = None
+        member_name = None
+        array_spec = None
+        
+        for child in tree.children:
+            if isinstance(child, Tree) and child.data == 'cpp_type':
+                member_type = self._extract_cpp_type(child)
+            elif isinstance(child, Token) and child.type == 'NAME':
+                member_name = child.value
+            elif isinstance(child, Tree) and child.data == 'array_spec':
+                array_spec = self._extract_array_spec(child)
+        
+        return StructMemberNode(type=member_type or "", name=member_name or "", array_spec=array_spec)
+
+    def _extract_array_spec(self, tree: Tree) -> str:
+        """Extract array specification."""
+        if tree.children and isinstance(tree.children[0], Tree) and tree.children[0].data == 'expr':
+            return f"[{self._expr_to_str(tree.children[0])}]"
+        return "[]"
+
+    def _handle_class(self, tree: Tree) -> ClassNode:
+        """Handle class definition."""
+        class_name = None
+        inheritance = None
+        class_content = None
+        
+        for child in tree.children:
+            if isinstance(child, Token) and child.type == 'NAME':
+                class_name = child.value
+            elif isinstance(child, Tree) and child.data == 'inheritance':
+                inheritance = self._handle_inheritance(child)
+            elif isinstance(child, Tree) and child.data == 'class_content':
+                class_content = self._parse_class_content(child)
+        
+        return ClassNode(name=class_name or "", inheritance=inheritance, content=class_content or ClassContentNode())
+
+    def _handle_inheritance(self, tree: Tree) -> InheritanceNode:
+        """Handle inheritance specification."""
+        base_classes = []
+        current_access = "public"  # Default access specifier
+        
+        for child in tree.children:
+            if isinstance(child, Token) and child.type == 'NAME':
+                if child.value in ['public', 'private', 'protected']:
+                    current_access = child.value
+                else:
+                    base_classes.append((current_access, child.value))
+        
+        return InheritanceNode(base_classes=base_classes)
+
+    def _parse_class_content(self, content_tree: Tree) -> ClassContentNode:
+        """Parse class content and return ClassContentNode."""
+        content = ClassContentNode()
+        current_section = None
+        
+        for child in content_tree.children:
+            if isinstance(child, Tree):
+                if child.data == 'access_section':
+                    current_section = self._handle_access_section(child)
+                    content.access_sections.append(current_section)
+                elif child.data == 'struct_member':
+                    content.members.append(self._handle_struct_member(child))
+                elif child.data == 'cpp_method':
+                    content.methods.append(self._handle_cpp_method(child))
+                elif child.data == 'include_stmt':
+                    content.includes.append(self._handle_include(child))
+        
+        return content
+
+    def _handle_access_section(self, tree: Tree) -> AccessSectionNode:
+        """Handle access section (public, private, protected)."""
+        access_specifier = "public"  # Default
+        members = []
+        methods = []
+        
+        for child in tree.children:
+            if isinstance(child, Token) and child.type == 'NAME':
+                if child.value in ['public', 'private', 'protected']:
+                    access_specifier = child.value
+            elif isinstance(child, Tree):
+                if child.data == 'struct_member':
+                    members.append(self._handle_struct_member(child))
+                elif child.data == 'cpp_method':
+                    methods.append(self._handle_cpp_method(child))
+        
+        return AccessSectionNode(access_specifier=access_specifier, members=members, methods=methods)
+
+    def _handle_enum(self, tree: Tree) -> EnumNode:
+        """Handle enum definition."""
+        enum_name = None
+        enum_type = None
+        enum_content = None
+        
+        for child in tree.children:
+            if isinstance(child, Token) and child.type == 'NAME':
+                if child.value in ['class', 'struct']:
+                    enum_type = child.value
+                else:
+                    enum_name = child.value
+            elif isinstance(child, Tree) and child.data == 'enum_content':
+                enum_content = self._parse_enum_content(child)
+        
+        return EnumNode(name=enum_name or "", enum_type=enum_type, content=enum_content or EnumContentNode())
+
+    def _parse_enum_content(self, content_tree: Tree) -> EnumContentNode:
+        """Parse enum content and return EnumContentNode."""
+        content = EnumContentNode()
+        
+        for child in content_tree.children:
+            if isinstance(child, Tree) and child.data == 'enum_value':
+                content.values.append(self._handle_enum_value(child))
+        
+        return content
+
+    def _handle_enum_value(self, tree: Tree) -> EnumValueNode:
+        """Handle enum value definition."""
+        value_name = None
+        value_expr = None
+        
+        for child in tree.children:
+            if isinstance(child, Token) and child.type == 'NAME':
+                value_name = child.value
+            elif isinstance(child, Tree) and child.data == 'expr':
+                value_expr = self._expr_to_str(child)
+        
+        return EnumValueNode(name=value_name or "", value=value_expr)
+
+    def _handle_typedef(self, tree: Tree) -> TypedefNode:
+        """Handle typedef definition."""
+        original_type = None
+        new_name = None
+        
+        for child in tree.children:
+            if isinstance(child, Tree) and child.data == 'cpp_type':
+                original_type = self._extract_cpp_type(child)
+            elif isinstance(child, Token) and child.type == 'NAME':
+                new_name = child.value
+        
+        return TypedefNode(original_type=original_type or "", new_name=new_name or "")
+
+    def _handle_using(self, tree: Tree) -> UsingNode:
+        """Handle using declaration."""
+        name = None
+        type_name = None
+        
+        for child in tree.children:
+            if isinstance(child, Token) and child.type == 'NAME':
+                if name is None:
+                    name = child.value
+                else:
+                    type_name = child.value
+            elif isinstance(child, Tree) and child.data == 'cpp_type':
+                type_name = self._extract_cpp_type(child)
+        
+        return UsingNode(name=name or "", type=type_name or "") 

@@ -5,13 +5,39 @@
 %ignore BLOCK_COMMENT
 %ignore _NL
 
-start: include_stmt* (node_def | cuda_kernels_block | onnx_model | pipeline_def)*
+start: include_stmt* (data_structure | node_def | cuda_kernels_block | onnx_model | pipeline_def)*
 
 // Include statements
 include_stmt: "include" ("<" include_path ">" | STRING)
 include_path: STRING | NAME ("/" NAME)* ("." NAME)?
 
-// Node definitions
+// Data structure definitions
+data_structure: struct_def | class_def | enum_def | typedef_def | using_def
+
+// Struct definitions
+struct_def: "struct" NAME LBRACE struct_content RBRACE
+struct_content: (struct_member | cpp_method | include_stmt)*
+struct_member: cpp_type NAME array_spec? ";"?
+
+// Class definitions
+class_def: "class" NAME inheritance? LBRACE class_content RBRACE
+inheritance: ":" access_specifier? cpp_type (COMMA access_specifier? cpp_type)*
+access_specifier: "public" | "private" | "protected"
+class_content: (access_section | struct_member | cpp_method | include_stmt)*
+access_section: access_specifier ":" (struct_member | cpp_method)*
+
+// Enum definitions
+enum_def: "enum" enum_type? NAME LBRACE enum_content RBRACE
+enum_type: "class" | "struct"
+enum_content: enum_value (COMMA enum_value)* COMMA?
+enum_value: NAME ("=" expr)?
+
+// Type definitions
+typedef_def: "typedef" cpp_type NAME ";"
+using_def: "using" NAME "=" cpp_type ";"
+
+// Array specifications
+array_spec: LSQB expr? RSQB
 node_def: "node" NAME LBRACE node_content RBRACE
 node_content: (parameter | lifecycle | timer | remap | namespace | ros_primitive | flag | cpp_method | kernel_def | onnx_model_ref | cuda_kernels_block | use_kernel)*
 
