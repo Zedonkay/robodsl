@@ -30,8 +30,7 @@ def get_node_paths(project_path: Path, node_name: str) -> tuple[Path, str]:
     return project_path / f"{node_name}.robodsl", node_name
 
 
-def create_robodsl_config(project_path: Path, node_name: str, publishers: List[Dict[str, str]] = None,
-                       subscribers: List[Dict[str, str]] = None) -> None:
+def create_robodsl_config(project_path: Path, node_name: str    ) -> None:
     """Create or update a RoboDSL configuration file for a node.
     
     Args:
@@ -77,17 +76,17 @@ def create_robodsl_config(project_path: Path, node_name: str, publishers: List[D
     else:  # Node exists, update it
         new_node_lines = config_lines[node_start:node_end]
     
-    # Add publishers
-    for pub in (publishers or []):
-        pub_line = f"    publisher {pub['topic']}: \"{pub['msg_type']}\""
-        if not any(pub_line in line for line in new_node_lines):
-            new_node_lines.insert(-1, f"{pub_line}\n")
+    # # Add publishers
+    # for pub in (publishers or []):
+    #     pub_line = f"    publisher {pub['topic']}: \"{pub['msg_type']}\""
+    #     if not any(pub_line in line for line in new_node_lines):
+    #         new_node_lines.insert(-1, f"{pub_line}\n")
     
-    # Add subscribers
-    for sub in (subscribers or []):
-        sub_line = f"    subscriber {sub['topic']}: \"{sub['msg_type']}\""
-        if not any(sub_line in line for line in new_node_lines):
-            new_node_lines.insert(-1, f"{sub_line}\n")
+    # # Add subscribers
+    # for sub in (subscribers or []):
+    #     sub_line = f"    subscriber {sub['topic']}: \"{sub['msg_type']}\""
+    #     if not any(sub_line in line for line in new_node_lines):
+    #         new_node_lines.insert(-1, f"{sub_line}\n")
     
     # Close node if we created it
     if node_start == -1:
@@ -344,64 +343,66 @@ def init(project_name: str, template: str, output_dir: str) -> None:
         
         # Create a comprehensive robodsl file
         (project_path / f"{project_name}.robodsl").write_text(
-            f"# {project_name} RoboDSL Configuration\n\n"
-            "# Project configuration\n"
+            f"// {project_name} RoboDSL Configuration\n\n"
+            "// Project configuration\n"
             f'project_name: {project_name}\n\n'
-            "# Global includes (will be added to all nodes)\n"
-            "#include <rclcpp/rclcpp.hpp>\n"
-            "#include <std_msgs/msg/string.hpp>\n"
-            "#include <sensor_msgs/msg/image.hpp>\n\n"
-            "# Main node configuration\n"
+            "// Global includes (will be added to all nodes)\n"
+            "include <rclcpp/rclcpp.hpp>\n"
+            "include <std_msgs/msg/string.hpp>\n"
+            "include <sensor_msgs/msg/image.hpp>\n\n"
+            "// Main node configuration\n"
             "node main_node {\n"
-            "    # Node namespace (optional)\n"
+            "    // Node namespace (optional)\n"
             f"    namespace: /{project_name}\n\n"
-            "    # Enable lifecycle (default: false)\n"
-            "    # lifecycle: true\n\n"
-            "    # Enable parameter callbacks (default: false)\n"
-            "    # parameter_callbacks: true\n\n"
-            "    # Topic remapping (optional)\n"
-            "    # remap /source_topic /target_topic\n\n"
-            "    # Parameters with different types\n"
-            "    parameter int count: 0\n"
-            "    parameter double rate: 10.0\n"
-            f"    parameter string name: \"{project_name}\"\n"
-            "    parameter bool enabled: true\n\n"
-            "    # Publisher with QoS settings\n"
-            "    publisher /chatter std_msgs/msg/String {\n"
-            "        qos: {\n"
-            "            reliability: reliable\n"
-            "            history: keep_last\n"
+            "    // Enable lifecycle (default: false)\n"
+            "    lifecycle {\n"
+            "        enabled: true\n"
+            "    }\n\n"
+            "    // Enable parameter callbacks (default: false)\n"
+            "    parameter_callbacks: true\n\n"
+            "    // Topic remapping (optional)\n"
+            "    remap /source_topic: /target_topic\n\n"
+            "    // Parameters with different types\n"
+            "    parameter int count = 0\n"
+            "    parameter double rate = 10.0\n"
+            f"    parameter string name = \"{project_name}\"\n"
+            "    parameter bool enabled = true\n\n"
+            "    // Publisher with QoS settings\n"
+            "    publisher /chatter: \"std_msgs/msg/String\" {\n"
+            "        qos {\n"
+            "            reliability: 1\n"
+            "            history: 1\n"
             "            depth: 10\n"
             "        }\n"
             "        queue_size: 10\n"
             "    }\n\n"
-            "    # Subscriber with QoS settings\n"
-            "    subscriber /chatter std_msgs/msg/String {\n"
-            "        qos: {\n"
-            "            reliability: best_effort\n"
-            "            history: keep_last\n"
+            "    // Subscriber with QoS settings\n"
+            "    subscriber /chatter: \"std_msgs/msg/String\" {\n"
+            "        qos {\n"
+            "            reliability: 0\n"
+            "            history: 1\n"
             "            depth: 10\n"
             "        }\n"
             "        queue_size: 10\n"
             "    }\n\n"
-            "    # Timer example (1.0 second period)\n"
-            "    timer my_timer 1.0 on_timer_callback\n"
+            "    // Timer example (1.0 second period)\n"
+            "    timer my_timer: 1.0 {\n"
+            "        callback: on_timer_callback\n"
+            "    }\n"
             "}\n\n"
-            "# CUDA Kernels section\n"
+            "// CUDA Kernels section\n"
             "cuda_kernels {\n"
-            "    # Example vector addition kernel\n"
+            "    // Example vector addition kernel\n"
             "    kernel vector_add {\n"
-            "        # Input parameters\n"
-            "        input float* a\n"
-            "        input float* b\n"
-            "        output float* c\n"
-            "        input int size\n\n"
-            "        # Kernel configuration\n"
-            "        block_size = (256, 1, 1)\n\n"
-            "        # Include additional headers\n"
+            "        // Input parameters\n"
+            "        input: float* a, float* b, int size\n"
+            "        output: float* c\n\n"
+            "        // Kernel configuration\n"
+            "        block_size: (256, 1, 1)\n\n"
+            "        // Include additional headers\n"
             "        include <cuda_runtime.h>\n"
             "        include <device_launch_parameters.h>\n\n"
-            "        # Kernel code\n"
+            "        // Kernel code\n"
             "        code {\n"
             "            __global__ void vector_add(const float* a, const float* b, float* c, int size) {\n"
             "                int i = blockIdx.x * blockDim.x + threadIdx.x;\n"
@@ -412,7 +413,7 @@ def init(project_name: str, template: str, output_dir: str) -> None:
             "        }\n"
             "    }\n"
             "}\n\n"
-            "# For more examples and documentation, see: examples/comprehensive_example.robodsl\n"
+            "// For more examples and documentation, see: examples/comprehensive_example.robodsl\n"
         )
         click.echo(f"Initialized RoboDSL project in {project_path}")
         click.echo(f"Edit {project_name}.robodsl to define your application")
@@ -480,7 +481,7 @@ def generate(input_file: Path, output_dir: Optional[Path], force: bool) -> None:
     CUDA/ROS2 source files, headers, and build configuration.
     """
     try:
-        from robodsl.parser import parse_robodsl
+        from robodsl.parsers import parse_robodsl
         from robodsl.generators.main_generator import MainGenerator
         
         # Set default output directory if not specified
@@ -516,16 +517,15 @@ def generate(input_file: Path, output_dir: Optional[Path], force: bool) -> None:
 
 @main.command()
 @click.argument('node_name')
-@click.option('--publisher', '-p', multiple=True, nargs=2,
-              help='Add a publisher with format: TOPIC MESSAGE_TYPE')
-@click.option('--subscriber', '-s', multiple=True, nargs=2,
-              help='Add a subscriber with format: TOPIC MESSAGE_TYPE')
+# @click.option('--publisher', '-p', multiple=True, nargs=2,
+#               help='Add a publisher with format: TOPIC MESSAGE_TYPE')
+# @click.option('--subscriber', '-s', multiple=True, nargs=2,
+#               help='Add a subscriber with format: TOPIC MESSAGE_TYPE')
 @click.option('--language', '-l', type=click.Choice(['cpp', 'python'], case_sensitive=False),
               default='python', help='Programming language for the node')
 @click.option('--project-dir', type=click.Path(file_okay=False, dir_okay=True, path_type=Path, exists=True),
               default=Path.cwd(), help='Project directory (default: current directory)')
-def add_node(node_name: str, publisher: List[tuple], subscriber: List[tuple], 
-            language: str, project_dir: Path) -> None:
+def add_node(node_name: str, language: str, project_dir: Path) -> None:
     """Add a new node to an existing project.
     
     Node names can use dot notation for subdirectories, e.g., 'sensors.camera'.
@@ -573,10 +573,10 @@ def add_node(node_name: str, publisher: List[tuple], subscriber: List[tuple],
             f.write("  ros__parameters:\n")
             f.write("    param1: value1\n")
     
-    # Create node files
-    create_node_files(project_path, node_name, language, 
-                     [{'topic': p[0], 'msg_type': p[1]} for p in publisher],
-                     [{'topic': s[0], 'msg_type': s[1]} for s in subscriber])
+    # # Create node files
+    # create_node_files(project_path, node_name, language, 
+    #                  [{'topic': p[0], 'msg_type': p[1]} for p in publisher],
+    #                  [{'topic': s[0], 'msg_type': s[1]} for s in subscriber])
     
     # Create launch file
     _create_launch_file_impl(project_path, node_name, language)
@@ -584,9 +584,9 @@ def add_node(node_name: str, publisher: List[tuple], subscriber: List[tuple],
     # Create or update RoboDSL config
     create_robodsl_config(
         project_path,
-        node_name,
-        [{'topic': p[0], 'msg_type': p[1]} for p in publisher],
-        [{'topic': s[0], 'msg_type': s[1]} for s in subscriber]
+        node_name
+ #       , [{'topic': p[0], 'msg_type': p[1]} for p in publisher]
+ #       , [{'topic': s[0], 'msg_type': s[1]} for s in subscriber]
     )
     
     try:
