@@ -43,13 +43,7 @@ class RoboDSLParser:
             SemanticError: If semantic errors are found
         """
         try:
-            # Preprocess content to remove comments
-            # Remove line comments
-            content = re.sub(r'//.*$', '', content, flags=re.MULTILINE)
-            # Remove block comments
-            content = re.sub(r'/\*[\s\S]*?\*/', '', content)
-            
-            # Parse with Lark
+            # Parse with Lark (comments are handled by grammar)
             parse_tree = self.parser.parse(content)
 
             # Build AST
@@ -105,10 +99,7 @@ class RoboDSLParser:
         issues = []
         ast = None
         try:
-            # Preprocess content to remove comments
-            content = re.sub(r'//.*$', '', content, flags=re.MULTILINE)
-            content = re.sub(r'/\*[\s\S]*?\*/', '', content)
-            # Parse with Lark
+            # Parse with Lark (comments are handled by grammar)
             parse_tree = self.parser.parse(content)
             # Build AST
             ast = self.ast_builder.build(parse_tree)

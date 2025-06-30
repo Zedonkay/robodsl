@@ -16,6 +16,9 @@
             "include": "#onnx-model"
         },
         {
+            "include": "#pipeline-definition"
+        },
+        {
             "include": "#comments"
         },
         {
@@ -47,36 +50,6 @@
         },
         {
             "include": "#values"
-        },
-        {
-            "include": "#pipeline-definition"
-        },
-        {
-            "include": "#stage-definition"
-        },
-        {
-            "include": "#stage-content"
-        },
-        {
-            "include": "#stage-input"
-        },
-        {
-            "include": "#stage-output"
-        },
-        {
-            "include": "#stage-method"
-        },
-        {
-            "include": "#stage-model"
-        },
-        {
-            "include": "#stage-topic"
-        },
-        {
-            "include": "#stage-cuda-kernel"
-        },
-        {
-            "include": "#stage-onnx-model"
         },
         {
             "include": "#onnx-input-def"
@@ -145,14 +118,15 @@
         },
         "node-definition": {
             "name": "meta.node-definition.robodsl",
-            "begin": "\\b(node)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+            "begin": "\\b(node)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*(\\{)",
             "end": "\\}",
             "beginCaptures": {
                 "1": { "name": "keyword.control.robodsl" },
-                "2": { "name": "entity.name.class.robodsl" }
+                "2": { "name": "entity.name.class.robodsl" },
+                "3": { "name": "punctuation.section.block.begin" }
             },
             "endCaptures": {
-                "0": { "name": "punctuation.section.block.end.robodsl" }
+                "0": { "name": "punctuation.section.block.end" }
             },
             "patterns": [
                 {
@@ -160,6 +134,9 @@
                 },
                 {
                     "include": "#comments"
+                },
+                {
+                    "include": "#nested-dicts"
                 }
             ]
         },
@@ -197,6 +174,9 @@
                 },
                 {
                     "include": "#ros-primitives"
+                },
+                {
+                    "include": "#qos-block"
                 }
             ]
         },
@@ -219,14 +199,24 @@
         },
         "lifecycle": {
             "name": "meta.lifecycle.robodsl",
-            "begin": "\\b(lifecycle)\\s*\\{",
+            "begin": "\\b(lifecycle)\\s*(\\{)",
             "end": "\\}",
             "beginCaptures": {
-                "1": { "name": "keyword.control.robodsl" }
+                "1": { "name": "keyword.control.robodsl" },
+                "2": { "name": "punctuation.section.block.begin" }
+            },
+            "endCaptures": {
+                "0": { "name": "punctuation.section.block.end" }
             },
             "patterns": [
                 {
                     "include": "#lifecycle-settings"
+                },
+                {
+                    "include": "#comments"
+                },
+                {
+                    "include": "#nested-dicts"
                 }
             ]
         },
@@ -244,10 +234,12 @@
         },
         "timer": {
             "name": "meta.timer.robodsl",
-            "match": "\\b(timer)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*:",
+            "match": "\\b(timer)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*:\\s*([0-9]+(\\.[0-9]+)?|\"[^\"]*\")?",
             "captures": {
                 "1": { "name": "keyword.control.robodsl" },
-                "2": { "name": "variable.other.robodsl" }
+                "2": { "name": "variable.other.robodsl" },
+                "3": { "name": "constant.numeric.robodsl" },
+                "4": { "name": "string.quoted.robodsl" }
             }
         },
         "remap": {
@@ -276,15 +268,20 @@
         },
         "cpp-method": {
             "name": "meta.cpp-method.robodsl",
-            "begin": "\\b(method)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\{",
+            "begin": "\\b(method)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*(\\{)",
             "end": "\\}",
             "beginCaptures": {
                 "1": { "name": "keyword.control.robodsl" },
-                "2": { "name": "entity.name.function.robodsl" }
+                "2": { "name": "entity.name.function.robodsl" },
+                "3": { "name": "punctuation.section.block.begin" }
+            },
+            "endCaptures": {
+                "0": { "name": "punctuation.section.block.end" }
             },
             "patterns": [
                 { "include": "#comments" },
-                { "include": "#method-content" }
+                { "include": "#method-content" },
+                { "include": "#nested-dicts" }
             ]
         },
         "method-content": {
@@ -297,10 +294,14 @@
         },
         "code-block-cpp": {
             "name": "meta.code-block.cpp.robodsl",
-            "begin": "\\b(code)\\s*:?\\s*\\{",
+            "begin": "\\b(code)\\s*:?\\s*(\\{)",
             "end": "\\}",
             "beginCaptures": {
-                "1": { "name": "keyword.control.robodsl" }
+                "1": { "name": "keyword.control.robodsl" },
+                "2": { "name": "punctuation.section.block.begin" }
+            },
+            "endCaptures": {
+                "0": { "name": "punctuation.section.block.end" }
             },
             "patterns": [
                 { "name": "source.cpp.embedded.robodsl", "begin": "", "end": "", "patterns": [ { "include": "source.cpp" } ] }
@@ -409,10 +410,14 @@
         },
         "cuda-kernels-block": {
             "name": "meta.cuda-kernels-block.robodsl",
-            "begin": "\\b(cuda_kernels)\\s*\\{",
+            "begin": "\\b(cuda_kernels)\\s*(\\{)",
             "end": "\\}",
             "beginCaptures": {
-                "1": { "name": "keyword.control.robodsl" }
+                "1": { "name": "keyword.control.robodsl" },
+                "2": { "name": "punctuation.section.block.begin" }
+            },
+            "endCaptures": {
+                "0": { "name": "punctuation.section.block.end" }
             },
             "patterns": [
                 {
@@ -420,20 +425,28 @@
                 },
                 {
                     "include": "#comments"
+                },
+                {
+                    "include": "#nested-dicts"
                 }
             ]
         },
         "kernel-definition": {
             "name": "meta.kernel-definition.robodsl",
-            "begin": "\\b(kernel)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\{",
+            "begin": "\\b(kernel)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*(\\{)",
             "end": "\\}",
             "beginCaptures": {
                 "1": { "name": "keyword.control.robodsl" },
-                "2": { "name": "entity.name.function.robodsl" }
+                "2": { "name": "entity.name.function.robodsl" },
+                "3": { "name": "punctuation.section.block.begin" }
+            },
+            "endCaptures": {
+                "0": { "name": "punctuation.section.block.end" }
             },
             "patterns": [
                 { "include": "#comments" },
-                { "include": "#kernel-content" }
+                { "include": "#kernel-content" },
+                { "include": "#nested-dicts" }
             ]
         },
         "kernel-content": {
@@ -449,10 +462,14 @@
         },
         "code-block-cuda": {
             "name": "meta.code-block.cuda.robodsl",
-            "begin": "\\b(code)\\s*:?\\s*\\{",
+            "begin": "\\b(code)\\s*:?\\s*(\\{)",
             "end": "\\}",
             "beginCaptures": {
-                "1": { "name": "keyword.control.robodsl" }
+                "1": { "name": "keyword.control.robodsl" },
+                "2": { "name": "punctuation.section.block.begin" }
+            },
+            "endCaptures": {
+                "0": { "name": "punctuation.section.block.end" }
             },
             "patterns": [
                 { "name": "source.cuda-c++.embedded.robodsl", "begin": "", "end": "", "patterns": [ { "include": "source.cuda-c++" } ] }
@@ -570,6 +587,14 @@
                 {
                     "name": "variable.other.robodsl",
                     "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)*\\b"
+                },
+                {
+                    "name": "punctuation.section.parens.begin",
+                    "match": "\\("
+                },
+                {
+                    "name": "punctuation.section.parens.end",
+                    "match": "\\)"
                 }
             ]
         },
@@ -587,6 +612,12 @@
             "name": "meta.array.robodsl",
             "begin": "\\[",
             "end": "\\]",
+            "beginCaptures": {
+                "0": { "name": "punctuation.section.bracket.begin" }
+            },
+            "endCaptures": {
+                "0": { "name": "punctuation.section.bracket.end" }
+            },
             "patterns": [
                 {
                     "include": "#expressions"
@@ -603,9 +634,30 @@
             "name": "meta.nested-dict.robodsl",
             "begin": "\\{",
             "end": "\\}",
+            "beginCaptures": {
+                "0": { "name": "punctuation.section.block.begin" }
+            },
+            "endCaptures": {
+                "0": { "name": "punctuation.section.block.end" }
+            },
             "patterns": [
                 {
                     "include": "#dict-items"
+                },
+                {
+                    "include": "#nested-dicts"
+                },
+                {
+                    "include": "#comments"
+                },
+                {
+                    "include": "#strings"
+                },
+                {
+                    "include": "#numbers"
+                },
+                {
+                    "include": "#expressions"
                 }
             ]
         },
@@ -646,11 +698,15 @@
         },
         "onnx-model": {
             "name": "meta.onnx-model.robodsl",
-            "begin": "\\b(onnx_model)\\s+\\\"([^\"]+)\\\"\\s*\\{",
+            "begin": "\\b(onnx_model)\\s+\\\"([^\"]+)\\\"\\s*(\\{)",
             "end": "\\}",
             "beginCaptures": {
                 "1": { "name": "keyword.control.robodsl" },
-                "2": { "name": "string.quoted.double.robodsl" }
+                "2": { "name": "string.quoted.double.robodsl" },
+                "3": { "name": "punctuation.section.block.begin" }
+            },
+            "endCaptures": {
+                "0": { "name": "punctuation.section.block.end" }
             },
             "patterns": [
                 {
@@ -658,6 +714,9 @@
                 },
                 {
                     "include": "#comments"
+                },
+                {
+                    "include": "#nested-dicts"
                 }
             ]
         },
@@ -679,20 +738,20 @@
         },
         "onnx-input-def": {
             "name": "meta.onnx-input-def.robodsl",
-            "match": "\\b(input)\\s*:\\s*([\"'][^\"']*[\"']|[a-zA-Z_][a-zA-Z0-9_]*)\\s*->\\s*([\"'][^\"']*[\"']|[a-zA-Z_][a-zA-Z0-9_]*)",
+            "match": "\\b(input)\\s*:\\s*([a-zA-Z_][a-zA-Z0-9_]*)\\s*->\\s*([a-zA-Z_][a-zA-Z0-9_]*)",
             "captures": {
                 "1": { "name": "keyword.control.robodsl" },
-                "2": { "name": "string.quoted.robodsl" },
-                "3": { "name": "string.quoted.robodsl" }
+                "2": { "name": "variable.parameter.robodsl" },
+                "3": { "name": "variable.parameter.robodsl" }
             }
         },
         "onnx-output-def": {
             "name": "meta.onnx-output-def.robodsl",
-            "match": "\\b(output)\\s*:\\s*([\"'][^\"']*[\"']|[a-zA-Z_][a-zA-Z0-9_]*)\\s*->\\s*([\"'][^\"']*[\"']|[a-zA-Z_][a-zA-Z0-9_]*)",
+            "match": "\\b(output)\\s*:\\s*([a-zA-Z_][a-zA-Z0-9_]*)\\s*->\\s*([a-zA-Z_][a-zA-Z0-9_]*)",
             "captures": {
                 "1": { "name": "keyword.control.robodsl" },
-                "2": { "name": "string.quoted.robodsl" },
-                "3": { "name": "string.quoted.robodsl" }
+                "2": { "name": "variable.parameter.robodsl" },
+                "3": { "name": "variable.parameter.robodsl" }
             }
         },
         "onnx-device": {
@@ -713,14 +772,19 @@
         },
         "qos-block": {
             "name": "meta.qos-block.robodsl",
-            "begin": "\\b(qos)\\s*:\\s*\\{",
+            "begin": "\\b(qos)\\s*:\\s*(\\{)",
             "end": "\\}",
             "beginCaptures": {
-                "1": { "name": "keyword.control.robodsl" }
+                "1": { "name": "keyword.control.robodsl" },
+                "2": { "name": "punctuation.section.block.begin" }
+            },
+            "endCaptures": {
+                "0": { "name": "punctuation.section.block.end" }
             },
             "patterns": [
                 { "include": "#qos-settings" },
-                { "include": "#comments" }
+                { "include": "#comments" },
+                { "include": "#nested-dicts" }
             ]
         },
         "queue-size": {
@@ -749,28 +813,38 @@
         },
         "pipeline-definition": {
             "name": "meta.pipeline-definition.robodsl",
-            "begin": "\\b(pipeline)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+            "begin": "\\b(pipeline)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*(\\{)",
             "end": "\\}",
             "beginCaptures": {
                 "1": { "name": "keyword.control.robodsl" },
-                "2": { "name": "entity.name.class.robodsl" }
+                "2": { "name": "entity.name.class.robodsl" },
+                "3": { "name": "punctuation.section.block.begin" }
+            },
+            "endCaptures": {
+                "0": { "name": "punctuation.section.block.end" }
             },
             "patterns": [
                 { "include": "#stage-definition" },
-                { "include": "#comments" }
+                { "include": "#comments" },
+                { "include": "#nested-dicts" }
             ]
         },
         "stage-definition": {
             "name": "meta.stage-definition.robodsl",
-            "begin": "\\b(stage)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+            "begin": "\\b(stage)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*(\\{)",
             "end": "\\}",
             "beginCaptures": {
                 "1": { "name": "keyword.control.robodsl" },
-                "2": { "name": "entity.name.function.robodsl" }
+                "2": { "name": "entity.name.function.robodsl" },
+                "3": { "name": "punctuation.section.block.begin" }
+            },
+            "endCaptures": {
+                "0": { "name": "punctuation.section.block.end" }
             },
             "patterns": [
                 { "include": "#stage-content" },
-                { "include": "#comments" }
+                { "include": "#comments" },
+                { "include": "#nested-dicts" }
             ]
         },
         "stage-content": {

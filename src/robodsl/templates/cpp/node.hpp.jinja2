@@ -27,19 +27,21 @@
 {% endfor %}
 {% endif %}
 
-{% if cuda_includes %}
-// CUDA includes
-{% for include in cuda_includes %}
-{{ include }}
-{% endfor %}
-{% endif %}
-
 {% if namespace %}
 namespace {{ namespace }} {
 {% endif %}
 
 class {{ class_name }} : public {{ base_class }} {
 public:
+    // Referenced global CUDA kernels
+    {% if referenced_kernels %}
+    /**
+     * Referenced global CUDA kernels:
+     * {% for k in referenced_kernels %}
+     *   - {{ k }}
+     * {% endfor %}
+     */
+    {% endif %}
     explicit {{ class_name }}(const rclcpp::NodeOptions& options = rclcpp::NodeOptions());
     ~{{ class_name }}() override;
 
@@ -140,6 +142,12 @@ public:
         {%- endfor -%}
     );
     {% endfor %}
+    {% if cuda_kernels|selectattr('use_thrust')|list %}
+    // NOTE: This node uses Thrust algorithms in at least one CUDA kernel.
+    #include <thrust/device_vector.h>
+    #include <thrust/transform.h>
+    #include <thrust/functional.h>
+    {% endif %}
     {% endif %}
 
     // User-defined C++ methods

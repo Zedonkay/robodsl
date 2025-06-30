@@ -219,7 +219,9 @@ class MethodParamNode(ASTNode):
 
 @dataclass
 class NodeContentNode(ASTNode):
-    """Node content node."""
+    """Node content node.
+    - used_kernels: List of names of referenced global CUDA kernels (via use_kernel)
+    """
     parameters: List[ParameterNode] = field(default_factory=list)
     lifecycle: Optional[LifecycleNode] = None
     timers: List[TimerNode] = field(default_factory=list)
@@ -234,6 +236,7 @@ class NodeContentNode(ASTNode):
     cpp_methods: List[CppMethodNode] = field(default_factory=list)
     cuda_kernels: List['KernelNode'] = field(default_factory=list)
     onnx_models: List['OnnxModelNode'] = field(default_factory=list)  # ONNX models within nodes
+    used_kernels: List[str] = field(default_factory=list)  # Referenced global CUDA kernels
 
 
 @dataclass
@@ -262,7 +265,7 @@ class KernelContentNode(ASTNode):
     use_thrust: bool = False
     parameters: List[KernelParamNode] = field(default_factory=list)
     code: str = ""
-    includes: List[str] = field(default_factory=list)
+    cuda_includes: List[str] = field(default_factory=list)
     defines: Dict[str, str] = field(default_factory=dict)
 
 

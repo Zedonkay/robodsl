@@ -13,7 +13,7 @@ include_path: STRING | NAME ("/" NAME)* ("." NAME)?
 
 // Node definitions
 node_def: "node" NAME LBRACE node_content RBRACE
-node_content: (parameter | lifecycle | timer | remap | namespace | ros_primitive | flag | cpp_method | kernel_def | onnx_model_ref | cuda_kernels_block)*
+node_content: (parameter | lifecycle | timer | remap | namespace | ros_primitive | flag | cpp_method | kernel_def | onnx_model_ref | cuda_kernels_block | use_kernel)*
 
 // Pipeline definitions (Phase 4) - Enhanced with CUDA/ONNX integration
 pipeline_def: "pipeline" NAME LBRACE pipeline_content RBRACE
@@ -179,3 +179,6 @@ qos_setting: NAME ":" expr
 
 // Add this to the terminals section near STRING:
 TOPIC_TYPE_STRING: /"[a-zA-Z0-9_\/]+"/
+
+// Reference to a global CUDA kernel by name
+use_kernel: "use_kernel" ":" STRING

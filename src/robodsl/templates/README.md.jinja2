@@ -1,0 +1,67 @@
+# {{ package_name }}
+
+{{ description }}
+
+## Overview
+
+This package contains {{ node_count }} ROS2 nodes{% if has_cuda %} and {{ cuda_kernel_count }} CUDA kernels{% endif %}.
+
+## Package Structure
+
+```
+{{ file_tree }}
+```
+
+## Nodes
+
+{% for node in nodes %}
+### {{ node.name }}
+
+- **Type**: {% if node.is_lifecycle %}Lifecycle Node{% else %}Standard Node{% endif %}
+- **Publishers**: {{ node.publishers }}
+- **Subscribers**: {{ node.subscribers }}
+- **Services**: {{ node.services }}
+- **Actions**: {{ node.actions }}
+- **Timers**: {{ node.timers }}
+- **Parameters**: {{ node.parameters }}
+{% if node.cuda_kernels > 0 %}- **CUDA Kernels**: {{ node.cuda_kernels }}{% endif %}
+
+{% endfor %}
+
+{% if standalone_kernels %}
+## Standalone CUDA Kernels
+
+{% for kernel in standalone_kernels %}
+### {{ kernel.name }}
+
+- **Parameters**: {{ kernel.parameters }}
+- **Block Size**: {{ kernel.block_size }}
+- **Use Thrust**: {{ kernel.use_thrust }}
+
+{% endfor %}
+{% endif %}
+
+## Building
+
+```bash
+colcon build
+```
+
+## Running
+
+```bash
+# Source the workspace
+source install/setup.bash
+
+# Launch all nodes
+ros2 launch {{ package_name }} {{ package_name }}_launch.py
+
+# Or launch individual nodes
+{% for node in nodes %}
+ros2 launch {{ package_name }} {{ node.name }}_launch.py
+{% endfor %}
+```
+
+## License
+
+Apache-2.0 
