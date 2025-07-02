@@ -143,7 +143,7 @@ class TestAdvancedCppMethodFeatures:
     def test_complex_cpp_methods(self):
         """Test complex C++ methods with various parameter types."""
         content = """
-        node test_node {
+        node test_node_1 {
             method complex_processing {
                 input: int data_size
                 input: float* input_data (data_size)
@@ -343,7 +343,7 @@ class TestSemanticValidation:
     def test_duplicate_parameter_names(self):
         """Test semantic validation for duplicate parameter names."""
         dsl_code = """
-        node test_node {
+        node test_node_1 {
             parameter int test_param = 42
             parameter int test_param = 43  // Duplicate name
         }
@@ -358,7 +358,7 @@ class TestSemanticValidation:
     def test_duplicate_timer_names(self):
         """Test detection of duplicate timer names."""
         content = """
-        node test_node {
+        node test_node_1 {
             timer my_timer: 1.0
             timer my_timer: 2.0  // Duplicate name
         }
@@ -372,7 +372,7 @@ class TestSemanticValidation:
     def test_duplicate_publisher_topics(self):
         """Test detection of duplicate publisher topics."""
         content = """
-        node test_node {
+        node test_node_1 {
             publisher /test_topic : "std_msgs/String"
             publisher /test_topic : "std_msgs/Int32"  // Duplicate topic
         }
@@ -386,7 +386,7 @@ class TestSemanticValidation:
     def test_duplicate_subscriber_topics(self):
         """Test detection of duplicate subscriber topics."""
         content = """
-        node test_node {
+        node test_node_1 {
             subscriber /test_topic : "std_msgs/String"
             subscriber /test_topic : "std_msgs/Int32"  // Duplicate topic
         }
@@ -400,7 +400,7 @@ class TestSemanticValidation:
     def test_duplicate_service_names(self):
         """Test detection of duplicate service names."""
         content = """
-        node test_node {
+        node test_node_1 {
             service /test_service : "std_srvs/Empty"
             service /test_service : "std_srvs/Trigger"  // Duplicate service
         }
@@ -414,7 +414,7 @@ class TestSemanticValidation:
     def test_duplicate_action_names(self):
         """Test detection of duplicate action names."""
         content = """
-        node test_node {
+        node test_node_1 {
             action /test_action : "test_msgs/TestAction"
             action /test_action : "test_msgs/TestAction2"  // Duplicate action
         }
@@ -428,7 +428,7 @@ class TestSemanticValidation:
     def test_duplicate_client_names(self):
         """Test detection of duplicate client names."""
         content = """
-        node test_node {
+        node test_node_1 {
             client /test_client : "std_srvs/Empty"
             client /test_client : "std_srvs/Trigger"  // Duplicate client
         }
@@ -442,7 +442,7 @@ class TestSemanticValidation:
     def test_duplicate_flag_names(self):
         """Test detection of duplicate flag names."""
         content = """
-        node test_node {
+        node test_node_1 {
             flag test_flag: true
             flag test_flag: false  // Duplicate flag
         }
@@ -456,7 +456,7 @@ class TestSemanticValidation:
     def test_duplicate_method_names(self):
         """Test detection of duplicate method names."""
         content = """
-        node test_node {
+        node test_node_1 {
             method test_method {
                 input: int x
                 code: {
@@ -506,7 +506,7 @@ class TestSemanticValidation:
     def test_invalid_qos_values(self):
         """Test detection of invalid QoS values."""
         content = """
-        node test_node {
+        node test_node_1 {
             publisher /test_topic: "std_msgs/msg/String" {
                 qos {
                     reliability: invalid_value
@@ -526,7 +526,7 @@ class TestSemanticValidation:
     def test_invalid_timer_period(self):
         """Test detection of invalid timer period."""
         content = """
-        node test_node {
+        node test_node_1 {
             timer my_timer: -1.0  // Invalid negative period
         }
         """
@@ -554,7 +554,7 @@ class TestSemanticValidation:
         with pytest.raises(SemanticError) as exc_info:
             parse_robodsl(content)
         
-        assert "block size dimension 0 cannot be zero" in str(exc_info.value)
+        assert "block size dimension 0 must be a positive integer" in str(exc_info.value)
 
 
 class TestEdgeCases:
@@ -594,7 +594,7 @@ class TestEdgeCases:
     def test_very_large_values(self):
         """Test handling of very large numeric values."""
         dsl_code = """
-        node test_node {
+        node test_node_1 {
             parameter int large_int = 999999999999999999
             parameter float large_float = 3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679
             parameter float small_float = 0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001
@@ -619,7 +619,7 @@ class TestEdgeCases:
     def test_unicode_strings(self):
         """Test handling of unicode strings."""
         dsl_code = """
-        node test_node {
+        node test_node_1 {
             parameter string japanese = "こんにちは世界"
             parameter string chinese = "你好世界"
             parameter string emoji = "🚀🤖💻"
@@ -649,7 +649,7 @@ class TestEdgeCases:
     def test_nested_arrays_and_dicts(self):
         """Test handling of nested arrays and dictionaries."""
         dsl_code = """
-        node test_node {
+        node test_node_1 {
             parameter list nested_array = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
             parameter dict nested_dict = {
                 level1: {
@@ -688,7 +688,7 @@ class TestEdgeCases:
     def test_method_with_no_parameters(self):
         """Test parsing of a method with no input/output parameters."""
         content = """
-        node test_node {
+        node test_node_1 {
             method no_params {
                 code: {
                     std::cout << 'Hello, World!' << std::endl;
@@ -773,7 +773,7 @@ class TestPerformance:
     
     def test_large_number_of_parameters(self):
         """Test parsing with a large number of parameters."""
-        dsl_code = "node test_node {\n"
+        dsl_code = "node test_node_1 {\n"
         for i in range(100):
             dsl_code += f"    parameter int param_{i} = {i}\n"
         dsl_code += "}"
@@ -807,7 +807,7 @@ class TestPerformance:
         """Test parsing with large code blocks."""
         large_code = "int x = 0;\\n" * 1000
         content = f"""
-        node test_node {{
+        node test_node_1 {{
             method large_method {{
                 input: int size
                 code: {{

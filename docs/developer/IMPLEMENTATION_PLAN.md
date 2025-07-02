@@ -268,17 +268,17 @@ Allow organizations (e.g., CMU Racing) to expose a Linux GPU server on the local
 ### 🧪 Tasks
 
    #### Cloud Support
-   - [x] Create `robodsl cloud deploy`, `start`, `stop`, `connect` CLI
-   - [x] Terraform + Docker setup for AWS/GCP GPU VMs
-   - [x] Install CUDA, ROS2, RoboDSL toolchain on startup
-   - [x] Add VSCode Web + Jupyter + Terminal support
-   - [x] Add GPU availability check + usage monitoring
+   - [ ] Create `robodsl cloud deploy`, `start`, `stop`, `connect` CLI
+   - [ ] Terraform + Docker setup for AWS/GCP GPU VMs
+   - [ ] Install CUDA, ROS2, RoboDSL toolchain on startup
+   - [ ] Add VSCode Web + Jupyter + Terminal support
+   - [ ] Add GPU availability check + usage monitoring
 
    #### Local Server Support
-   - [x] `robodsl host init` to set up server
-   - [x] Launch `code-server` or VSCode Remote
-   - [x] Integrate graphical support via X11/VNC/WebRTC
-   - [x] Add auth + sandboxing for multiple users
+   - [ ] `robodsl host init` to set up server
+   - [ ] Launch `code-server` or VSCode Remote
+   - [ ] Integrate graphical support via X11/VNC/WebRTC
+   - [ ] Add auth + sandboxing for multiple users
 
 
 

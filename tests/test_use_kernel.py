@@ -34,7 +34,7 @@ class TestUseKernelSyntax:
             }
         }
 
-        node test_node {
+        node test_node_1 {
             use_kernel: "test_kernel"
             parameter int input_size = 1024
             publisher /test/output: "std_msgs/Float32MultiArray"
@@ -54,7 +54,7 @@ class TestUseKernelSyntax:
         # Check that the node was parsed with used_kernels
         assert len(ast.nodes) == 1
         node = ast.nodes[0]
-        assert node.name == "test_node"
+        assert node.name == "test_node_1"
         assert hasattr(node.content, 'used_kernels')
         assert len(node.content.used_kernels) == 1
         assert node.content.used_kernels[0] == "test_kernel"
@@ -224,7 +224,7 @@ class TestUseKernelSyntax:
             }
         }
 
-        node test_node {
+        node test_node_1 {
             use_kernel: "test_kernel"
             parameter int input_size = 1024
             publisher /test/output: "std_msgs/Float32MultiArray"
@@ -274,7 +274,7 @@ class TestUseKernelSyntax:
     def test_use_kernel_nonexistent_kernel(self):
         """Test that referencing a non-existent kernel doesn't break parsing."""
         robodsl_code = """
-        node test_node {
+        node test_node_2 {
             use_kernel: "nonexistent_kernel"
             parameter int input_size = 1024
             publisher /test/output: "std_msgs/Float32MultiArray"
@@ -287,7 +287,7 @@ class TestUseKernelSyntax:
         
         assert len(ast.nodes) == 1
         node = ast.nodes[0]
-        assert node.name == "test_node"
+        assert node.name == "test_node_2"
         assert len(node.content.used_kernels) == 1
         assert node.content.used_kernels[0] == "nonexistent_kernel"
 
@@ -328,7 +328,7 @@ class TestUseKernelSyntax:
             }
         }
 
-        node test_node {
+        node test_node_3 {
             use_kernel: "no_thrust_kernel"
             use_kernel: "thrust_kernel"
             parameter int input_size = 1024
@@ -382,7 +382,7 @@ class TestUseKernelSyntax:
             }
         }
 
-        node test_node {
+        node test_node_4 {
             use_kernel: "kernel1"
             use_kernel: "kernel1"
             parameter int input_size = 1024
@@ -430,7 +430,7 @@ class TestUseKernelSyntax:
             }
         }
 
-        node test_node {
+        node test_node_5 {
             use_kernel: "pipeline_kernel"
             parameter int input_size = 1024
             publisher /test/output: "std_msgs/Float32MultiArray"

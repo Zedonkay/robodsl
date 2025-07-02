@@ -57,15 +57,31 @@ class LaunchGenerator(BaseGenerator):
         """Generate a launch file for a single node."""
         context = self._prepare_node_launch_context(node)
         
+        # Determine subdirectory structure based on node name
+        # For subnodes like "sensors.camera", create "launch/sensors/camera.launch.py"
+        subdir = ""
+        filename = f'{node.name}.launch.py'
+        if '.' in node.name:
+            parts = node.name.split('.')
+            if len(parts) > 1:
+                subdir = '/'.join(parts[:-1])
+                filename = f'{parts[-1]}.launch.py'
+        
         try:
             content = self.render_template('node.launch.py.jinja2', context)
-            launch_path = self.get_output_path('launch', f'{node.name}_launch.py')
+            if subdir:
+                launch_path = self.get_output_path('launch', subdir, filename)
+            else:
+                launch_path = self.get_output_path('launch', filename)
             return self.write_file(launch_path, content)
         except Exception as e:
             print(f"Template error for node {node.name} launch: {e}")
             # Fallback to simple node launch
             content = self._generate_fallback_node_launch(node)
-            launch_path = self.get_output_path('launch', f'{node.name}_launch.py')
+            if subdir:
+                launch_path = self.get_output_path('launch', subdir, filename)
+            else:
+                launch_path = self.get_output_path('launch', filename)
             return self.write_file(launch_path, content)
     
     def _prepare_main_launch_context(self, ast: RoboDSLAST) -> Dict[str, Any]:

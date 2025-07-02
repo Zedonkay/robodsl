@@ -27,7 +27,7 @@ class CppNodeGenerator(BaseGenerator):
         generated_files = []
         
         # Create output directories
-        (self.output_dir / 'include' / 'robodsl').mkdir(parents=True, exist_ok=True)
+        (self.output_dir / 'include').mkdir(parents=True, exist_ok=True)
         (self.output_dir / 'src').mkdir(exist_ok=True)
         
         # Generate files for each node
@@ -43,30 +43,62 @@ class CppNodeGenerator(BaseGenerator):
         """Generate a C++ header file for a ROS2 node."""
         context = self._prepare_node_context(node)
         
+        # Determine subdirectory structure based on node name
+        # For subnodes like "robot.sensors.camera.depth", create "include/robot/sensors/camera/depth_node.hpp"
+        subdir = ""
+        if '.' in node.name:
+            # Extract the directory part (everything before the last dot)
+            parts = node.name.split('.')
+            if len(parts) > 1:
+                subdir = '/'.join(parts[:-1])  # All parts except the last one
+        
         try:
             content = self.render_template('node.hpp.jinja2', context)
-            header_path = self.get_output_path('include', f'{node.name}_node.hpp')
+            # Create flat structure - subnodes are CLI-only for organization
+            if subdir:
+                # Use the base name (last part after dot) for flat structure
+                header_path = self.get_output_path('include', f'{node.name.split(".")[-1]}_node.hpp')
+            else:
+                header_path = self.get_output_path('include', f'{node.name}_node.hpp')
             return self.write_file(header_path, content)
         except Exception as e:
             print(f"Template error for node {node.name}: {e}")
             # Fallback to simple header
             content = f"// Generated header for {node.name}\n"
-            header_path = self.get_output_path('include', f'{node.name}_node.hpp')
+            if subdir:
+                header_path = self.get_output_path('include', f'{node.name.split(".")[-1]}_node.hpp')
+            else:
+                header_path = self.get_output_path('include', f'{node.name}_node.hpp')
             return self.write_file(header_path, content)
     
     def _generate_node_source(self, node: NodeNode) -> Path:
         """Generate a C++ source file for a ROS2 node."""
         context = self._prepare_node_context(node)
         
+        # Determine subdirectory structure based on node name
+        # For subnodes like "robot.sensors.camera.depth", create "src/robot/sensors/camera/depth_node.cpp"
+        subdir = ""
+        if '.' in node.name:
+            # Extract the directory part (everything before the last dot)
+            parts = node.name.split('.')
+            if len(parts) > 1:
+                subdir = '/'.join(parts[:-1])  # All parts except the last one
+        
         try:
             content = self.render_template('node.cpp.jinja2', context)
-            source_path = self.get_output_path('src', f'{node.name}_node.cpp')
+            if subdir:
+                source_path = self.get_output_path('src', subdir, f'{node.name.split(".")[-1]}_node.cpp')
+            else:
+                source_path = self.get_output_path('src', f'{node.name}_node.cpp')
             return self.write_file(source_path, content)
         except Exception as e:
             print(f"Template error for node {node.name}: {e}")
             # Fallback to simple source
             content = f"// Generated source for {node.name}\n"
-            source_path = self.get_output_path('src', f'{node.name}_node.cpp')
+            if subdir:
+                source_path = self.get_output_path('src', subdir, f'{node.name.split(".")[-1]}_node.cpp')
+            else:
+                source_path = self.get_output_path('src', f'{node.name}_node.cpp')
             return self.write_file(source_path, content)
     
     def _prepare_node_context(self, node: NodeNode) -> Dict[str, Any]:

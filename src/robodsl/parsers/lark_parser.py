@@ -65,7 +65,18 @@ class RoboDSLParser:
             
         except ParseError as e:
             # Provide better error messages for parse errors
-            raise ParseError(f"Parse error: {str(e)}")
+            error_str = str(e)
+            
+            # Check if this is a subnode syntax error
+            if "Unexpected token" in error_str and "." in error_str and "NODE_NAME" in error_str:
+                raise ParseError(
+                    "Subnodes with dots (.) are not allowed in RoboDSL code. "
+                    "Subnodes are a CLI-only feature for organizing files. "
+                    "Use a simple node name without dots, or create subnodes using the CLI command: "
+                    "'robodsl create-node <node_name>'"
+                )
+            
+            raise ParseError(f"Parse error: {error_str}")
         except SemanticError as e:
             # Re-raise semantic errors as-is
             raise e

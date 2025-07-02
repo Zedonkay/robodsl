@@ -176,8 +176,8 @@ class SubscriberNode(ASTNode):
 
 
 @dataclass
-class ServiceNode(ASTNode):
-    """Service node."""
+class ServicePrimitiveNode(ASTNode):
+    """Service primitive node."""
     service: str
     srv_type: str
     qos: Optional[QoSNode]
@@ -230,7 +230,7 @@ class NodeContentNode(ASTNode):
     flags: List[FlagNode] = field(default_factory=list)
     publishers: List[PublisherNode] = field(default_factory=list)
     subscribers: List[SubscriberNode] = field(default_factory=list)
-    services: List[ServiceNode] = field(default_factory=list)
+    services: List[ServicePrimitiveNode] = field(default_factory=list)
     clients: List[ClientNode] = field(default_factory=list)
     actions: List[ActionNode] = field(default_factory=list)
     cpp_methods: List[CppMethodNode] = field(default_factory=list)
@@ -368,8 +368,8 @@ class TypedefNode(ASTNode):
 @dataclass
 class UsingNode(ASTNode):
     """Using declaration node."""
-    name: str
-    type: str
+    original_type: str
+    new_name: str
 
 
 # ONNX Model AST Nodes (Phase 3)
@@ -550,6 +550,157 @@ class PyClassNode(ASTNode):
     inheritance: Optional[InheritanceNode] = None
 
 
+# Custom Message/Service/Action AST Nodes
+@dataclass
+class MessageFieldNode(ASTNode):
+    """Message field node."""
+    type: str
+    name: str
+    array_spec: Optional[str] = None
+    default_value: Optional[ValueNode] = None
+
+
+@dataclass
+class MessageContentNode(ASTNode):
+    """Message content node."""
+    fields: List[MessageFieldNode] = field(default_factory=list)
+    constants: List[MessageFieldNode] = field(default_factory=list)  # For constants like "uint8 FOO=1"
+
+
+@dataclass
+class MessageNode(ASTNode):
+    """Custom message definition node."""
+    name: str
+    content: MessageContentNode
+
+
+@dataclass
+class ServiceRequestNode(ASTNode):
+    """Service request node."""
+    fields: List[MessageFieldNode] = field(default_factory=list)
+
+
+@dataclass
+class ServiceResponseNode(ASTNode):
+    """Service response node."""
+    fields: List[MessageFieldNode] = field(default_factory=list)
+
+
+@dataclass
+class ServiceContentNode(ASTNode):
+    """Service content node."""
+    request: ServiceRequestNode
+    response: ServiceResponseNode
+
+
+@dataclass
+class ServiceNode(ASTNode):
+    """Custom service definition node."""
+    name: str
+    content: ServiceContentNode
+
+
+@dataclass
+class ActionGoalNode(ASTNode):
+    """Action goal node."""
+    fields: List[MessageFieldNode] = field(default_factory=list)
+
+
+@dataclass
+class ActionFeedbackNode(ASTNode):
+    """Action feedback node."""
+    fields: List[MessageFieldNode] = field(default_factory=list)
+
+
+@dataclass
+class ActionResultNode(ASTNode):
+    """Action result node."""
+    fields: List[MessageFieldNode] = field(default_factory=list)
+
+
+@dataclass
+class ActionContentNode(ASTNode):
+    """Action content node."""
+    goal: ActionGoalNode
+    feedback: ActionFeedbackNode
+    result: ActionResultNode
+
+
+@dataclass
+class CustomActionNode(ASTNode):
+    """Custom action definition node."""
+    name: str
+    content: ActionContentNode
+
+
+# Dynamic Runtime AST Nodes
+@dataclass
+class DynamicParameterNode(ASTNode):
+    """Dynamic parameter node."""
+    name: str
+    type: str
+    default_value: ValueNode
+    min_value: Optional[ValueNode] = None
+    max_value: Optional[ValueNode] = None
+    step: Optional[ValueNode] = None
+    description: Optional[str] = None
+
+
+@dataclass
+class DynamicRemapNode(ASTNode):
+    """Dynamic remap node."""
+    from_topic: str
+    to_topic: str
+    condition: Optional[str] = None  # Optional condition for when to apply
+
+
+# Simulation Configuration AST Nodes
+@dataclass
+class SimulationPluginNode(ASTNode):
+    """Simulation plugin node."""
+    name: str
+    parameters: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class SimulationWorldNode(ASTNode):
+    """Simulation world configuration node."""
+    world_file: str
+    physics_engine: str = "ode"  # ode, bullet, etc.
+    gravity: tuple = (0, 0, -9.81)
+    max_step_size: float = 0.001
+    real_time_factor: float = 1.0
+
+
+@dataclass
+class SimulationRobotNode(ASTNode):
+    """Simulation robot configuration node."""
+    model_file: str  # URDF/SDF file
+    namespace: Optional[str] = None
+    initial_pose: Optional[tuple] = None  # (x, y, z, roll, pitch, yaw)
+    plugins: List[SimulationPluginNode] = field(default_factory=list)
+
+
+@dataclass
+class SimulationConfigNode(ASTNode):
+    """Simulation configuration node."""
+    simulator: str  # "gazebo", "isaac_sim", etc.
+    world: Optional[SimulationWorldNode] = None
+    robots: List[SimulationRobotNode] = field(default_factory=list)
+    plugins: List[SimulationPluginNode] = field(default_factory=list)
+    gui: bool = True
+    headless: bool = False
+    physics_engine: str = "ode"
+
+
+@dataclass
+class HardwareInLoopNode(ASTNode):
+    """Hardware-in-the-loop configuration node."""
+    simulation_nodes: List[str] = field(default_factory=list)  # Node names that run in sim
+    hardware_nodes: List[str] = field(default_factory=list)    # Node names that run on hardware
+    bridge_config: Optional[str] = None  # Optional bridge configuration file
+
+
 @dataclass
 class RoboDSLAST(ASTNode):
     """Root AST node."""
@@ -558,4 +709,14 @@ class RoboDSLAST(ASTNode):
     nodes: List[NodeNode] = field(default_factory=list)
     cuda_kernels: Optional[CudaKernelsNode] = None  # Standalone kernels outside nodes 
     onnx_models: List['OnnxModelNode'] = field(default_factory=list)  # ONNX models
-    pipelines: List['PipelineNode'] = field(default_factory=list)  # Pipeline definitions 
+    pipelines: List['PipelineNode'] = field(default_factory=list)  # Pipeline definitions
+    # Custom message/service/action types
+    messages: List[MessageNode] = field(default_factory=list)
+    services: List[ServiceNode] = field(default_factory=list)
+    actions: List[CustomActionNode] = field(default_factory=list)
+    # Dynamic runtime configuration
+    dynamic_parameters: List[DynamicParameterNode] = field(default_factory=list)
+    dynamic_remaps: List[DynamicRemapNode] = field(default_factory=list)
+    # Simulation configuration
+    simulation: Optional[SimulationConfigNode] = None
+    hil_config: Optional[HardwareInLoopNode] = None 

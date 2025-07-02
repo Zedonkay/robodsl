@@ -85,6 +85,8 @@ class SemanticAnalyzer:
         self.warnings.clear()
         self.symbol_table = SymbolTable()
         
+
+        
         # Analyze project-level configuration
         self._analyze_project_config(ast)
         
@@ -546,12 +548,18 @@ class SemanticAnalyzer:
             if len(content.block_size) != 3:
                 self.errors.append(f"CUDA kernel '{kernel.name}' block size must have exactly 3 dimensions")
             for i, size in enumerate(content.block_size):
-                if not isinstance(size, int) or size <= 0:
-                    self.errors.append(f"CUDA kernel '{kernel.name}' block size dimension {i} must be a positive integer")
-                if size == 0:
-                    self.errors.append(f"CUDA kernel '{kernel.name}' block size dimension {i} cannot be zero")
-                if size > 1024:  # CUDA limit
-                    self.errors.append(f"CUDA kernel '{kernel.name}' block size dimension {i} exceeds CUDA limit of 1024")
+                # Allow both integers and expressions (strings)
+                if isinstance(size, int):
+                    if size <= 0:
+                        self.errors.append(f"CUDA kernel '{kernel.name}' block size dimension {i} must be a positive integer")
+                    if size > 1024:  # CUDA limit
+                        self.errors.append(f"CUDA kernel '{kernel.name}' block size dimension {i} exceeds CUDA limit of 1024")
+                elif isinstance(size, str):
+                    # Expression - validate that it's not empty
+                    if not size.strip():
+                        self.errors.append(f"CUDA kernel '{kernel.name}' block size dimension {i} expression cannot be empty")
+                else:
+                    self.errors.append(f"CUDA kernel '{kernel.name}' block size dimension {i} must be an integer or expression")
         
         # Check grid size
         if content.grid_size:

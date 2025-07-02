@@ -15,7 +15,7 @@ def test_data_structures_parsing():
 
     # Check using
     usings = [ds for ds in ast.data_structures if isinstance(ds, UsingNode)]
-    assert any(u.name == "Point3D" for u in usings)
+    assert any(u.new_name == "Point3D" for u in usings)
 
     # Check enums
     enums = [ds for ds in ast.data_structures if isinstance(ds, EnumNode)]

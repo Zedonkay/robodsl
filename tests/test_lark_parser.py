@@ -10,7 +10,7 @@ from robodsl.core.ast import RoboDSLAST, NodeNode, KernelNode
 def test_basic_node_parsing():
     """Test basic node parsing with the new Lark parser."""
     content = """
-    node test_node {
+    node test_node_1 {
         parameter int test_param = 42
         publisher /test_topic: "std_msgs/msg/String"
         subscriber /input_topic: "std_msgs/msg/String"
@@ -21,7 +21,7 @@ def test_basic_node_parsing():
     
     assert len(ast.nodes) == 1
     node = ast.nodes[0]
-    assert node.name == "test_node"
+    assert node.name == "test_node_1"
     assert len(node.content.parameters) == 1
     
     param = node.content.parameters[0]
@@ -66,7 +66,7 @@ def test_cuda_kernel_parsing():
 def test_qos_configuration():
     """Test QoS configuration parsing."""
     content = """
-    node test_node {
+    node test_node_1 {
         publisher /test_topic: "std_msgs/msg/String" {
             qos {
                 reliability: reliable
@@ -98,7 +98,7 @@ def test_qos_configuration():
 def test_lifecycle_configuration():
     """Test lifecycle configuration parsing."""
     content = """
-    node test_node {
+    node test_node_1 {
         lifecycle {
             autostart: true
             cleanup_on_shutdown: false
@@ -125,7 +125,7 @@ def test_lifecycle_configuration():
 def test_timer_configuration():
     """Test timer configuration parsing."""
     content = """
-    node test_node {
+    node test_node_1 {
         timer timer_callback: 1.0 {
             oneshot: true
             autostart: false
@@ -161,7 +161,7 @@ def test_include_statements():
     include <rclcpp/rclcpp.hpp>
     include "common.robodsl"
     
-    node test_node {
+    node test_node_1 {
         parameter int test_param = 42
     }
     """
@@ -179,7 +179,7 @@ def test_comments():
     """Test comment handling."""
     dsl_code = """
     // This is a comment
-    node test_node {
+    node test_node_1 {
         parameter int test_param = 42  // Another comment
         // publisher "/test_topic" "std_msgs/String"  // Commented out
     }
@@ -189,7 +189,7 @@ def test_comments():
     
     assert len(ast.nodes) == 1
     node = ast.nodes[0]
-    assert node.name == "test_node"
+    assert node.name == "test_node_1"
     assert len(node.content.parameters) == 1
     assert node.content.parameters[0].name == "test_param"
     assert node.content.parameters[0].type == "int"
@@ -199,7 +199,7 @@ def test_comments():
 def test_semantic_errors():
     """Test semantic error detection."""
     dsl_code = """
-    node test_node {
+    node test_node_1 {
         parameter int test_param = 42
         parameter int test_param = 43  // Duplicate parameter name
     }
@@ -215,7 +215,7 @@ def test_semantic_errors():
 def test_parse_errors():
     """Test parse error handling."""
     content = """
-    node test_node {
+    node test_node_1 {
         parameter test_param = 42
         invalid_syntax_here
     }
@@ -228,7 +228,7 @@ def test_parse_errors():
 def test_complex_value_types():
     """Test parsing complex value types."""
     dsl_code = """
-    node test_node {
+    node test_node_1 {
         parameter list int_array = [1, 2, 3, 4, 5]
         parameter list float_array = [1.0, 2.5, 3.14]
         parameter list string_array = ["hello", "world"]
@@ -270,7 +270,7 @@ def test_complex_value_types():
 def test_remapping():
     """Test topic remapping."""
     content = """
-    node test_node {
+    node test_node_1 {
         remap from: /original_topic to: /new_topic
         subscriber /original_topic: "std_msgs/msg/String"
     }
@@ -289,7 +289,7 @@ def test_remapping():
 def test_namespace():
     """Test namespace parsing."""
     dsl_code = """
-    node test_node {
+    node test_node_1 {
         namespace : /my/namespace
         parameter int test_param = 42
     }
@@ -310,7 +310,7 @@ def test_namespace():
 def test_cpp_method_parsing():
     """Test basic C++ method parsing (legacy syntax)."""
     content = """
-node test_node {
+node test_node_1 {
     method do_something {
         code: {
             int x = 42;
@@ -324,7 +324,7 @@ node test_node {
     assert len(ast.nodes) == 1
     
     node = ast.nodes[0]
-    assert node.name == 'test_node'
+    assert node.name == 'test_node_1'
     
     cpp_methods = node.content.cpp_methods
     assert len(cpp_methods) == 1
@@ -382,7 +382,7 @@ def test_enhanced_cpp_method_parsing():
     NOTE: Pointer types must be written without spaces, e.g., 'float* input_data', not 'float * input_data'.
     """
     config = """
-node test_node {
+node test_node_1 {
     method process_data {
         input: int data_size
         input: float* input_data (data_size)
@@ -411,7 +411,7 @@ node test_node {
     assert len(ast.nodes) == 1
     
     node = ast.nodes[0]
-    assert node.name == 'test_node'
+    assert node.name == 'test_node_1'
     
     cpp_methods = node.content.cpp_methods
     assert len(cpp_methods) == 2
@@ -468,7 +468,7 @@ node test_node {
 def test_enhanced_cpp_method_semantic_validation():
     """Test semantic validation of enhanced C++ methods."""
     config = """
-node test_node {
+node test_node_1 {
     method valid_method {
         input: int data_size
         output: float result

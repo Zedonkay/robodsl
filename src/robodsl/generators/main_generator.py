@@ -15,6 +15,7 @@ from .launch_generator import LaunchGenerator
 from .package_generator import PackageGenerator
 from .onnx_integration import OnnxIntegrationGenerator
 from .pipeline_generator import PipelineGenerator
+from .config_generator import ConfigGenerator
 from ..core.ast import RoboDSLAST
 
 
@@ -41,6 +42,7 @@ class MainGenerator(BaseGenerator):
         self.package_generator = PackageGenerator(output_dir, template_dirs)
         self.onnx_generator = OnnxIntegrationGenerator(output_dir)
         self.pipeline_generator = PipelineGenerator(output_dir)
+        self.config_generator = ConfigGenerator(output_dir, template_dirs)
     
     def generate(self, ast: RoboDSLAST) -> List[Path]:
         """Generate all files from the AST.
@@ -88,6 +90,12 @@ class MainGenerator(BaseGenerator):
         package_files = self.package_generator.generate(ast)
         all_generated_files.extend(package_files)
         print(f"Generated {len(package_files)} package files")
+        
+        # Generate config files
+        print("Generating config files...")
+        config_files = self.config_generator.generate(ast)
+        all_generated_files.extend(config_files)
+        print(f"Generated {len(config_files)} config files")
         
         # Generate ONNX integration files
         print("Generating ONNX integration files...")

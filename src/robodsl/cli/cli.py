@@ -21,8 +21,10 @@ def create_robodsl_node_file(project_path: Path, node_name: str, template: str =
     parts = node_name.split('.')
     node_base_name = parts[-1]
     
-    # Create subdirectories if they don't exist
+    # Create flat structure - subnodes are CLI-only for organization
+    # All robodsl files go in the same directory, but we create nested dirs for organization
     if len(parts) > 1:
+        # Create nested directory structure for organization
         node_dir = project_path / 'robodsl' / 'nodes' / '/'.join(parts[:-1])
         node_dir.mkdir(parents=True, exist_ok=True)
         config_file = node_dir / f"{node_base_name}.robodsl"
@@ -814,11 +816,24 @@ def create_node(node_name: str, template: str, project_dir: Path) -> None:
         # Create the RoboDSL node file
         config_file = create_robodsl_node_file(project_path, node_name, template)
         
+        # Generate source files from the created RoboDSL file
+        from robodsl.parsers import parse_robodsl
+        from robodsl.generators.main_generator import MainGenerator
+        
+        click.echo(f"Generating source files...")
+        
+        # Parse the created RoboDSL file
+        config = parse_robodsl(config_file.read_text())
+        
+        # Generate code
+        generator = MainGenerator(output_dir=str(project_path), debug=False)
+        generated_files = generator.generate(config)
+        
         click.echo(f"Created RoboDSL node definition: {config_file.relative_to(project_path)}")
+        click.echo(f"Generated {len(generated_files)} source files")
         click.echo(f"\nNext steps:")
         click.echo(f"1. Edit the node definition in: {config_file.relative_to(project_path)}")
-        click.echo(f"2. Generate C++ code: robodsl generate {config_file.relative_to(project_path)}")
-        click.echo(f"3. Build the project: colcon build")
+        click.echo(f"2. Build the project: colcon build")
         
     except Exception as e:
         click.echo(f"Error: Failed to create node: {str(e)}", err=True)

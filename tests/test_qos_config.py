@@ -7,7 +7,7 @@ from robodsl.core.ast import RoboDSLAST, NodeNode, PublisherNode, SubscriberNode
 def test_qos_config_parsing():
     """Test parsing of QoS configurations for different entities."""
     dsl_content = """
-    node test_node {
+    node test_node_1 {
         publisher /test_topic: "std_msgs/msg/String" {
             qos {
                 reliability: reliable
@@ -37,7 +37,7 @@ def test_qos_config_parsing():
     
     assert len(ast.nodes) == 1
     node = ast.nodes[0]
-    assert node.name == "test_node"
+    assert node.name == "test_node_1"
     
     # Check publisher QoS
     assert len(node.content.publishers) == 1
@@ -68,7 +68,7 @@ def test_qos_config_parsing():
 def test_qos_reliability_values():
     """Test different QoS reliability values."""
     dsl_content = """
-    node test_node {
+    node test_node_2 {
         publisher /topic1: "std_msgs/msg/String" {
             qos {
                 reliability: reliable
@@ -94,7 +94,7 @@ def test_qos_reliability_values():
 def test_qos_durability_values():
     """Test different QoS durability values."""
     dsl_content = """
-    node test_node {
+    node test_node_3 {
         publisher /topic1: "std_msgs/msg/String" {
             qos {
                 durability: volatile
@@ -120,7 +120,7 @@ def test_qos_durability_values():
 def test_qos_history_values():
     """Test different QoS history values."""
     dsl_content = """
-    node test_node {
+    node test_node_4 {
         publisher /topic1: "std_msgs/msg/String" {
             qos {
                 history: keep_last
@@ -148,7 +148,7 @@ def test_qos_history_values():
 def test_qos_liveliness_values():
     """Test different QoS liveliness values."""
     dsl_content = """
-    node test_node {
+    node test_node_5 {
         publisher /topic1: "std_msgs/msg/String" {
             qos {
                 liveliness: automatic
@@ -176,7 +176,7 @@ def test_qos_liveliness_values():
 def test_qos_multiple_settings():
     """Test multiple QoS settings on a single entity."""
     dsl_content = """
-    node test_node {
+    node test_node_6 {
         publisher /test_topic: "std_msgs/msg/String" {
             qos {
                 reliability: reliable
@@ -205,7 +205,7 @@ def test_qos_multiple_settings():
 def test_qos_default_values():
     """Test that QoS entities without explicit QoS config work."""
     dsl_content = """
-    node test_node {
+    node test_node_7 {
         publisher /test_topic: "std_msgs/msg/String"
         subscriber /test_sub: "std_msgs/msg/String"
         service /test_srv: "std_srvs/srv/Trigger"
@@ -226,7 +226,7 @@ def test_qos_invalid_values():
     # This test would check how the parser handles invalid QoS values
     # For now, we'll just test that the parser doesn't crash
     dsl_content = """
-    node test_node {
+    node test_node_8 {
         publisher /test_topic: "std_msgs/msg/String" {
             qos {
                 reliability: invalid_value
@@ -248,7 +248,7 @@ def test_qos_invalid_values():
 def test_qos_numeric_values():
     """Test QoS settings with numeric values."""
     dsl_content = """
-    node test_node {
+    node test_node_9 {
         publisher /test_topic: "std_msgs/msg/String" {
             qos {
                 depth: 100

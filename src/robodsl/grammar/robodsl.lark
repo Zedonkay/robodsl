@@ -5,7 +5,7 @@
 %ignore BLOCK_COMMENT
 %ignore _NL
 
-start: include_stmt* (data_structure | node_def | cuda_kernels_block | onnx_model | pipeline_def)*
+start: include_stmt* (data_structure | custom_interface | node_def | cuda_kernels_block | onnx_model | pipeline_def | simulation_config | dynamic_config)*
 
 // Include statements
 include_stmt: "include" ("<" include_path ">" | STRING)
@@ -19,6 +19,80 @@ data_structure: struct_def SEMICOLON?
               | typedef_def SEMICOLON?
               | using_def SEMICOLON?
 
+// Custom interface definitions (messages, services, actions)
+custom_interface: message_def | service_def | action_def
+
+// Message definitions
+message_def: "message" NAME LBRACE message_content RBRACE
+message_content: message_field*
+message_field: cpp_type NAME default_value? ";"
+default_value: "=" value
+
+// Service definitions
+service_def: "service" NAME LBRACE service_content RBRACE
+service_content: service_request service_response
+service_request: service_fields
+service_response: "---" service_fields
+service_fields: message_field*
+
+// Action definitions
+action_def: "action" NAME LBRACE action_content RBRACE
+action_content: action_goal action_feedback action_result
+action_goal: action_fields
+action_feedback: "---" action_fields
+action_result: "---" action_fields
+action_fields: message_field*
+
+// Dynamic runtime configuration
+dynamic_config: dynamic_parameters | dynamic_remaps
+dynamic_parameters: "dynamic_parameters" LBRACE dynamic_parameter* RBRACE
+dynamic_parameter: "parameter" TYPE NAME "=" value dynamic_param_config?
+dynamic_param_config: LBRACE dynamic_param_setting* RBRACE
+dynamic_param_setting: (NAME ":" value) | description
+description: "description" ":" STRING
+
+dynamic_remaps: "dynamic_remaps" LBRACE dynamic_remap* RBRACE
+dynamic_remap: "remap" TOPIC_PATH ":" TOPIC_PATH remap_condition?
+remap_condition: "when" ":" STRING
+
+// Simulation configuration
+simulation_config: simulation_def | hil_config
+simulation_def: "simulation" simulator_type LBRACE simulation_content RBRACE
+simulator_type: "gazebo" | "isaac_sim" | "gym"
+simulation_content: (simulation_world | simulation_robot | simulation_plugin | simulation_setting)*
+
+simulation_world: "world" LBRACE world_config RBRACE
+world_config: world_setting*
+world_setting: (NAME ":" value) | physics_engine | gravity | step_size | real_time_factor
+physics_engine: "physics_engine" ":" (NAME | STRING)
+gravity: "gravity" ":" LPAR expr COMMA expr COMMA expr RPAR
+step_size: "max_step_size" ":" expr
+real_time_factor: "real_time_factor" ":" expr
+
+simulation_robot: "robot" NAME LBRACE robot_config RBRACE
+robot_config: robot_setting*
+robot_setting: (NAME ":" value) | model_file | robot_namespace | initial_pose | robot_plugins
+model_file: "model_file" ":" (NAME | STRING)
+robot_namespace: "namespace" ":" (NAME | STRING)
+initial_pose: "initial_pose" ":" LPAR expr COMMA expr COMMA expr COMMA expr COMMA expr COMMA expr RPAR
+robot_plugins: "plugins" LBRACE simulation_plugin* RBRACE
+
+simulation_plugin: "plugin" NAME LBRACE plugin_config RBRACE
+plugin_config: plugin_setting*
+plugin_setting: NAME ":" value
+
+simulation_setting: (gui | headless | physics_engine)
+gui: "gui" ":" BOOLEAN
+headless: "headless" ":" BOOLEAN
+
+// Hardware-in-the-loop configuration
+hil_config: "hardware_in_loop" LBRACE hil_content RBRACE
+hil_content: (simulation_nodes | hardware_nodes | bridge_config)*
+simulation_nodes: "simulation_nodes" ":" node_list
+hardware_nodes: "hardware_nodes" ":" node_list
+node_list: NAME (COMMA NAME)*
+bridge_config: "bridge_config" ":" STRING
+
 // Struct definitions
 struct_def: "struct" NAME LBRACE struct_content RBRACE
 struct_content: (struct_member | cpp_method | include_stmt)*
@@ -27,17 +101,19 @@ struct_member: cpp_type NAME array_spec? ";"?
 // Class definitions
 class_def: "class" NAME inheritance? LBRACE class_content RBRACE
 inheritance: ":" access_specifier? cpp_type (COMMA access_specifier? cpp_type)*
-access_specifier: "public" | "private" | "protected"
-class_content: (access_section | struct_member | cpp_method | include_stmt)*
-access_section: access_specifier ":" (struct_member | cpp_method)*
+access_specifier: PUBLIC | PRIVATE | PROTECTED
+class_content: (class_access_section | class_direct_member | class_section_method | include_stmt)*
+class_access_section: access_specifier ":" (class_section_member | class_section_method)*
+class_direct_member: struct_member
+class_section_member: struct_member
+class_section_method: cpp_method
 
 // Pythonic class definition
-pyclass_def: "class" NAME inheritance? LBRACE pyclass_content RBRACE
+pyclass_def: "pyclass" NAME inheritance? LBRACE pyclass_content RBRACE
 pyclass_content: (pyclass_attribute | pyclass_method | pyclass_constructor | pyclass_access_section)*
 
 // Pythonic class attributes (member variables)
 pyclass_attribute: NAME ":" cpp_type default_value?
-default_value: "=" value
 
 // Pythonic class constructor
 pyclass_constructor: "def" "__init__" LPAR pyclass_param_list RPAR LBRACE pyclass_constructor_content RBRACE
@@ -52,11 +128,12 @@ return_type: "->" cpp_type
 pyclass_method_content: (code_block)*
 
 // Pythonic access sections
-pyclass_access_section: access_specifier ":" (pyclass_attribute | pyclass_method | pyclass_constructor)*
+pyclass_access_section: pyclass_access_specifier ":" (pyclass_attribute | pyclass_method | pyclass_constructor)*
+pyclass_access_specifier: "public" | "private" | "protected"
 
 // Enum definitions
 enum_def: "enum" enum_type? NAME LBRACE enum_content RBRACE
-enum_type: "class" | "struct"
+enum_type: CLASS | STRUCT
 enum_content: enum_value (COMMA enum_value)* COMMA?
 enum_value: NAME ("=" expr)?
 
@@ -66,7 +143,7 @@ using_def: "using" NAME "=" cpp_type ";"
 
 // Array specifications
 array_spec: LSQB expr? RSQB
-node_def: "node" NAME LBRACE node_content RBRACE
+node_def: "node" NODE_NAME LBRACE node_content RBRACE
 node_content: (parameter | lifecycle | timer | remap | namespace | ros_primitive | flag | cpp_method | kernel_def | onnx_model_ref | cuda_kernels_block | use_kernel)*
 
 // Pipeline definitions (Phase 4) - Enhanced with CUDA/ONNX integration
@@ -167,7 +244,7 @@ kernel_param_list: kernel_param (COMMA kernel_param)*
 kernel_param: cpp_type NAME kernel_param_size?
 cuda_include: "include" ("<" include_path ">" | STRING)
 cpp_type: cpp_type_name
-cpp_type_name: /((const\s+)?[a-zA-Z_][a-zA-Z0-9_]*(\:\:[a-zA-Z_][a-zA-Z0-9_]*)*(\<[^<>]*(\<[^<>]*\>[^<>]*)*\>)?(\s*const)?(\s*[\*&])*)/
+cpp_type_name: /((const\s+)?[a-zA-Z_][a-zA-Z0-9_]*(\:\:[a-zA-Z_][a-zA-Z0-9_]*)*(\<[^<>]*(\<[^<>]*\>[^<>]*)*\>)?(\s*const)?(\s*[\*&])*(\[\])*)/
 kernel_param_size: LPAR kernel_param_size_list RPAR
 kernel_param_size_list: kernel_param_size_item (COMMA kernel_param_size_item)*
 kernel_param_size_item: SIGNED_NUMBER | NAME | STRING
@@ -215,7 +292,13 @@ LESSTAN: "<"
 MORETHAN: ">"
 SIGNED_NUMBER: /-?[0-9]+(\.[0-9]+)?/
 BOOLEAN: "true" | "false"
+CLASS: "class"
+STRUCT: "struct"
+PUBLIC: "public"
+PRIVATE: "private"
+PROTECTED: "protected"
 NAME: /[a-zA-Z_][a-zA-Z0-9_]*/
+NODE_NAME: /[a-zA-Z_][a-zA-Z0-9_]*/
 STRING: /"([^"\\]|\\.)*"/
 TYPE: /[a-zA-Z_][a-zA-Z0-9_]*(\[[0-9,]*\])*(\<[^>]*\>)?/
 

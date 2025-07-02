@@ -18,9 +18,9 @@ def test_add_subnode_basic(test_output_dir):
     result = runner.invoke(
         main,
         [
-            "add-node",
+            "create-node",
             "sensors.camera",
-            "--language", "python",
+            "--template", "basic",
             "--project-dir", str(project_dir)
             # No publishers or subscribers for this test
         ]
@@ -29,18 +29,23 @@ def test_add_subnode_basic(test_output_dir):
     assert result.exit_code == 0
     
     # Check that files were created in the correct locations
+    # RoboDSL files are organized in nested directories for organization
     assert (project_dir / "robodsl" / "nodes" / "sensors" / "camera.robodsl").exists()
-    assert (project_dir / "src" / "sensors" / "camera_node.py").exists()
-    assert (project_dir / "launch" / "sensors" / "camera.launch.py").exists()
+    # Source files are in flat structure (subnodes are CLI-only for organization)
+    assert (project_dir / "src" / "camera_node.py").exists()
+    # Launch files are in flat structure
+    assert (project_dir / "launch" / "camera.launch.py").exists()
     
     # Check Python file is executable
     if os.name != 'nt':
-        assert (project_dir / "src" / "sensors" / "camera_node.py").stat().st_mode & stat.S_IXUSR
+        assert (project_dir / "src" / "camera_node.py").stat().st_mode & stat.S_IXUSR
     
-    # Check robodsl file content
+    # Check robodsl file content - node name should be simple (no dots)
     with open(project_dir / "robodsl" / "nodes" / "sensors" / "camera.robodsl", 'r') as f:
         content = f.read()
         assert "node camera" in content
+        # Ensure no dots in the actual node definition
+        assert "node sensors.camera" not in content
 
 
 def test_add_nested_subnode(test_output_dir):
@@ -53,9 +58,9 @@ def test_add_nested_subnode(test_output_dir):
     result = runner.invoke(
         main,
         [
-            "add-node",
+            "create-node",
             "robot.sensors.camera.depth",
-            "--language", "cpp",
+            "--template", "cuda",
             "--project-dir", str(project_dir)
             # No publishers or subscribers for this test
         ]
@@ -64,10 +69,13 @@ def test_add_nested_subnode(test_output_dir):
     assert result.exit_code == 0
     
     # Check that files were created in the correct locations
+    # RoboDSL files are organized in nested directories for organization
     assert (project_dir / "robodsl" / "nodes" / "robot" / "sensors" / "camera" / "depth.robodsl").exists()
-    assert (project_dir / "src" / "robot" / "sensors" / "camera" / "depth_node.cpp").exists()
-    assert (project_dir / "include" / "robot" / "sensors" / "camera" / "depth_node.hpp").exists()
-    assert (project_dir / "launch" / "robot" / "sensors" / "camera" / "depth.launch.py").exists()
+    # Source files are in flat structure (subnodes are CLI-only for organization)
+    assert (project_dir / "src" / "depth_node.cpp").exists()
+    assert (project_dir / "include" / "depth_node.hpp").exists()
+    # Launch files are in flat structure
+    assert (project_dir / "launch" / "depth.launch.py").exists()
 
 
 def test_add_subnode_with_pubsub(test_output_dir):
@@ -80,9 +88,9 @@ def test_add_subnode_with_pubsub(test_output_dir):
     result = runner.invoke(
         main,
         [
-            "add-node",
+            "create-node",
             "perception.object_detector",
-            "--language", "python",
+            "--template", "basic",
             "--project-dir", str(project_dir)
         ]
     )
@@ -90,14 +98,19 @@ def test_add_subnode_with_pubsub(test_output_dir):
     assert result.exit_code == 0
     
     # Check that files were created in the correct locations
+    # RoboDSL files are organized in nested directories for organization
     assert (project_dir / "robodsl" / "nodes" / "perception" / "object_detector.robodsl").exists()
-    assert (project_dir / "src" / "perception" / "object_detector_node.py").exists()
-    assert (project_dir / "launch" / "perception" / "object_detector.launch.py").exists()
+    # Source files are in flat structure (subnodes are CLI-only for organization)
+    assert (project_dir / "src" / "object_detector_node.py").exists()
+    # Launch files are in flat structure
+    assert (project_dir / "launch" / "object_detector.launch.py").exists()
     
-    # Check robodsl file content
+    # Check robodsl file content - node name should be simple (no dots)
     with open(project_dir / "robodsl" / "nodes" / "perception" / "object_detector.robodsl", 'r') as f:
         content = f.read()
         assert "node object_detector" in content
+        # Ensure no dots in the actual node definition
+        assert "node perception.object_detector" not in content
 
 
 def test_invalid_node_name(test_output_dir):
@@ -110,11 +123,34 @@ def test_invalid_node_name(test_output_dir):
     result = runner.invoke(
         main,
         [
-            "add-node",
+            "create-node",
             "invalid-node@name",
+            "--template", "basic",
             "--project-dir", str(project_dir)
         ]
     )
     
     assert result.exit_code != 0
     assert "Invalid node name" in result.output
+
+
+def test_subnode_syntax_rejected_in_robodsl_code(test_output_dir):
+    """Test that subnode syntax (with dots) is rejected in robodsl code."""
+    from robodsl.parsers import parse_robodsl
+    
+    # Create a robodsl file with subnode syntax
+    robodsl_content = """
+node sensors.camera {
+    parameter int count = 0
+}
+"""
+    
+    # This should raise an error with a clear message
+    try:
+        parse_robodsl(robodsl_content)
+        assert False, "Should have raised an error for subnode syntax"
+    except Exception as e:
+        error_msg = str(e)
+        assert "Subnodes with dots (.) are not allowed in RoboDSL code" in error_msg
+        assert "CLI-only feature" in error_msg
+        assert "robodsl create-node" in error_msg

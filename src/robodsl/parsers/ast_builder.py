@@ -1,1528 +1,1769 @@
-"""AST Builder for RoboDSL Lark parser.
+"""AST Builder for RoboDSL.
 
-This module converts Lark parse trees to our AST data structures,
-providing a clean representation of parsed configurations.
+This module builds the AST from the Lark parse tree.
 """
-
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, List, Optional, Union
 from lark import Tree, Token
-from pathlib import Path
-import sys
-
 from ..core.ast import (
-    RoboDSLAST, IncludeNode, NodeNode, NodeContentNode, ParameterNode, ValueNode,
-    LifecycleNode, LifecycleSettingNode, TimerNode, TimerSettingNode,
-    RemapNode, NamespaceNode, FlagNode, QoSNode, QoSSettingNode,
-    PublisherNode, SubscriberNode, ServiceNode, ActionNode,
-    CudaKernelsNode, KernelNode, KernelContentNode, KernelParamNode,
-    QoSReliability, QoSDurability, QoSHistory, QoSLiveliness, KernelParameterDirection,
-    CppMethodNode, ClientNode, MethodParamNode,
-    OnnxModelNode, ModelConfigNode, InputDefNode, OutputDefNode, DeviceNode, OptimizationNode,
-    PipelineNode, PipelineContentNode, StageNode, StageContentNode, StageInputNode, StageOutputNode, StageMethodNode, StageModelNode, StageTopicNode, StageCudaKernelNode, StageOnnxModelNode,
-    StructNode, StructContentNode, StructMemberNode, ClassNode, ClassContentNode, AccessSectionNode, InheritanceNode,
-    EnumNode, EnumContentNode, EnumValueNode, TypedefNode, UsingNode,
-    PyClassNode, PyClassContentNode, PyClassAttributeNode, PyClassMethodNode, PyClassConstructorNode, PyClassParamNode, PyClassAccessSectionNode
+    RoboDSLAST, IncludeNode, StructNode, ClassNode, PyClassNode, EnumNode,
+    TypedefNode, UsingNode, NodeNode, CudaKernelsNode, OnnxModelNode,
+    PipelineNode, MessageNode, ServiceNode, CustomActionNode,
+    DynamicParameterNode, DynamicRemapNode, SimulationConfigNode,
+    HardwareInLoopNode, StructContentNode, ClassContentNode, PyClassContentNode,
+    AccessSectionNode, StructMemberNode, CppMethodNode, MethodParamNode,
+    PyClassAttributeNode, PyClassMethodNode, PyClassConstructorNode,
+    PyClassAccessSectionNode, MessageContentNode, MessageFieldNode,
+    ServiceContentNode, ServiceRequestNode, ServiceResponseNode,
+    ActionContentNode, ActionGoalNode, ActionFeedbackNode, ActionResultNode,
+    ValueNode, InheritanceNode, EnumContentNode, EnumValueNode,
+    NodeContentNode, ParameterNode, LifecycleNode, LifecycleSettingNode,
+    TimerNode, TimerSettingNode, RemapNode, NamespaceNode, FlagNode,
+    PublisherNode, SubscriberNode, ServicePrimitiveNode,
+    ClientNode, ActionNode, QoSNode, QoSSettingNode, KernelNode,
+    KernelContentNode, KernelParamNode, StageNode, StageContentNode,
+    StageInputNode, StageOutputNode, StageMethodNode, StageModelNode,
+    StageTopicNode, StageCudaKernelNode, StageOnnxModelNode,
+    PipelineContentNode, ModelConfigNode, InputDefNode, OutputDefNode,
+    DeviceNode, OptimizationNode, SimulationWorldNode, SimulationRobotNode,
+    SimulationPluginNode, KernelParameterDirection
 )
 
 
 class ASTBuilder:
-    """Builds AST from Lark parse tree."""
+    """AST builder for RoboDSL with improved structure and error handling."""
     
     def __init__(self, debug: bool = False):
         self.debug = debug
-        self.ast = RoboDSLAST()
+        self.ast = None
+        self.errors = []
+        self.in_node_context = False  # Track if we're processing inside a node
     
     def build(self, tree: Tree) -> RoboDSLAST:
         """Build AST from Lark parse tree."""
         self.ast = RoboDSLAST()
+        self.errors = []
         
-        for child in tree.children:
-            if isinstance(child, Tree):
-                if child.data == 'include_stmt':
-                    include_node = self._handle_include(child)
-                    self.ast.includes.append(include_node)
-                elif child.data == 'data_structure':
-                    data_structure_node = self._handle_data_structure(child)
-                    self.ast.data_structures.append(data_structure_node)
-                elif child.data == 'pyclass_def':
-                    pyclass_node = self._handle_pyclass(child)
-                    self.ast.data_structures.append(pyclass_node)
-                elif child.data == 'node_def':
-                    node_node = self._handle_node(child)
-                    self.ast.nodes.append(node_node)
-                elif child.data == 'cuda_kernels_block':
-                    self.ast.cuda_kernels = self._handle_cuda_kernels(child)
-                elif child.data == 'onnx_model':
-                    onnx_model_node = self._handle_onnx_model(child)
-                    self.ast.onnx_models.append(onnx_model_node)
-                elif child.data == 'pipeline_def':
-                    pipeline_node = self._handle_pipeline(child)
-                    self.ast.pipelines.append(pipeline_node)
+        if self.debug:
+            print(f"Building AST from tree: {tree.data}")
+        
+        try:
+            for child in tree.children:
+                if isinstance(child, Tree):
+                    self._process_node(child)
+        except Exception as e:
+            if self.debug:
+                print(f"Error during AST building: {e}")
+            self.errors.append(f"AST building error: {e}")
         
         return self.ast
     
-    def _handle_include(self, tree: Tree) -> IncludeNode:
-        """Handle include statement."""
-        path = ""
-        is_system = False
-        
-        for child in tree.children:
-            if isinstance(child, Token):
-                if child.type == 'STRING':
-                    path = child.value.strip('"')
-                    is_system = False
-                elif child.type == 'NAME':
-                    # Handle unquoted system include path
-                    path = child.value
-                    is_system = True
-            elif isinstance(child, Tree) and child.data == 'include_path':
-                # Extract path from include_path rule
-                path_parts = []
-                for path_child in child.children:
-                    if isinstance(path_child, Token):
-                        path_parts.append(path_child.value)
-                # If the last two parts are a filename and extension, join with a dot
-                if len(path_parts) > 1 and not '/' in path_parts[-1] and path_parts[-1].isalpha():
-                    # e.g., ['system_header', 'h'] -> 'system_header.h'
-                    path = '/'.join(path_parts[:-2] + [path_parts[-2] + '.' + path_parts[-1]])
-                else:
-                    path = '/'.join(path_parts)
-                is_system = True
-        
-        return IncludeNode(path=path, is_system=is_system)
-    
-    def _handle_node(self, tree: Tree) -> NodeNode:
-        """Handle node definition."""
-        node_name = None
-        node_content = None
-        
-        for child in tree.children:
-            if isinstance(child, Token) and child.type == 'NAME':
-                node_name = child.value
-            elif isinstance(child, Tree) and child.data == 'node_content':
-                node_content = self._parse_node_content(child)
-        
-        if node_name and node_content:
-            return NodeNode(name=node_name, content=node_content)
-        
-        # Fallback
-        return NodeNode(name=node_name or "unknown", content=node_content or NodeContentNode())
-    
-    def _parse_node_content(self, content_tree: Tree) -> NodeContentNode:
-        """Parse node content and return NodeContentNode."""
-        content = NodeContentNode()
-        
-        for child in content_tree.children:
-            if isinstance(child, Tree):
-                if child.data == 'parameter':
-                    content.parameters.append(self._handle_parameter(child))
-                elif child.data == 'lifecycle':
-                    content.lifecycle = self._handle_lifecycle(child)
-                elif child.data == 'timer':
-                    content.timers.append(self._handle_timer(child))
-                elif child.data == 'remap':
-                    content.remaps.append(self._handle_remap(child))
-                elif child.data == 'namespace':
-                    content.namespace = self._handle_namespace(child)
-                elif child.data == 'flag':
-                    content.flags.append(self._handle_flag(child))
-                elif child.data == 'cpp_method':
-                    content.cpp_methods.append(self._handle_cpp_method(child))
-                elif child.data == 'ros_primitive':
-                    # Handle ROS primitives (publisher, subscriber, service, client, action)
-                    primitive_child = child.children[0]
-                    if primitive_child.data == 'publisher':
-                        content.publishers.append(self._handle_publisher(primitive_child))
-                    elif primitive_child.data == 'subscriber':
-                        content.subscribers.append(self._handle_subscriber(primitive_child))
-                    elif primitive_child.data == 'service':
-                        content.services.append(self._handle_service(primitive_child))
-                    elif primitive_child.data == 'client':
-                        content.clients.append(self._handle_client(primitive_child))
-                    elif primitive_child.data == 'action':
-                        content.actions.append(self._handle_action(primitive_child))
-                elif child.data == 'kernel_def':
-                    # Handle CUDA kernels inside nodes
-                    content.cuda_kernels.append(self._handle_kernel_def(child))
-                elif child.data == 'cuda_kernels_block':
-                    # Handle CUDA kernels block inside nodes
-                    cuda_kernels_node = self._handle_cuda_kernels(child)
-                    if cuda_kernels_node and hasattr(cuda_kernels_node, 'kernels'):
-                        content.cuda_kernels.extend(cuda_kernels_node.kernels)
-                elif child.data == 'onnx_model_ref':
-                    # Handle ONNX models inside nodes
-                    content.onnx_models.append(self._handle_onnx_model(child))
-                elif child.data == 'use_kernel':
-                    # Handle use_kernel reference
-                    for subchild in child.children:
-                        if hasattr(subchild, 'type') and subchild.type == 'STRING':
-                            kernel_name = subchild.value.strip('"')
-                            content.used_kernels.append(kernel_name)
-        
-        return content
-    
-    def _handle_parameter(self, tree: Tree) -> ParameterNode:
-        """Handle parameter definition."""
-        param_type = None
-        param_name = None
-        param_value = None
-        
-        for child in tree.children:
-            if isinstance(child, Token) and child.type == 'TYPE':
-                param_type = child.value
-            elif isinstance(child, Token) and child.type == 'NAME':
-                param_name = child.value
-            elif isinstance(child, Tree) and child.data == 'value':
-                param_value = self._extract_value(child)
-        
-        # Post-processing: Convert string booleans to actual booleans for bool parameters
-        if param_type == 'bool' and isinstance(param_value, str):
-            if param_value.lower() == 'true':
-                param_value = True
-            elif param_value.lower() == 'false':
-                param_value = False
-            # If it's neither 'true' nor 'false', keep it as a string for semantic analysis to catch
-        
-        value_node = ValueNode(value=param_value)
-        return ParameterNode(name=param_name or "", type=param_type or "", value=value_node)
-    
-    def _handle_lifecycle(self, tree: Tree) -> LifecycleNode:
-        """Handle lifecycle configuration."""
-        settings = []
-        
-        for child in tree.children:
-            if isinstance(child, Tree) and child.data == 'lifecycle_config':
-                for setting in child.children:
-                    if isinstance(setting, Tree) and setting.data == 'lifecycle_setting':
-                        name, value = self._extract_setting(setting)
-                        settings.append(LifecycleSettingNode(name=name or "", value=value))
-        
-        return LifecycleNode(settings=settings)
-    
-    def _handle_timer(self, tree: Tree) -> TimerNode:
-        """Handle timer definition."""
-        timer_name = None
-        period = None
-        settings = []
-        
-        for child in tree.children:
-            if isinstance(child, Token) and child.type == 'NAME':
-                timer_name = child.value
-            elif isinstance(child, Tree) and child.data == 'expr':
-                period = self._extract_expr(child)
-            elif isinstance(child, Tree) and child.data == 'timer_config':
-                for setting in child.children:
-                    if isinstance(setting, Tree) and setting.data == 'timer_setting':
-                        name, value = self._extract_setting(setting)
-                        settings.append(TimerSettingNode(name=name or "", value=value))
-        
-        return TimerNode(
-            name=timer_name or "",
-            period=period or 1.0,
-            settings=settings
-        )
-    
-    def _handle_remap(self, tree: Tree) -> RemapNode:
-        """Handle remapping rule."""
-        from_topic = None
-        to_topic = None
-        
-        for child in tree.children:
-            if isinstance(child, Token) and child.type == 'TOPIC_PATH':
-                if from_topic is None:
-                    from_topic = child.value
-                else:
-                    to_topic = child.value
-        
-        return RemapNode(
-            from_topic=from_topic or "",
-            to_topic=to_topic or ""
-        )
-    
-    def _handle_namespace(self, tree: Tree) -> NamespaceNode:
-        """Handle namespace definition."""
-        namespace = ""
-        for child in tree.children:
-            if isinstance(child, Token) and child.type == 'TOPIC_PATH':
-                namespace = child.value
-        
-        return NamespaceNode(namespace=namespace)
-    
-    def _handle_flag(self, tree: Tree) -> FlagNode:
-        """Handle boolean flags."""
-        flag_name = None
-        flag_value = None
-        
-        for child in tree.children:
-            if isinstance(child, Token) and child.type == 'NAME':
-                flag_name = child.value
-            elif isinstance(child, Token) and child.type == 'BOOLEAN':
-                flag_value = child.value.lower() == 'true'
-        
-        return FlagNode(name=flag_name or "", value=flag_value or False)
-    
-    def _handle_publisher(self, tree: Tree) -> PublisherNode:
-        """Handle publisher definition."""
-        topic = None
-        msg_type = None
-        qos_config = None
-        
-        for child in tree.children:
-            if isinstance(child, Tree) and child.data == 'topic_path':
-                topic = self._extract_topic_path(child)
-            elif isinstance(child, Tree) and child.data == 'topic_type':
-                msg_type = self._extract_topic_type(child)
-            elif isinstance(child, Tree) and child.data == 'publisher_config':
-                # Extract settings from publisher config
-                for setting in child.children:
-                    if isinstance(setting, Tree) and setting.data == 'publisher_setting':
-                        setting_name = None
-                        setting_value = None
-                        
-                        for config_child in setting.children:
-                            if isinstance(config_child, Token) and config_child.type == 'NAME':
-                                if setting_name is None:
-                                    setting_name = config_child.value
-                                else:
-                                    setting_value = config_child.value
-                            elif isinstance(config_child, Tree):
-                                if config_child.data == 'topic_type':
-                                    setting_value = self._extract_topic_type(config_child)
-                                elif config_child.data == 'value':
-                                    setting_value = self._extract_value(config_child)
-                                elif config_child.data == 'qos_config':
-                                    qos_config = self._handle_qos_config(config_child)
-                        # Set message type if this is a 'type' setting
-                        if setting_name == 'type' and setting_value:
-                            msg_type = setting_value
-        
-        return PublisherNode(
-            topic=topic or "",
-            msg_type=msg_type or "",
-            qos=qos_config
-        )
-    
-    def _handle_subscriber(self, tree: Tree) -> SubscriberNode:
-        """Handle subscriber definition."""
-        topic = None
-        msg_type = None
-        qos_config = None
-        
-        for child in tree.children:
-            if isinstance(child, Tree) and child.data == 'topic_path':
-                topic = self._extract_topic_path(child)
-            elif isinstance(child, Tree) and child.data == 'topic_type':
-                msg_type = self._extract_topic_type(child)
-            elif isinstance(child, Tree) and child.data == 'subscriber_config':
-                # Extract settings from subscriber config
-                for setting in child.children:
-                    if isinstance(setting, Tree) and setting.data == 'subscriber_setting':
-                        setting_name = None
-                        setting_value = None
-                        
-                        for config_child in setting.children:
-                            if isinstance(config_child, Token) and config_child.type == 'NAME':
-                                if setting_name is None:
-                                    setting_name = config_child.value
-                                else:
-                                    setting_value = config_child.value
-                            elif isinstance(config_child, Tree):
-                                if config_child.data == 'topic_type':
-                                    setting_value = self._extract_topic_type(config_child)
-                                elif config_child.data == 'value':
-                                    setting_value = self._extract_value(config_child)
-                                elif config_child.data == 'qos_config':
-                                    qos_config = self._handle_qos_config(config_child)
-                        # Set message type if this is a 'type' setting
-                        if setting_name == 'type' and setting_value:
-                            msg_type = setting_value
-        
-        return SubscriberNode(
-            topic=topic or "",
-            msg_type=msg_type or "",
-            qos=qos_config
-        )
-    
-    def _handle_service(self, tree: Tree) -> ServiceNode:
-        """Handle service definition."""
-        service_name = None
-        srv_type = None
-        qos_config = None
-        for child in tree.children:
-            if isinstance(child, Tree) and child.data == 'topic_path':
-                service_name = self._extract_topic_path(child)
-            elif isinstance(child, Tree) and child.data == 'topic_type':
-                srv_type = self._extract_topic_type(child)
-            elif isinstance(child, Token) and child.type == 'TOPIC_PATH':
-                service_name = child.value
-            elif isinstance(child, Token) and child.type == 'STRING':
-                srv_type = child.value.strip('"')
-            elif isinstance(child, Tree) and child.data == 'service_config':
-                for setting in child.children:
-                    if isinstance(setting, Tree) and setting.data == 'service_setting':
-                        for config_child in setting.children:
-                            if isinstance(config_child, Tree) and config_child.data == 'qos_config':
-                                qos_config = self._handle_qos_config(config_child)
-                                break
-        return ServiceNode(
-            service=service_name or "",
-            srv_type=srv_type or "",
-            qos=qos_config
-        )
-    
-    def _handle_action(self, tree: Tree) -> ActionNode:
-        """Handle action definition."""
-        action_name = None
-        action_type = None
-        qos_config = None
-        
-        for child in tree.children:
-            if isinstance(child, Tree) and child.data == 'topic_path':
-                action_name = self._extract_topic_path(child)
-            elif isinstance(child, Tree) and child.data == 'topic_type':
-                action_type = self._extract_topic_type(child)
-            elif isinstance(child, Token) and child.type == 'STRING':
-                action_type = child.value.strip('"')
-            elif isinstance(child, Tree) and child.data == 'action_config':
-                for setting in child.children:
-                    if isinstance(setting, Tree) and setting.data == 'action_setting':
-                        for config_child in setting.children:
-                            if isinstance(config_child, Tree) and config_child.data == 'qos_config':
-                                qos_config = self._handle_qos_config(config_child)
-                                break
-        
-        return ActionNode(
-            name=action_name or "",
-            action_type=action_type or "",
-            qos=qos_config
-        )
-    
-    def _handle_client(self, tree: Tree) -> ClientNode:
-        """Handle client definition."""
-        client_name = None
-        srv_type = None
-        qos_config = None
-        
-        for child in tree.children:
-            if isinstance(child, Tree) and child.data == 'topic_path':
-                client_name = self._extract_topic_path(child)
-            elif isinstance(child, Tree) and child.data == 'topic_type':
-                srv_type = self._extract_topic_type(child)
-            elif isinstance(child, Token) and child.type == 'STRING':
-                srv_type = child.value.strip('"')
-            elif isinstance(child, Tree) and child.data == 'client_config':
-                for setting in child.children:
-                    if isinstance(setting, Tree) and setting.data == 'client_setting':
-                        for config_child in setting.children:
-                            if isinstance(config_child, Tree) and config_child.data == 'qos_config':
-                                qos_config = self._handle_qos_config(config_child)
-                                break
-        
-        return ClientNode(
-            service=client_name or "",
-            srv_type=srv_type or "",
-            qos=qos_config
-        )
-    
-    def _handle_qos_config(self, tree: Tree) -> QoSNode:
-        """Handle QoS configuration."""
+    def _process_node(self, node: Tree):
+        """Process a parse tree node with error handling."""
         if self.debug:
-            print('DEBUG: _handle_qos_config children:', tree.children)
-        settings = []
-        for child in tree.children:
+            print(f"Processing node: {node.data}")
+        
+        try:
+            method_name = f"_process_{node.data}"
+            if hasattr(self, method_name):
+                getattr(self, method_name)(node)
+            else:
+                if self.debug:
+                    print(f"No handler for node type: {node.data}")
+        except Exception as e:
             if self.debug:
-                print('DEBUG: child type:', type(child), 'data:', getattr(child, 'data', None))
-            if isinstance(child, Tree) and child.data == 'qos_setting':
-                name, value = self._extract_qos_setting(child)
-                if name is not None and value is not None:
-                    settings.append(QoSSettingNode(name=name, value=value))
-        return QoSNode(settings=settings)
+                print(f"Error processing node {node.data}: {e}")
+            self.errors.append(f"Error processing {node.data}: {e}")
     
-    def _extract_qos_setting(self, tree: Tree) -> tuple[str, Any]:
-        """Extract QoS setting name and value."""
-        name = None
-        value = None
-        for child in tree.children:
-            if isinstance(child, Token):
-                if child.type == 'NAME' and name is None:
-                    name = child.value
-            elif isinstance(child, Tree) and child.data == 'expr':
-                value = self._extract_expr(child)
-        return name or "", value
+    def _process_data_structure(self, node: Tree):
+        """Process data structure definition (struct, class, enum, typedef, using)."""
+        try:
+            # data_structure can have multiple children: the definition and optional semicolon
+            # Find the actual definition node (first Tree child)
+            definition_node = None
+            for child in node.children:
+                if isinstance(child, Tree):
+                    definition_node = child
+                    break
+            
+            if definition_node:
+                # Delegate to the appropriate handler
+                if definition_node.data == "struct_def":
+                    self._process_struct_def(definition_node)
+                elif definition_node.data == "class_def":
+                    self._process_class_def(definition_node)
+                elif definition_node.data == "pyclass_def":
+                    self._process_pyclass_def(definition_node)
+                elif definition_node.data == "enum_def":
+                    self._process_enum_def(definition_node)
+                elif definition_node.data == "typedef_def":
+                    self._process_typedef_def(definition_node)
+                elif definition_node.data == "using_def":
+                    self._process_using_def(definition_node)
+                else:
+                    if self.debug:
+                        print(f"Unknown data structure type: {definition_node.data}")
+                    self.errors.append(f"Unknown data structure type: {definition_node.data}")
+            else:
+                if self.debug:
+                    print(f"No definition node found in data_structure")
+                self.errors.append(f"No definition node found in data_structure")
+        except Exception as e:
+            if self.debug:
+                print(f"Error processing data structure: {e}")
+            self.errors.append(f"Data structure error: {e}")
     
-    def _handle_cuda_kernels(self, tree: Tree) -> CudaKernelsNode:
-        """Handle CUDA kernels block."""
-        kernels = []
-        
-        for child in tree.children:
-            if isinstance(child, Tree) and child.data == 'kernel_def':
-                kernel_node = self._parse_kernel(child)
-                if kernel_node:
-                    kernels.append(kernel_node)
-        
-        return CudaKernelsNode(kernels=kernels)
-    
-    def _parse_kernel(self, tree: Tree) -> Optional[KernelNode]:
-        """Parse CUDA kernel definition."""
-        kernel_name = None
-        kernel_content = None
-        
-        for child in tree.children:
-            if isinstance(child, Token) and child.type == 'NAME':
-                kernel_name = child.value
-            elif isinstance(child, Tree) and child.data == 'kernel_content':
-                kernel_content = self._parse_kernel_content(child)
-        
-        if kernel_name and kernel_content:
-            return KernelNode(name=kernel_name, content=kernel_content)
-        
-        return None
-    
-    def _parse_kernel_content(self, tree: Tree) -> KernelContentNode:
-        """Parse kernel content and return KernelContentNode."""
-        content = KernelContentNode()
-        
-        for child in tree.children:
-            if isinstance(child, Tree):
-                if child.data == 'block_size':
-                    content.block_size = self._extract_tuple(child, 3)
-                elif child.data == 'grid_size':
-                    content.grid_size = self._extract_tuple(child, 3)
-                elif child.data == 'shared_memory':
-                    shared_memory = self._extract_expr(child)
-                    # Convert to int if it's a string that can be parsed as a number
-                    if isinstance(shared_memory, str):
-                        try:
-                            content.shared_memory = int(shared_memory)
-                        except ValueError:
-                            content.shared_memory = shared_memory
-                    else:
-                        content.shared_memory = shared_memory
-                elif child.data == 'use_thrust':
-                    content.use_thrust = self._extract_primitive(child)
-                elif child.data == 'kernel_input_param':
-                    # Handle comma-separated input parameters
-                    params = self._handle_kernel_param_list(child, KernelParameterDirection.IN)
-                    content.parameters.extend(params)
-                elif child.data == 'kernel_output_param':
-                    # Handle comma-separated output parameters
-                    params = self._handle_kernel_param_list(child, KernelParameterDirection.OUT)
-                    content.parameters.extend(params)
-                elif child.data == 'cuda_include':
-                    include_path = self._extract_include(child)
-                    content.cuda_includes.append(include_path)
-                elif child.data == 'code_block':
-                    content.code = self._extract_code_block(child)
-        
-        return content
-
-    def _handle_kernel_param_list(self, tree: Tree, direction: KernelParameterDirection) -> List[KernelParamNode]:
-        """Handle comma-separated kernel parameter list."""
-        params = []
-        
-        for child in tree.children:
-            if isinstance(child, Tree) and child.data == 'kernel_param_list':
-                for param_child in child.children:
-                    if isinstance(param_child, Tree) and param_child.data == 'kernel_param':
-                        param = self._handle_kernel_param(param_child, direction)
-                        if param:
-                            params.append(param)
-        
-        return params
-
-    def _handle_kernel_param(self, tree: Tree, direction: KernelParameterDirection) -> Optional[KernelParamNode]:
-        """Handle individual kernel parameter."""
-        param_type = None
-        param_name = None
-        size_expr = None
-        
-        for child in tree.children:
-            if isinstance(child, Tree) and child.data == 'cpp_type':
-                param_type = self._extract_cpp_type(child)
-            elif isinstance(child, Token) and child.type == 'NAME':
-                param_name = child.value
-            elif isinstance(child, Tree) and child.data == 'kernel_param_size':
-                size_expr = self._extract_kernel_param_size(child)
-        
-        if param_type and param_name:
-            return KernelParamNode(
-                param_type=param_type,
-                param_name=param_name,
-                direction=direction,
-                size_expr=size_expr
-            )
-        
-        return None
-    
-    def _extract_value(self, tree: Tree) -> Any:
-        """Extract value from value tree."""
-        for child in tree.children:
-            if isinstance(child, Tree):
-                if child.data == 'primitive':
-                    return self._extract_primitive(child)
-                elif child.data == 'array':
-                    return self._extract_array(child)
-                elif child.data == 'nested_dict':
-                    return self._extract_nested_dict(child)
-        
-        return None
-    
-    def _parse_number(self, value: str):
-        """Parse a number as int if possible, otherwise float."""
-        if '.' in value or 'e' in value or 'E' in value:
-            return float(value)
+    def _extract_token_value(self, token_or_tree: Union[Token, Tree]) -> str:
+        """Extract string value from token or tree."""
+        if isinstance(token_or_tree, Token):
+            return token_or_tree.value
+        elif isinstance(token_or_tree, Tree):
+            # Special handling for cpp_type and cpp_type_name
+            if token_or_tree.data == "cpp_type":
+                # cpp_type may have children like cpp_type_name, pointer, etc.
+                return "".join(self._extract_token_value(child) for child in token_or_tree.children)
+            elif token_or_tree.data == "cpp_type_name":
+                return "".join(self._extract_token_value(child) for child in token_or_tree.children)
+            else:
+                return str(token_or_tree)
         else:
-            return int(value)
-
-    def _extract_primitive(self, tree: Tree) -> Any:
-        """Extract primitive value from tree."""
-        for child in tree.children:
-            if isinstance(child, Token):
-                if child.type == 'BOOLEAN':
-                    result = child.value.lower() == 'true'
-                    return result
-                elif child.type == 'SIGNED_NUMBER':
-                    return self._parse_number(child.value)
-                elif child.type == 'STRING':
-                    return child.value.strip('"')
-            elif isinstance(child, Tree) and child.data == 'expr':
-                return self._extract_expr(child)
-        return None
+            return str(token_or_tree)
     
-    def _extract_array(self, tree: Tree) -> list:
-        """Extract array from tree."""
-        for child in tree.children:
-            if isinstance(child, Tree) and child.data == 'value_list':
-                return [self._extract_value(item) for item in child.children if isinstance(item, Tree)]
-        return []
-    
-    def _extract_nested_dict(self, tree: Tree) -> dict:
-        """Extract nested dictionary from tree."""
-        result = {}
-        for child in tree.children:
-            if isinstance(child, Tree) and child.data == 'dict_list':
-                for item in child.children:
-                    if isinstance(item, Tree) and item.data == 'dict_item':
-                        name, value = self._extract_dict_item(item)
-                        result[name] = value
-        return result
-    
-    def _extract_setting(self, tree: Tree) -> tuple[str, Any]:
-        """Extract name-value setting from tree."""
-        name = None
-        value = None
-        
-        for i, child in enumerate(tree.children):
-            if isinstance(child, Token):
-                if child.type == 'NAME' and name is None:
-                    name = child.value
-                elif child.type == 'BOOLEAN':
-                    value = child.value.lower() == 'true'
-                elif child.type == 'STRING':
-                    value = child.value.strip('"')
-                elif child.type == 'NUMBER':
-                    value = int(child.value) if '.' not in child.value else float(child.value)
-                elif child.type == 'NAME' and (child.value == 'true' or child.value == 'false'):
-                    value = child.value == 'true'
-            elif isinstance(child, Tree) and child.data == 'number':
-                value = self._extract_number(child)
-        
-        return name or "", value
-    
-    def _extract_tuple(self, tree: Tree, size: int) -> tuple:
-        """Extract tuple of numbers from tree."""
-        numbers = []
-        for child in tree.children:
-            if isinstance(child, Tree) and child.data == 'expr':
-                numbers.append(self._extract_expr(child))
-        return tuple(numbers[:size])
-    
-    def _extract_string(self, tree: Tree) -> str:
-        """Extract string value from tree."""
-        for child in tree.children:
-            if isinstance(child, Token) and child.type == 'STRING':
-                return child.value.strip('"')
-        return ""
-    
-    def _extract_include(self, tree: Tree) -> str:
-        # Handle both <...> and "..." includes
-        for child in tree.children:
-            if isinstance(child, Token) and child.type == 'STRING':
-                return child.value.strip('"')
-            elif isinstance(child, Tree) and child.data == 'include_path':
-                # Reconstruct the path from tokens
-                path_parts = []
-                for path_child in child.children:
-                    if isinstance(path_child, Token):
-                        path_parts.append(path_child.value)
-                # Handle .h, .hpp, etc.
-                if len(path_parts) > 1 and not '/' in path_parts[-1] and path_parts[-1].isalpha():
-                    return '/'.join(path_parts[:-2] + [path_parts[-2] + '.' + path_parts[-1]])
-                else:
-                    return '/'.join(path_parts)
-        return ""
-    
-    def _extract_define(self, tree: Tree) -> tuple[str, str]:
-        """Extract define name and value."""
-        name = None
-        value = ""
-        
-        for child in tree.children:
-            if isinstance(child, Token):
-                if child.type == 'NAME':
-                    name = child.value
-                elif child.type == 'STRING':
-                    value = child.value.strip('"')
-        
-        return name or "", value
-    
-    def _extract_dict_item(self, tree: Tree) -> tuple[str, Any]:
-        """Extract dictionary item."""
-        name = None
-        value = None
-        
-        for child in tree.children:
-            if isinstance(child, Token) and child.type == 'NAME':
-                name = child.value
-            elif isinstance(child, Tree) and child.data == 'value':
-                value = self._extract_value(child)
-        
-        return name or "", value
-    
-    def _handle_cpp_method(self, tree: Tree) -> CppMethodNode:
-        method_name = None
-        inputs = []
-        outputs = []
-        code = ""
-        
-        for child in tree.children:
-            if isinstance(child, Token) and child.type == 'NAME':
-                method_name = child.value
-            elif isinstance(child, Tree) and child.data == 'method_content':
-                for content_child in child.children:
-                    if isinstance(content_child, Tree):
-                        if content_child.data == 'input_param':
-                            inputs.append(self._handle_method_param(content_child))
-                        elif content_child.data == 'output_param':
-                            outputs.append(self._handle_method_param(content_child))
-                        elif content_child.data == 'code_block':
-                            code = self._extract_code_block(content_child)
-        
-        return CppMethodNode(name=method_name or '', inputs=inputs, outputs=outputs, code=code)
-
-    def _handle_method_param(self, tree: Tree) -> MethodParamNode:
-        """Handle method parameter."""
-        param_type = None
-        param_name = None
-        size_expr = None
-        is_const = False
-        
-        for child in tree.children:
-            if param_type is None and isinstance(child, Tree) and child.data == 'cpp_type':
-                param_type = self._extract_cpp_type(child)
-            elif param_name is None and isinstance(child, Token) and child.type == 'NAME':
-                param_name = child.value
-            elif size_expr is None and isinstance(child, Tree) and child.data in ('input_param_size', 'output_param_size'):
-                size_expr = self._extract_method_param_size(child)
-        
-        if param_type and param_type.strip().startswith("const "):
-            is_const = True
-            param_type = param_type.strip()[6:].strip()
-        
-        return MethodParamNode(
-            param_type=param_type or '', 
-            param_name=param_name or '', 
-            size_expr=size_expr,
-            is_const=is_const
-        )
-
-    def _extract_expr(self, tree: Tree) -> Any:
-        # If the expr is a single signed_atom, extract it
-        if len(tree.children) == 1:
-            child = tree.children[0]
-            if isinstance(child, Tree) and child.data == 'signed_atom':
-                return self._extract_signed_atom(child)
-        # Otherwise, reconstruct the expression as a string
-        return self._expr_to_str(tree)
-    
-    def _expr_to_str(self, tree: Tree) -> str:
-        """Convert expression tree to string representation."""
-        parts = []
-        for child in tree.children:
-            if isinstance(child, Token):
-                parts.append(child.value)
-            elif isinstance(child, Tree):
-                if child.data == 'signed_atom':
-                    parts.append(str(self._extract_signed_atom(child)))
-                elif child.data == 'binop':
-                    parts.append(child.children[0].value if child.children else '')
-                else:
-                    parts.append(self._expr_to_str(child))
-        return ' '.join(parts)
-    
-    def _extract_signed_atom(self, tree: Tree) -> Any:
-        """Extract signed atom value from tree."""
-        for child in tree.children:
-            if isinstance(child, Token):
-                if child.type == 'SIGNED_NUMBER':
-                    return self._parse_number(child.value)
-                elif child.type == 'NAME':
-                    return child.value
-                elif child.type == 'STRING':
-                    return child.value.strip('"')
-            elif isinstance(child, Tree) and child.data == 'dotted_name':
-                # For dotted names, return as string for now
-                return self._extract_dotted_name(child)
-        return None
-    
-    def _extract_dotted_name(self, tree: Tree) -> str:
-        """Extract dotted name as string."""
-        parts = []
-        for child in tree.children:
-            if isinstance(child, Token) and child.type == 'NAME':
-                parts.append(child.value)
-            elif isinstance(child, Token) and child.type == 'DOT':
-                parts.append('.')
-        return ''.join(parts)
-
-    def _extract_number(self, tree: Tree) -> float:
-        """Extract number from tree."""
-        for child in tree.children:
-            if isinstance(child, Token):
-                if child.type == 'NUMBER':
-                    value = child.value
-                    if '.' in value:
-                        return float(value)
-                    else:
-                        return int(value)
-        return 0.0
-
-    def _extract_cpp_type(self, tree) -> str:
-        """Extract C++ type from tree or token."""
-        if hasattr(tree, 'children'):
-            for child in tree.children:
-                if isinstance(child, Tree) and child.data == 'cpp_type_name':
-                    return self._extract_cpp_type_name(child)
-        elif hasattr(tree, 'value'):
-            return tree.value
-        return ""
-    
-    def _extract_cpp_type_name(self, tree: Tree) -> str:
-        """Extract C++ type name from tree."""
-        # With the new regex-based rule, the type name is a single token
-        if tree.children and isinstance(tree.children[0], Token):
-            return tree.children[0].value
-        return ""
-
-    def _extract_kernel_param_size(self, tree: Tree) -> List[str]:
-        """Extract kernel parameter size expression from tree."""
-        size_parts = []
-        for child in tree.children:
-            if isinstance(child, Tree) and child.data == 'kernel_param_size_list':
-                for item in child.children:
-                    if isinstance(item, Tree) and item.data == 'kernel_param_size_item':
-                        # Extract the value from the item
-                        for item_child in item.children:
-                            if isinstance(item_child, Token):
-                                if item_child.type in ('SIGNED_NUMBER', 'NAME', 'STRING'):
-                                    size_parts.append(item_child.value)
-                            elif isinstance(item_child, Tree):
-                                # Handle nested expressions
-                                if item_child.data == 'expr':
-                                    size_parts.append(str(self._extract_expr(item_child)))
-                    elif isinstance(item, Token):
-                        # kernel_param_size_item is a direct token
-                        if item.type in ('SIGNED_NUMBER', 'NAME', 'STRING'):
-                            size_parts.append(item.value)
-        return size_parts if size_parts else None
-
-    def _extract_code_block(self, tree: Tree) -> str:
-        """Extract code block from tree."""
-        for child in tree.children:
-            if isinstance(child, Tree) and child.data == 'balanced_braces':
-                return self._extract_balanced_braces(child)
-        return ""
-    
-    def _extract_balanced_braces(self, tree: Tree) -> str:
-        """Recursively extract all text from balanced_braces."""
-        result = []
-        for child in tree.children:
-            if isinstance(child, Tree) and child.data == 'balanced_content':
-                result.append(self._extract_balanced_content(child))
+    def _process_include_stmt(self, node: Tree):
+        """Process include statement with proper path parsing."""
+        try:
+            # Check if this is a system include (has include_path child) or local include (direct string)
+            if len(node.children) == 1 and isinstance(node.children[0], Tree) and node.children[0].data == "include_path":
+                # System include with angle brackets: include <path>
+                path_node = node.children[0]
+                path = self._parse_include_path(path_node)
+                is_system = True
             else:
-                result.append(str(child))
-        return '{' + ''.join(result) + '}'
+                # Local include with quotes: include "path"
+                path_child = node.children[0]
+                path = self._parse_include_path(path_child)
+                is_system = False
+            
+            include_node = IncludeNode(path=path, is_system=is_system)
+            self.ast.includes.append(include_node)
+            
+            if self.debug:
+                print(f"Added include: {path} (system: {is_system})")
+                
+        except Exception as e:
+            if self.debug:
+                print(f"Error processing include statement: {e}")
+            self.errors.append(f"Include statement error: {e}")
     
-    def _extract_balanced_content(self, tree: Tree) -> str:
-        """Extract content from balanced_content rule."""
-        result = []
-        for child in tree.children:
-            if isinstance(child, Tree) and child.data == 'balanced_braces':
-                result.append(self._extract_balanced_braces(child))
+    def _parse_include_path(self, path_node: Union[Tree, Token]) -> str:
+        """Parse include path according to grammar structure."""
+        if isinstance(path_node, Token):
+            # Direct string token
+            return path_node.value.strip('"<>')
+        
+        if isinstance(path_node, Tree):
+            if path_node.data == "include_path":
+                # Parse according to grammar: STRING | NAME ("/" NAME)* ("." NAME)?
+                parts = []
+                for child in path_node.children:
+                    if isinstance(child, Token):
+                        parts.append(child.value)
+                    else:
+                        parts.append(str(child))
+                
+                if self.debug:
+                    print(f"Include path parts: {parts}")
+                
+                # Reconstruct path based on grammar structure
+                if len(parts) == 1:
+                    # Single STRING or NAME
+                    return parts[0]
+                elif len(parts) == 2:
+                    # NAME "." NAME (extension)
+                    return f"{parts[0]}.{parts[1]}"
+                else:
+                    # NAME ("/" NAME)* ("." NAME)?
+                    # For paths like "rclcpp/rclcpp.hpp", we have 3 parts: ['rclcpp', 'rclcpp', 'hpp']
+                    # The last part should be treated as an extension
+                    if len(parts) == 3:
+                        # Special case for "rclcpp/rclcpp.hpp" pattern
+                        return f"{parts[0]}/{parts[1]}.{parts[2]}"
+                    else:
+                        # General case: join all parts except the last with slashes, then add dot + last part
+                        path_parts = parts[:-1]
+                        extension = parts[-1]
+                        path = "/".join(path_parts)
+                        path += f".{extension}"
+                        return path
             else:
-                result.append(str(child))
-        return ''.join(result)
-
-    def _extract_topic_path(self, tree: Tree) -> str:
-        """Extract topic path from tree."""
-        path_parts = []
-        for child in tree.children:
-            if isinstance(child, Token) and child.type == 'NAME':
-                path_parts.append(child.value)
-        return '/' + '/'.join(path_parts)
-
-    def _handle_kernel_def(self, tree: Tree) -> KernelNode:
-        """Handle kernel definition inside nodes."""
-        return self._parse_kernel(tree)
-
-    def _handle_onnx_model(self, tree: Tree) -> OnnxModelNode:
-        """Handle ONNX model definition."""
-        model_name = None
-        model_config = None
+                # Fallback for other tree structures
+                return str(path_node)
         
-        for child in tree.children:
-            if isinstance(child, Token) and child.type == 'NAME':
-                model_name = child.value
-            elif isinstance(child, Tree) and child.data == 'onnx_model_content':
-                model_config = self._handle_onnx_model_content(child)
-        
-        return OnnxModelNode(name=model_name or "", config=model_config or ModelConfigNode())
-
-    def _handle_onnx_model_content(self, tree: Tree) -> ModelConfigNode:
-        """Handle ONNX model content with flexible structure."""
-        config = ModelConfigNode()
-        
-        for child in tree.children:
-            if isinstance(child, Tree):
-                if child.data == 'config_block':
-                    # Handle config block
-                    config_block = self._handle_config_block(child)
-                    # Merge config block contents into main config
-                    config.inputs.extend(config_block.inputs)
-                    config.outputs.extend(config_block.outputs)
-                    if config_block.device:
-                        config.device = config_block.device
-                    config.optimizations.extend(config_block.optimizations)
-                elif child.data == 'input_def':
-                    config.inputs.append(self._handle_input_def(child))
-                elif child.data == 'output_def':
-                    config.outputs.append(self._handle_output_def(child))
-                elif child.data == 'device':
-                    config.device = self._handle_device(child)
-                elif child.data == 'optimization':
-                    config.optimizations.append(self._handle_optimization(child))
-        
-        return config
-
-    def _handle_config_block(self, tree: Tree) -> ModelConfigNode:
-        """Handle config block within ONNX model."""
-        config = ModelConfigNode()
-        
-        for child in tree.children:
-            if isinstance(child, Tree):
-                if child.data == 'input_def':
-                    config.inputs.append(self._handle_input_def(child))
-                elif child.data == 'output_def':
-                    config.outputs.append(self._handle_output_def(child))
-                elif child.data == 'device':
-                    config.device = self._handle_device(child)
-                elif child.data == 'optimization':
-                    config.optimizations.append(self._handle_optimization(child))
-        
-        return config
-
-    def _handle_input_def(self, tree: Tree) -> InputDefNode:
-        """Handle input definition."""
-        input_name = None
-        input_type = None
-        
-        for child in tree.children:
-            if isinstance(child, Token):
-                if child.type in ['STRING', 'NAME']:  # Handle both types
-                    value = child.value.strip('"') if child.type == 'STRING' else child.value
-                    if input_name is None:
-                        input_name = value
-                    else:
-                        input_type = value
-        
-        return InputDefNode(name=input_name or "", type=input_type or "")
-
-    def _handle_output_def(self, tree: Tree) -> OutputDefNode:
-        """Handle output definition."""
-        output_name = None
-        output_type = None
-        
-        for child in tree.children:
-            if isinstance(child, Token):
-                if child.type in ['STRING', 'NAME']:  # Handle both types
-                    value = child.value.strip('"') if child.type == 'STRING' else child.value
-                    if output_name is None:
-                        output_name = value
-                    else:
-                        output_type = value
-        
-        return OutputDefNode(name=output_name or "", type=output_type or "")
-
-    def _handle_device(self, tree: Tree) -> DeviceNode:
-        """Handle device definition."""
-        device_name = None
-        
-        for child in tree.children:
-            if isinstance(child, Token) and child.type in ['NAME', 'STRING']:
-                device_name = child.value.strip('"') if child.type == 'STRING' else child.value
-                break
-        
-        return DeviceNode(device=device_name or "")
-
-    def _handle_optimization(self, tree: Tree) -> OptimizationNode:
-        """Handle optimization definition."""
-        optimization_name = None
-        
-        for child in tree.children:
-            if isinstance(child, Token) and child.type in ['NAME', 'STRING']:
-                optimization_name = child.value.strip('"') if child.type == 'STRING' else child.value
-                break
-        
-        return OptimizationNode(optimization=optimization_name or "")
-
-    def _extract_method_param_size(self, tree: Tree) -> str:
-        """Extract method parameter size expression."""
-        size_parts = []
-        if tree.children and isinstance(tree.children[0], Tree) and tree.children[0].data == 'method_param_size_list':
-            for item in tree.children[0].children:
-                if isinstance(item, Tree) and item.data == 'method_param_size_item':
-                    # Extract the value from the item
-                    for item_child in item.children:
-                        if isinstance(item_child, Token):
-                            if item_child.type in ('SIGNED_NUMBER', 'NAME', 'STRING'):
-                                size_parts.append(item_child.value)
-                        elif isinstance(item_child, Tree):
-                            # Handle nested expressions
-                            if item_child.data == 'expr':
-                                size_parts.append(str(self._extract_expr(item_child)))
-                elif isinstance(item, Token):
-                    # method_param_size_item is a direct token
-                    if item.type in ('SIGNED_NUMBER', 'NAME', 'STRING'):
-                        size_parts.append(item.value)
-        return ', '.join(size_parts)
-
-    def _handle_pipeline(self, tree: Tree) -> PipelineNode:
-        """Handle pipeline definition."""
-        pipeline_name = None
-        pipeline_content = None
-        
-        for child in tree.children:
-            if isinstance(child, Token) and child.type == 'NAME':
-                pipeline_name = child.value
-            elif isinstance(child, Tree) and child.data == 'pipeline_content':
-                pipeline_content = self._parse_pipeline_content(child)
-        
-        return PipelineNode(name=pipeline_name or "", content=pipeline_content or PipelineContentNode())
-
-    def _parse_pipeline_content(self, content_tree: Tree) -> PipelineContentNode:
-        """Parse pipeline content and return PipelineContentNode."""
-        content = PipelineContentNode()
-        
-        for child in content_tree.children:
-            if isinstance(child, Tree):
-                if child.data == 'stage_def':
-                    content.stages.append(self._handle_stage(child))
-        
-        return content
-
-    def _handle_stage(self, tree: Tree) -> StageNode:
-        """Handle stage definition."""
-        stage_name = None
-        stage_content = None
-        
-        for child in tree.children:
-            if isinstance(child, Token) and child.type == 'NAME':
-                stage_name = child.value
-            elif isinstance(child, Tree) and child.data == 'stage_content':
-                stage_content = self._parse_stage_content(child)
-        
-        return StageNode(name=stage_name or "", content=stage_content or StageContentNode())
-
-    def _parse_stage_content(self, content_tree: Tree) -> StageContentNode:
-        """Parse stage content and return StageContentNode."""
-        content = StageContentNode()
-        
-        for child in content_tree.children:
-            if isinstance(child, Tree):
-                if child.data == 'stage_input':
-                    content.inputs.append(self._handle_stage_input(child))
-                elif child.data == 'stage_output':
-                    content.outputs.append(self._handle_stage_output(child))
-                elif child.data == 'stage_method':
-                    content.methods.append(self._handle_stage_method(child))
-                elif child.data == 'stage_model':
-                    content.models.append(self._handle_stage_model(child))
-                elif child.data == 'stage_topic':
-                    content.topics.append(self._handle_stage_topic(child))
-                elif child.data == 'stage_cuda_kernel':
-                    content.cuda_kernels.append(self._handle_stage_cuda_kernel(child))
-                elif child.data == 'stage_onnx_model':
-                    content.onnx_models.append(self._handle_stage_onnx_model(child))
-        
-        return content
-
-    def _handle_stage_input(self, tree: Tree) -> StageInputNode:
-        """Handle stage input definition."""
-        input_name = ""
-        for child in tree.children:
-            if isinstance(child, Token) and child.type == 'STRING':
-                input_name = child.value.strip('"')
-        return StageInputNode(input_name=input_name)
-
-    def _handle_stage_output(self, tree: Tree) -> StageOutputNode:
-        """Handle stage output definition."""
-        output_name = ""
-        for child in tree.children:
-            if isinstance(child, Token) and child.type == 'STRING':
-                output_name = child.value.strip('"')
-        return StageOutputNode(output_name=output_name)
-
-    def _handle_stage_method(self, tree: Tree) -> StageMethodNode:
-        """Handle stage method definition."""
-        method_name = ""
-        for child in tree.children:
-            if isinstance(child, Token) and child.type == 'STRING':
-                method_name = child.value.strip('"')
-        return StageMethodNode(method_name=method_name)
-
-    def _handle_stage_model(self, tree: Tree) -> StageModelNode:
-        """Handle stage model definition."""
-        model_name = ""
-        for child in tree.children:
-            if isinstance(child, Token) and child.type == 'STRING':
-                model_name = child.value.strip('"')
-        return StageModelNode(model_name=model_name)
-
-    def _handle_stage_topic(self, tree: Tree) -> StageTopicNode:
-        """Handle stage topic definition."""
-        topic_path = ""
-        for child in tree.children:
-            if isinstance(child, Token) and child.type == 'TOPIC_PATH':
-                topic_path = child.value
-        return StageTopicNode(topic_path=topic_path)
-
-    def _handle_stage_cuda_kernel(self, tree: Tree) -> StageCudaKernelNode:
-        """Handle stage CUDA kernel definition."""
-        kernel_name = ""
-        for child in tree.children:
-            if isinstance(child, Token) and child.type == 'STRING':
-                kernel_name = child.value.strip('"')
-        return StageCudaKernelNode(kernel_name=kernel_name)
-
-    def _handle_stage_onnx_model(self, tree: Tree) -> StageOnnxModelNode:
-        """Handle stage ONNX model definition."""
-        model_name = ""
-        for child in tree.children:
-            if isinstance(child, Token) and child.type == 'STRING':
-                model_name = child.value.strip('"')
-        return StageOnnxModelNode(model_name=model_name)
-
-    def _extract_topic_type(self, tree: Tree) -> str:
-        """Extract topic type from topic_type tree."""
-        parts = []
-        for child in tree.children:
-            if isinstance(child, Token):
-                if child.type == 'NAME':
-                    parts.append(child.value)
-                elif child.type in ('STRING', 'TOPIC_TYPE_STRING'):
-                    # Strip quotes for quoted topic types
-                    return child.value.strip('"')
-        if parts:
-            return '/'.join(parts)
-        return ""
-
-    # Data Structure Handling Methods
-    def _handle_data_structure(self, tree: Tree) -> Union[StructNode, ClassNode, EnumNode, TypedefNode, UsingNode]:
-        """Handle data structure definition."""
-        # The first child should be the specific data structure type
-        if tree.children and isinstance(tree.children[0], Tree):
-            child = tree.children[0]
-            if child.data == 'struct_def':
-                return self._handle_struct(child)
-            elif child.data == 'class_def':
-                return self._handle_class(child)
-            elif child.data == 'enum_def':
-                return self._handle_enum(child)
-            elif child.data == 'typedef_def':
-                return self._handle_typedef(child)
-            elif child.data == 'using_def':
-                return self._handle_using(child)
-        
-        # Fallback
-        raise ValueError("Unknown data structure type")
-
-    def _handle_struct(self, tree: Tree) -> StructNode:
-        """Handle struct definition."""
-        struct_name = None
-        struct_content = None
-        
-        for child in tree.children:
-            if isinstance(child, Token) and child.type == 'NAME':
-                struct_name = child.value
-            elif isinstance(child, Tree) and child.data == 'struct_content':
-                struct_content = self._parse_struct_content(child)
-        
-        return StructNode(name=struct_name or "", content=struct_content or StructContentNode())
-
-    def _parse_struct_content(self, content_tree: Tree) -> StructContentNode:
-        """Parse struct content and return StructContentNode."""
+        return str(path_node)
+    
+    def _process_struct_def(self, node: Tree):
+        """Process struct definition."""
+        try:
+            name = str(node.children[0])
+            content = self._process_struct_content(node.children[2])
+            struct_node = StructNode(name=name, content=content)
+            self.ast.data_structures.append(struct_node)
+        except Exception as e:
+            if self.debug:
+                print(f"Error processing struct definition: {e}")
+            self.errors.append(f"Struct definition error: {e}")
+    
+    def _process_struct_content(self, node: Tree) -> StructContentNode:
+        """Process struct content."""
         content = StructContentNode()
-        
-        for child in content_tree.children:
-            if isinstance(child, Tree):
-                if child.data == 'struct_member':
-                    content.members.append(self._handle_struct_member(child))
-                elif child.data == 'cpp_method':
-                    content.methods.append(self._handle_cpp_method(child))
-                elif child.data == 'include_stmt':
-                    content.includes.append(self._handle_include(child))
-        
+        try:
+            for child in node.children:
+                if isinstance(child, Tree):
+                    if child.data == "struct_member":
+                        content.members.append(self._process_struct_member(child))
+                    elif child.data == "cpp_method":
+                        content.methods.append(self._process_cpp_method(child))
+                    elif child.data == "include_stmt":
+                        self._process_include_stmt(child)
+        except Exception as e:
+            if self.debug:
+                print(f"Error processing struct content: {e}")
+            self.errors.append(f"Struct content error: {e}")
         return content
-
-    def _handle_struct_member(self, tree: Tree) -> StructMemberNode:
-        """Handle struct member definition."""
-        member_type = None
-        member_name = None
-        array_spec = None
-        
-        for child in tree.children:
-            if isinstance(child, Tree) and child.data == 'cpp_type':
-                member_type = self._extract_cpp_type(child)
-            elif isinstance(child, Token) and child.type == 'NAME':
-                member_name = child.value
-            elif isinstance(child, Tree) and child.data == 'array_spec':
-                array_spec = self._extract_array_spec(child)
-        
-        return StructMemberNode(type=member_type or "", name=member_name or "", array_spec=array_spec)
-
-    def _extract_array_spec(self, tree: Tree) -> str:
-        """Extract array specification."""
-        if tree.children and isinstance(tree.children[0], Tree) and tree.children[0].data == 'expr':
-            return f"[{self._expr_to_str(tree.children[0])}]"
-        return "[]"
-
-    def _handle_class(self, tree: Tree) -> ClassNode:
-        """Handle class definition."""
-        class_name = None
-        inheritance = None
-        class_content = None
-        
-        for child in tree.children:
-            if isinstance(child, Token) and child.type == 'NAME':
-                class_name = child.value
-            elif isinstance(child, Tree) and child.data == 'inheritance':
-                inheritance = self._handle_inheritance(child)
-            elif isinstance(child, Tree) and child.data == 'class_content':
-                class_content = self._parse_class_content(child)
-        
-        return ClassNode(name=class_name or "", inheritance=inheritance, content=class_content or ClassContentNode())
-
-    def _handle_inheritance(self, tree: Tree) -> InheritanceNode:
-        """Handle inheritance specification."""
-        base_classes = []
-        current_access = "public"  # Default access specifier
-        
-        for child in tree.children:
-            if isinstance(child, Token) and child.type == 'NAME':
-                if child.value in ['public', 'private', 'protected']:
-                    current_access = child.value
-                else:
-                    base_classes.append((current_access, child.value))
-        
-        return InheritanceNode(base_classes=base_classes)
-
-    def _parse_class_content(self, content_tree: Tree) -> ClassContentNode:
-        """Parse class content and return ClassContentNode."""
+    
+    def _process_struct_member(self, node: Tree) -> StructMemberNode:
+        """Process struct member."""
+        try:
+            type_name = str(node.children[0])
+            name = str(node.children[1])
+            array_spec = None
+            if len(node.children) > 2 and node.children[2].data == "array_spec":
+                array_spec = str(node.children[2])
+            return StructMemberNode(type=type_name, name=name, array_spec=array_spec)
+        except Exception as e:
+            if self.debug:
+                print(f"Error processing struct member: {e}")
+            self.errors.append(f"Struct member error: {e}")
+    
+    def _process_class_def(self, node: Tree):
+        """Process class definition."""
+        try:
+            name = str(node.children[0])
+            inheritance = None
+            content_node = None
+            
+            # Find inheritance and class_content among the children
+            for child in node.children[1:]:
+                if isinstance(child, Tree):
+                    if child.data == "inheritance":
+                        inheritance = self._process_inheritance(child)
+                    elif child.data == "class_content":
+                        content_node = self._process_class_content(child)
+            
+            if content_node is None:
+                content_node = ClassContentNode()
+            
+            class_node = ClassNode(name=name, content=content_node, inheritance=inheritance)
+            self.ast.data_structures.append(class_node)
+        except Exception as e:
+            if self.debug:
+                print(f"Error processing class definition: {e}")
+            self.errors.append(f"Class definition error: {e}")
+    
+    def _process_class_content(self, node: Tree) -> ClassContentNode:
+        """Process class content."""
         content = ClassContentNode()
-        current_section = None
-        
-        for child in content_tree.children:
-            if isinstance(child, Tree):
-                if child.data == 'access_section':
-                    current_section = self._handle_access_section(child)
-                    content.access_sections.append(current_section)
-                elif child.data == 'struct_member':
-                    content.members.append(self._handle_struct_member(child))
-                elif child.data == 'cpp_method':
-                    content.methods.append(self._handle_cpp_method(child))
-                elif child.data == 'include_stmt':
-                    content.includes.append(self._handle_include(child))
-        
+        try:
+            if self.debug:
+                print(f"[DEBUG] Processing class_content with {len(node.children)} children")
+            for child in node.children:
+                if isinstance(child, Tree):
+                    if self.debug:
+                        print(f"[DEBUG] class_content child: {child.data}")
+                    if child.data == "class_access_section":
+                        if self.debug:
+                            print(f"[DEBUG] Found class_access_section, processing...")
+                        content.access_sections.append(self._process_class_access_section(child))
+                    elif child.data == "class_direct_member":
+                        content.members.append(self._process_struct_member(child.children[0]))
+                    elif child.data == "class_direct_method":
+                        content.methods.append(self._process_cpp_method(child.children[0]))
+                    elif child.data == "include_stmt":
+                        self._process_include_stmt(child)
+        except Exception as e:
+            if self.debug:
+                print(f"Error processing class content: {e}")
+            self.errors.append(f"Class content error: {e}")
         return content
-
-    def _handle_access_section(self, tree: Tree) -> AccessSectionNode:
-        """Handle access section (public, private, protected)."""
-        access_specifier = "public"  # Default
-        members = []
-        methods = []
-        
-        for child in tree.children:
-            if isinstance(child, Token) and child.type == 'NAME':
-                if child.value in ['public', 'private', 'protected']:
-                    access_specifier = child.value
-            elif isinstance(child, Tree):
-                if child.data == 'struct_member':
-                    members.append(self._handle_struct_member(child))
-                elif child.data == 'cpp_method':
-                    methods.append(self._handle_cpp_method(child))
-        
-        return AccessSectionNode(access_specifier=access_specifier, members=members, methods=methods)
-
-    def _handle_enum(self, tree: Tree) -> EnumNode:
-        """Handle enum definition."""
-        enum_name = None
-        enum_type = None
-        enum_content = None
-        
-        for child in tree.children:
-            if isinstance(child, Token) and child.type == 'NAME':
-                if child.value in ['class', 'struct']:
-                    enum_type = child.value
+    
+    def _process_class_access_section(self, node: Tree) -> AccessSectionNode:
+        """Process class access section."""
+        try:
+            # access_specifier is a tree node containing a token
+            access_specifier_token = node.children[0]
+            if isinstance(access_specifier_token, Tree) and access_specifier_token.children:
+                access_specifier = str(access_specifier_token.children[0].value)
+            elif hasattr(access_specifier_token, 'value'):
+                access_specifier = str(access_specifier_token.value)
+            else:
+                access_specifier = str(access_specifier_token)
+            if self.debug:
+                print(f"[DEBUG] Creating AccessSectionNode with access_specifier: {access_specifier}")
+            section = AccessSectionNode(access_specifier=access_specifier)
+            
+            for child in node.children[1:]:
+                if isinstance(child, Tree):
+                    if child.data == "class_section_member":
+                        section.members.append(self._process_struct_member(child.children[0]))
+                    elif child.data == "class_section_method":
+                        cpp_method_node = child.children[0] if child.children else None
+                        if cpp_method_node:
+                            section.methods.append(self._process_cpp_method(cpp_method_node))
+            
+            return section
+        except Exception as e:
+            if self.debug:
+                print(f"Error processing class access section: {e}")
+            self.errors.append(f"Class access section error: {e}")
+            return AccessSectionNode(access_specifier="public")
+    
+    def _process_inheritance(self, node: Tree) -> InheritanceNode:
+        """Process inheritance."""
+        try:
+            base_classes = []
+            current_access = "public"  # Default access
+            
+            for child in node.children:
+                if isinstance(child, Tree):
+                    if child.data == "access_specifier":
+                        current_access = str(child.children[0]) if child.children else "public"
+                    elif child.data == "cpp_type":
+                        class_name = self._extract_token_value(child)
+                        base_classes.append((current_access, class_name))
+                        current_access = "public"  # Reset for next base class
                 else:
-                    enum_name = child.value
-            elif isinstance(child, Tree) and child.data == 'enum_content':
-                enum_content = self._parse_enum_content(child)
+                    # Direct token (class name without access specifier)
+                    class_name = str(child)
+                    base_classes.append((current_access, class_name))
+                    current_access = "public"  # Reset for next base class
+            
+            return InheritanceNode(base_classes=base_classes)
+        except Exception as e:
+            if self.debug:
+                print(f"Error processing inheritance: {e}")
+            self.errors.append(f"Inheritance error: {e}")
+            return InheritanceNode(base_classes=[])
+    
+    def _process_cpp_method(self, node: Tree) -> CppMethodNode:
+        try:
+            name = str(node.children[0])
+            method = CppMethodNode(name=name)
+            print(f"[DEBUG] _process_cpp_method: method name: {name}")
+            # Process method_content child
+            if len(node.children) > 1 and isinstance(node.children[1], Tree) and node.children[1].data == "method_content":
+                method_content = node.children[1]
+                print(f"[DEBUG] Processing method_content with {len(method_content.children)} children")
+                for child in method_content.children:
+                    if isinstance(child, Tree):
+                        print(f"[DEBUG] method_content child: {child}, data: {child.data}")
+                        if child.data == "input_param":
+                            method.inputs.append(self._process_method_param(child))
+                        elif child.data == "output_param":
+                            method.outputs.append(self._process_method_param(child))
+                        elif child.data == "code_block":
+                            print(f"[DEBUG] Calling _extract_code_from_block for code_block: {child}")
+                            method.code = self._extract_code_from_block(child)
+            else:
+                # Legacy format - direct children
+                for child in node.children[1:]:
+                    if isinstance(child, Tree):
+                        print(f"[DEBUG] legacy child: {child}, data: {child.data}")
+                        if child.data == "method_content":
+                            print(f"[DEBUG] Recursively processing legacy method_content child")
+                            for subchild in child.children:
+                                if isinstance(subchild, Tree):
+                                    print(f"[DEBUG] legacy method_content subchild: {subchild}, data: {subchild.data}")
+                                    if subchild.data == "input_param":
+                                        method.inputs.append(self._process_method_param(subchild))
+                                    elif subchild.data == "output_param":
+                                        method.outputs.append(self._process_method_param(subchild))
+                                    elif subchild.data == "code_block":
+                                        print(f"[DEBUG] Calling _extract_code_from_block for code_block: {subchild}")
+                                        method.code = self._extract_code_from_block(subchild)
+                        elif child.data == "input_param":
+                            method.inputs.append(self._process_method_param(child))
+                        elif child.data == "output_param":
+                            method.outputs.append(self._process_method_param(child))
+                        elif child.data == "code_block":
+                            print(f"[DEBUG] Calling _extract_code_from_block for code_block: {child}")
+                            method.code = self._extract_code_from_block(child)
+            return method
+        except Exception as e:
+            print(f"Error processing C++ method: {e}")
+            self.errors.append(f"C++ method error: {e}")
+            return CppMethodNode(name="")
+    
+    def _extract_code_from_block(self, code_block_node: Tree) -> str:
+        """Extract code from a code block node, handling nested balanced braces."""
+        if self.debug:
+            print("[DEBUG] _extract_code_from_block called")
         
-        return EnumNode(name=enum_name or "", enum_type=enum_type, content=enum_content or EnumContentNode())
-
-    def _parse_enum_content(self, content_tree: Tree) -> EnumContentNode:
-        """Parse enum content and return EnumContentNode."""
-        content = EnumContentNode()
-        
-        for child in content_tree.children:
-            if isinstance(child, Tree) and child.data == 'enum_value':
-                content.values.append(self._handle_enum_value(child))
-        
-        return content
-
-    def _handle_enum_value(self, tree: Tree) -> EnumValueNode:
-        """Handle enum value definition."""
-        value_name = None
-        value_expr = None
-        
-        for child in tree.children:
-            if isinstance(child, Token) and child.type == 'NAME':
-                value_name = child.value
-            elif isinstance(child, Tree) and child.data == 'expr':
-                value_expr = self._expr_to_str(child)
-        
-        return EnumValueNode(name=value_name or "", value=value_expr)
-
-    def _handle_typedef(self, tree: Tree) -> TypedefNode:
-        """Handle typedef definition."""
-        original_type = None
-        new_name = None
-        
-        for child in tree.children:
-            if isinstance(child, Tree) and child.data == 'cpp_type':
-                original_type = self._extract_cpp_type(child)
-            elif isinstance(child, Token) and child.type == 'NAME':
-                new_name = child.value
-        
-        return TypedefNode(original_type=original_type or "", new_name=new_name or "")
-
-    def _handle_using(self, tree: Tree) -> UsingNode:
-        """Handle using declaration."""
-        name = None
-        type_name = None
-        
-        for child in tree.children:
-            if isinstance(child, Token) and child.type == 'NAME':
-                if name is None:
-                    name = child.value
+        def collect_code(node):
+            code_parts = []
+            if self.debug:
+                print(f"[DEBUG] collect_code visiting node: {node}, type: {type(node)}")
+            if isinstance(node, Tree):
+                if node.data == "balanced_braces":
+                    code_parts.append("{")
+                    for child in node.children:
+                        code_parts.append(collect_code(child))
+                    code_parts.append("}")
+                elif node.data == "balanced_content":
+                    for child in node.children:
+                        code_parts.append(collect_code(child))
                 else:
-                    type_name = child.value
-            elif isinstance(child, Tree) and child.data == 'cpp_type':
-                type_name = self._extract_cpp_type(child)
-        
-        return UsingNode(name=name or "", type=type_name or "")
+                    for child in node.children:
+                        code_parts.append(collect_code(child))
+            elif isinstance(node, Token):
+                code_parts.append(node.value)
+            return ''.join(code_parts)
 
-    # Pythonic Class Handling Methods
-    def _handle_pyclass(self, tree: Tree) -> PyClassNode:
-        """Handle Pythonic class definition."""
-        class_name = None
-        inheritance = None
-        class_content = None
-        
-        for child in tree.children:
-            if isinstance(child, Token) and child.type == 'NAME':
-                class_name = child.value
-            elif isinstance(child, Tree) and child.data == 'inheritance':
-                inheritance = self._handle_inheritance(child)
-            elif isinstance(child, Tree) and child.data == 'pyclass_content':
-                class_content = self._parse_pyclass_content(child)
-        
-        return PyClassNode(name=class_name or "", inheritance=inheritance, content=class_content or PyClassContentNode())
+        try:
+            if self.debug:
+                print(f"[DEBUG] code_block_node: {code_block_node}")
+                print(f"[DEBUG] code_block_node type: {type(code_block_node)}")
+                print(f"[DEBUG] code_block_node children: {code_block_node.children}")
+            
+            # Process all children of the code_block_node, not just the first one
+            code_parts = []
+            for child in code_block_node.children:
+                if isinstance(child, Tree) and child.data in ("balanced_braces", "balanced_content"):
+                    code_parts.append(collect_code(child))
+                else:
+                    code_parts.append(collect_code(child))
+            
+            code_str = ''.join(code_parts)
+            if self.debug:
+                print(f"[DEBUG] Extracted code: '{code_str}'")
+            return code_str
+        except Exception as e:
+            if self.debug:
+                print(f"Error extracting code from block: {e}")
+            return ""
+    
+    def _process_method_param(self, node: Tree):
+        """Process method parameter."""
+        try:
+            # Extract type name from cpp_type subtree
+            def extract_cpp_type(type_node):
+                # cpp_type -> cpp_type_name (Token) or pointer/array
+                if hasattr(type_node, 'children') and len(type_node.children) > 0:
+                    # Recursively extract from first child
+                    return extract_cpp_type(type_node.children[0])
+                elif hasattr(type_node, 'value'):
+                    return type_node.value
+                else:
+                    return str(type_node)
 
-    def _parse_pyclass_content(self, content_tree: Tree) -> PyClassContentNode:
-        """Parse Pythonic class content and return PyClassContentNode."""
-        content = PyClassContentNode()
-        
-        for child in content_tree.children:
+            param_type = extract_cpp_type(node.children[0])
+            param_name = str(node.children[1])
+            size_expr = None
+            if len(node.children) > 2 and hasattr(node.children[2], 'data') and node.children[2].data == "input_param_size":
+                size_expr = str(node.children[2])
+            return MethodParamNode(param_type=param_type, param_name=param_name, size_expr=size_expr)
+        except Exception as e:
+            print(f"Error processing method parameter: {e}")
+            self.errors.append(f"Method parameter error: {e}")
+            return MethodParamNode(param_type="", param_name="", size_expr=None)
+    
+    def _process_custom_interface(self, node: Tree):
+        """Process custom interface (message, service, or action)."""
+        try:
+            for child in node.children:
+                if isinstance(child, Tree):
+                    self._process_node(child)
+        except Exception as e:
+            if self.debug:
+                print(f"Error processing custom interface: {e}")
+            self.errors.append(f"Custom interface error: {e}")
+    
+    def _process_message_def(self, node: Tree):
+        """Process message definition."""
+        try:
+            name = str(node.children[0])
+            content = self._process_message_content(node.children[2])
+            message_node = MessageNode(name=name, content=content)
+            self.ast.messages.append(message_node)
+        except Exception as e:
+            if self.debug:
+                print(f"Error processing message definition: {e}")
+            self.errors.append(f"Message definition error: {e}")
+    
+    def _process_message_content(self, node: Tree) -> MessageContentNode:
+        """Process message content."""
+        content = MessageContentNode()
+        try:
+            for child in node.children:
+                if isinstance(child, Tree) and child.data == "message_field":
+                    content.fields.append(self._process_message_field(child))
+        except Exception as e:
+            if self.debug:
+                print(f"Error processing message content: {e}")
+            self.errors.append(f"Message content error: {e}")
+        return content
+    
+    def _process_message_field(self, node: Tree) -> MessageFieldNode:
+        """Process message field."""
+        try:
+            field_type = str(node.children[0])
+            field_name = str(node.children[1])
+            array_spec = None
+            default_value = None
+
+            # If type ends with [] or similar, extract array_spec
+            if field_type.endswith('[]'):
+                array_spec = '[]'
+                field_type = field_type[:-2]
+                field_type = field_type.strip()
+
+            for child in node.children[2:]:
+                if isinstance(child, Tree):
+                    if child.data == "default_value":
+                        default_value = self._process_value(child.children[0])
+
+            return MessageFieldNode(type=field_type, name=field_name, 
+                                  array_spec=array_spec, default_value=default_value)
+        except Exception as e:
+            if self.debug:
+                print(f"Error processing message field: {e}")
+            self.errors.append(f"Message field error: {e}")
+            return MessageFieldNode(type="", name="", array_spec=None, default_value=None)
+    
+    def _process_value(self, node) -> ValueNode:
+        """Process value node."""
+        # Recursively unwrap 'value' nodes
+        while isinstance(node, Tree) and node.data == "value" and len(node.children) == 1:
+            node = node.children[0]
+        if isinstance(node, Tree):
+            if node.data == "primitive":
+                # Handle primitive values (boolean, string, number)
+                primitive_value = node.children[0]
+                if hasattr(primitive_value, 'type'):
+                    if primitive_value.type == 'BOOLEAN':
+                        return ValueNode(value=primitive_value.value == 'true')
+                    elif primitive_value.type == 'STRING':
+                        return ValueNode(value=primitive_value.value.strip('"'))
+                    elif primitive_value.type == 'SIGNED_NUMBER':
+                        # Try to convert to int first, then float
+                        try:
+                            if '.' in primitive_value.value:
+                                return ValueNode(value=float(primitive_value.value))
+                            else:
+                                return ValueNode(value=int(primitive_value.value))
+                        except ValueError:
+                            return ValueNode(value=primitive_value.value)
+                else:
+                    return ValueNode(value=str(primitive_value))
+            elif node.data == "array":
+                # Handle array values
+                values = []
+                for child in node.children:
+                    if isinstance(child, Tree) and child.data == "value_list":
+                        for list_child in child.children:
+                            if isinstance(list_child, Tree) and list_child.data == "value":
+                                values.append(self._process_value(list_child).value)
+                return ValueNode(value=values)
+            elif node.data == "nested_dict":
+                # Handle dictionary values
+                result = {}
+                for child in node.children:
+                    if isinstance(child, Tree) and child.data == "dict_list":
+                        for dict_child in child.children:
+                            if isinstance(dict_child, Tree) and dict_child.data == "dict_item":
+                                key = str(dict_child.children[0])
+                                value = self._process_value(dict_child.children[1]).value
+                                result[key] = value
+                return ValueNode(value=result)
+            else:
+                return ValueNode(value=str(node))
+        else:
+            # Handle direct tokens
+            if hasattr(node, 'type'):
+                if node.type == 'BOOLEAN':
+                    return ValueNode(value=node.value == 'true')
+                elif node.type == 'STRING':
+                    return ValueNode(value=node.value.strip('"'))
+                elif node.type == 'SIGNED_NUMBER':
+                    try:
+                        if '.' in node.value:
+                            return ValueNode(value=float(node.value))
+                        else:
+                            return ValueNode(value=int(node.value))
+                    except ValueError:
+                        return ValueNode(value=node.value)
+            return ValueNode(value=str(node))
+
+    def _process_service_content(self, node: Tree) -> ServiceContentNode:
+        """Process service content."""
+        request = None
+        response = None
+        for child in node.children:
             if isinstance(child, Tree):
-                if child.data == 'pyclass_attribute':
-                    content.attributes.append(self._handle_pyclass_attribute(child))
-                elif child.data == 'pyclass_method':
-                    content.methods.append(self._handle_pyclass_method(child))
-                elif child.data == 'pyclass_constructor':
-                    content.constructors.append(self._handle_pyclass_constructor(child))
-                elif child.data == 'pyclass_access_section':
-                    content.access_sections.append(self._handle_pyclass_access_section(child))
-        
+                if child.data == "service_request":
+                    request = self._process_service_request(child)
+                elif child.data == "service_response":
+                    response = self._process_service_response(child)
+        return ServiceContentNode(request=request, response=response)
+
+    def _process_service_request(self, node: Tree) -> ServiceRequestNode:
+        fields = []
+        for child in node.children:
+            if isinstance(child, Tree) and child.data == "message_field":
+                fields.append(self._process_message_field(child))
+        return ServiceRequestNode(fields=fields)
+
+    def _process_service_response(self, node: Tree) -> ServiceResponseNode:
+        fields = []
+        for child in node.children:
+            if isinstance(child, Tree) and child.data == "message_field":
+                fields.append(self._process_message_field(child))
+        return ServiceResponseNode(fields=fields)
+
+    def _process_service_def(self, node: Tree):
+        name = str(node.children[0])
+        # The structure is: service NAME LBRACE service_content RBRACE
+        content = self._process_service_content(node.children[2])
+        service_node = ServiceNode(name=name, content=content)
+        self.ast.services.append(service_node)
+
+    def _process_action_content(self, node: Tree) -> ActionContentNode:
+        goal = None
+        feedback = None
+        result = None
+        for child in node.children:
+            if isinstance(child, Tree):
+                if child.data == "action_goal":
+                    goal = self._process_action_goal(child)
+                elif child.data == "action_feedback":
+                    feedback = self._process_action_feedback(child)
+                elif child.data == "action_result":
+                    result = self._process_action_result(child)
+        return ActionContentNode(goal=goal, feedback=feedback, result=result)
+
+    def _process_action_goal(self, node: Tree) -> ActionGoalNode:
+        fields = []
+        for child in node.children:
+            if isinstance(child, Tree) and child.data == "message_field":
+                fields.append(self._process_message_field(child))
+        return ActionGoalNode(fields=fields)
+
+    def _process_action_feedback(self, node: Tree) -> ActionFeedbackNode:
+        fields = []
+        for child in node.children:
+            if isinstance(child, Tree) and child.data == "message_field":
+                fields.append(self._process_message_field(child))
+        return ActionFeedbackNode(fields=fields)
+
+    def _process_action_result(self, node: Tree) -> ActionResultNode:
+        fields = []
+        for child in node.children:
+            if isinstance(child, Tree) and child.data == "message_field":
+                fields.append(self._process_message_field(child))
+        return ActionResultNode(fields=fields)
+
+    def _process_action_def(self, node: Tree):
+        name = str(node.children[0])
+        # The structure is: action NAME LBRACE action_content RBRACE
+        content = self._process_action_content(node.children[2])
+        action_node = CustomActionNode(name=name, content=content)
+        self.ast.actions.append(action_node)
+
+    def _process_node_def(self, node: Tree):
+        """Process node definition."""
+        try:
+            name = str(node.children[0])
+            
+            # Validate node name - subnodes (with dots) are not allowed in robodsl code
+            if '.' in name:
+                error_msg = (
+                    f"Invalid node name '{name}': Subnodes with dots (.) are not allowed in RoboDSL code. "
+                    f"Subnodes are a CLI-only feature for organizing files. "
+                    f"Use a simple node name without dots, or create subnodes using the CLI command: "
+                    f"'robodsl create-node {name}'"
+                )
+                self.errors.append(error_msg)
+                raise ValueError(error_msg)
+            
+            # Set context to indicate we're processing inside a node
+            self.in_node_context = True
+            content = self._process_node_content(node.children[2])
+            # Reset context
+            self.in_node_context = False
+            node_node = NodeNode(name=name, content=content)
+            self.ast.nodes.append(node_node)
+        except Exception as e:
+            # Reset context on error
+            self.in_node_context = False
+            if self.debug:
+                print(f"Error processing node definition: {e}")
+            if str(e) not in self.errors:  # Avoid duplicate error messages
+                self.errors.append(f"Node definition error: {e}")
+
+    def _process_node_content(self, node: Tree) -> NodeContentNode:
+        """Process node content."""
+        content = NodeContentNode()
+        try:
+            if self.debug:
+                print(f"Processing node_content with {len(node.children)} children")
+            for child in node.children:
+                if isinstance(child, Tree):
+                    if self.debug:
+                        print(f"  Processing child: {child.data}")
+                        print(f"    Child type: {type(child)}")
+                        print(f"    Child children: {len(child.children)}")
+                    if child.data == "parameter":
+                        content.parameters.append(self._process_parameter(child))
+                    elif child.data == "lifecycle":
+                        content.lifecycle = self._process_lifecycle(child)
+                    elif child.data == "timer":
+                        content.timers.append(self._process_timer(child))
+                    elif child.data == "remap":
+                        content.remaps.append(self._process_remap(child))
+                    elif child.data == "namespace":
+                        content.namespace = self._process_namespace(child)
+                    elif child.data == "ros_primitive":
+                        # Handle ROS primitives (publisher, subscriber, service, client, action)
+                        primitive_child = child.children[0]  # The actual primitive (publisher, etc.)
+                        if primitive_child.data == "publisher":
+                            content.publishers.append(self._process_publisher(primitive_child))
+                        elif primitive_child.data == "subscriber":
+                            content.subscribers.append(self._process_subscriber(primitive_child))
+                        elif primitive_child.data == "service":
+                            content.services.append(self._process_service_primitive(primitive_child))
+                        elif primitive_child.data == "client":
+                            content.clients.append(self._process_client(primitive_child))
+                        elif primitive_child.data == "action":
+                            content.actions.append(self._process_action_primitive(primitive_child))
+                    elif child.data == "flag":
+                        content.flags.append(self._process_flag(child))
+                    elif child.data == "cpp_method":
+                        content.cpp_methods.append(self._process_cpp_method(child))
+                    elif child.data == "kernel_def":
+                        # Individual kernel definitions within nodes
+                        kernel = self._process_kernel_def(child)
+                        content.cuda_kernels.append(kernel)
+                    elif child.data == "onnx_model_ref":
+                        # Process ONNX model reference inside node
+                        onnx_model = self._process_onnx_model_ref(child)
+                        content.onnx_models.append(onnx_model)
+                    elif child.data == "cuda_kernels_block":
+                        # Block of kernel definitions
+                        kernels_block = self._process_cuda_kernels_block(child)
+                        if kernels_block and hasattr(kernels_block, 'kernels'):
+                            content.cuda_kernels.extend(kernels_block.kernels)
+                    elif child.data == "use_kernel":
+                        content.used_kernels.append(self._process_use_kernel(child))
+                    else:
+                        if self.debug:
+                            print(f"    No handler for {child.data}")
+        except Exception as e:
+            if self.debug:
+                print(f"Error processing node content: {e}")
+            self.errors.append(f"Node content error: {e}")
         return content
 
-    def _handle_pyclass_attribute(self, tree: Tree) -> PyClassAttributeNode:
-        """Handle Pythonic class attribute definition."""
-        attr_name = None
-        attr_type = None
-        default_value = None
-        
-        for child in tree.children:
-            if isinstance(child, Token) and child.type == 'NAME':
-                attr_name = child.value
-            elif isinstance(child, Tree) and child.data == 'cpp_type':
-                attr_type = self._extract_cpp_type(child)
-            elif isinstance(child, Tree) and child.data == 'default_value':
-                default_value = self._extract_value(child)
-        
-        return PyClassAttributeNode(
-            name=attr_name or "", 
-            type=attr_type or "", 
-            default_value=ValueNode(default_value) if default_value is not None else None
-        )
+    def _process_parameter(self, node: Tree) -> ParameterNode:
+        """Process parameter."""
+        param_type = str(node.children[0])
+        name = str(node.children[1])
+        value = self._process_value(node.children[2])
+        return ParameterNode(type=param_type, name=name, value=value)
 
-    def _handle_pyclass_constructor(self, tree: Tree) -> PyClassConstructorNode:
-        """Handle Pythonic class constructor definition."""
-        parameters = []
-        assignments = []
-        code = ""
-        
-        for child in tree.children:
-            if isinstance(child, Tree) and child.data == 'pyclass_param_list':
-                parameters = self._handle_pyclass_param_list(child)
-            elif isinstance(child, Tree) and child.data == 'pyclass_constructor_content':
-                assignments, code = self._parse_pyclass_constructor_content(child)
-        
-        return PyClassConstructorNode(parameters=parameters, assignments=assignments, code=code)
+    def _process_lifecycle(self, node: Tree) -> LifecycleNode:
+        """Process lifecycle configuration."""
+        settings = []
+        for child in node.children:
+            if isinstance(child, Tree):
+                if child.data == "lifecycle_setting":
+                    settings.append(self._process_lifecycle_setting(child))
+                elif child.data == "lifecycle_config":
+                    # Handle lifecycle_config block
+                    for config_child in child.children:
+                        if isinstance(config_child, Tree) and config_child.data == "lifecycle_setting":
+                            settings.append(self._process_lifecycle_setting(config_child))
+        return LifecycleNode(settings=settings)
 
-    def _handle_pyclass_param_list(self, tree: Tree) -> List[PyClassParamNode]:
-        """Handle Pythonic class parameter list."""
+    def _process_lifecycle_setting(self, node: Tree) -> LifecycleSettingNode:
+        """Process lifecycle setting."""
+        name = str(node.children[0])
+        value = str(node.children[1]) == "true"
+        return LifecycleSettingNode(name=name, value=value)
+
+    def _process_timer(self, node: Tree) -> TimerNode:
+        """Process timer."""
+        name = str(node.children[0])
+        period_node = node.children[1]
+        # Extract the actual value from the expression tree
+        if isinstance(period_node, Tree) and period_node.data == "expr":
+            if len(period_node.children) > 0:
+                atom = period_node.children[0]
+                if isinstance(atom, Tree) and atom.data == "signed_atom":
+                    if len(atom.children) > 0:
+                        value = atom.children[0]
+                        if hasattr(value, 'type') and value.type == 'SIGNED_NUMBER':
+                            try:
+                                if '.' in value.value:
+                                    period = float(value.value)
+                                else:
+                                    period = int(value.value)
+                            except ValueError:
+                                period = value.value
+                        else:
+                            period = str(value)
+                    else:
+                        period = str(atom)
+                else:
+                    period = str(atom)
+            else:
+                period = str(period_node)
+        else:
+            period = str(period_node)
+        
+        settings = []
+        if len(node.children) > 2:
+            config = self._process_timer_config(node.children[2])
+            if config:
+                for setting_name, value in config.items():
+                    settings.append(TimerSettingNode(name=setting_name, value=value))
+        return TimerNode(name=name, period=period, settings=settings)
+
+    def _process_timer_config(self, node: Tree):
+        """Process timer configuration."""
+        settings = {}
+        for child in node.children:
+            if isinstance(child, Tree) and child.data == "timer_setting":
+                name = str(child.children[0])
+                value_node = child.children[1]
+                if hasattr(value_node, 'type'):
+                    if value_node.type == 'BOOLEAN':
+                        value = value_node.value == 'true'
+                    elif value_node.type == 'NAME':
+                        # Handle boolean names like 'true', 'false'
+                        value = value_node.value == 'true'
+                    else:
+                        value = str(value_node)
+                else:
+                    value = str(value_node)
+                settings[name] = value
+        return settings
+
+    def _process_remap(self, node: Tree) -> RemapNode:
+        """Process remap."""
+        if len(node.children) == 2:
+            from_topic = str(node.children[0])
+            to_topic = str(node.children[1])
+        else:
+            # Handle "from: topic to: topic" format
+            from_topic = str(node.children[1])
+            to_topic = str(node.children[3])
+        return RemapNode(from_topic=from_topic, to_topic=to_topic)
+
+    def _process_namespace(self, node: Tree) -> NamespaceNode:
+        """Process namespace."""
+        namespace = str(node.children[0])
+        return NamespaceNode(namespace=namespace)
+
+    def _process_publisher(self, node: Tree) -> PublisherNode:
+        """Process publisher."""
+        topic_node = node.children[0]
+        if isinstance(topic_node, Tree):
+            # Handle topic_path structure
+            topic_parts = []
+            for child in topic_node.children:
+                if hasattr(child, 'value'):
+                    topic_parts.append(child.value)
+                else:
+                    topic_parts.append(str(child))
+            topic = "/" + "/".join(topic_parts)
+        else:
+            topic = str(topic_node)
+        
+        msg_type_node = node.children[1]
+        if isinstance(msg_type_node, Tree):
+            # Handle topic_type structure
+            if msg_type_node.data == "topic_type":
+                msg_type = str(msg_type_node.children[0]).strip('"')
+            else:
+                msg_type = str(msg_type_node)
+        else:
+            msg_type = str(msg_type_node).strip('"')
+        
+        qos = None
+        if len(node.children) > 2:
+            config = self._process_publisher_config(node.children[2])
+            qos = config.get("qos") if config else None
+        return PublisherNode(topic=topic, msg_type=msg_type, qos=qos)
+
+    def _process_publisher_config(self, node: Tree):
+        """Process publisher configuration."""
+        settings = {}
+        for child in node.children:
+            if isinstance(child, Tree):
+                if child.data == "qos_config":
+                    settings["qos"] = self._process_qos_config(child)
+                elif child.data == "publisher_setting":
+                    # publisher_setting can be either qos_config or NAME ":" value
+                    if len(child.children) == 1 and child.children[0].data == "qos_config":
+                        settings["qos"] = self._process_qos_config(child.children[0])
+                    elif len(child.children) >= 2:
+                        name = str(child.children[0])
+                        value = str(child.children[1])
+                        settings[name] = value
+        return settings
+
+    def _process_subscriber(self, node: Tree) -> SubscriberNode:
+        """Process subscriber."""
+        topic_node = node.children[0]
+        if isinstance(topic_node, Tree):
+            # Handle topic_path structure
+            topic_parts = []
+            for child in topic_node.children:
+                if hasattr(child, 'value'):
+                    topic_parts.append(child.value)
+                else:
+                    topic_parts.append(str(child))
+            topic = "/" + "/".join(topic_parts)
+        else:
+            topic = str(topic_node)
+        
+        msg_type_node = node.children[1]
+        if isinstance(msg_type_node, Tree):
+            # Handle topic_type structure
+            if msg_type_node.data == "topic_type":
+                msg_type = str(msg_type_node.children[0]).strip('"')
+            else:
+                msg_type = str(msg_type_node)
+        else:
+            msg_type = str(msg_type_node).strip('"')
+        
+        qos = None
+        if len(node.children) > 2:
+            config = self._process_subscriber_config(node.children[2])
+            qos = config.get("qos") if config else None
+        return SubscriberNode(topic=topic, msg_type=msg_type, qos=qos)
+
+    def _process_subscriber_config(self, node: Tree):
+        """Process subscriber configuration."""
+        settings = {}
+        for child in node.children:
+            if isinstance(child, Tree):
+                if child.data == "qos_config":
+                    settings["qos"] = self._process_qos_config(child)
+                elif child.data == "subscriber_setting":
+                    # subscriber_setting can be either qos_config or NAME ":" value
+                    if len(child.children) == 1 and child.children[0].data == "qos_config":
+                        settings["qos"] = self._process_qos_config(child.children[0])
+                    elif len(child.children) >= 2:
+                        name = str(child.children[0])
+                        value = str(child.children[1])
+                        settings[name] = value
+        return settings
+
+    def _process_service_primitive(self, node: Tree) -> ServicePrimitiveNode:
+        """Process service primitive."""
+        service_node = node.children[0]
+        if isinstance(service_node, Tree):
+            # Handle service_path structure
+            service_parts = []
+            for child in service_node.children:
+                if hasattr(child, 'value'):
+                    service_parts.append(child.value)
+                else:
+                    service_parts.append(str(child))
+            service = "/" + "/".join(service_parts)
+        else:
+            service = str(service_node)
+        
+        srv_type_node = node.children[1]
+        if isinstance(srv_type_node, Tree):
+            # Handle topic_type structure
+            if srv_type_node.data == "topic_type":
+                srv_type = str(srv_type_node.children[0]).strip('"')
+            else:
+                srv_type = str(srv_type_node)
+        else:
+            srv_type = str(srv_type_node).strip('"')
+        
+        qos = None
+        if len(node.children) > 2:
+            config = self._process_service_config(node.children[2])
+            qos = config.get("qos") if config else None
+        return ServicePrimitiveNode(service=service, srv_type=srv_type, qos=qos)
+
+    def _process_service_config(self, node: Tree):
+        """Process service configuration."""
+        settings = {}
+        for child in node.children:
+            if isinstance(child, Tree):
+                if child.data == "qos_config":
+                    settings["qos"] = self._process_qos_config(child)
+                elif child.data == "service_setting":
+                    # service_setting can be either qos_config or NAME ":" value
+                    if len(child.children) == 1 and child.children[0].data == "qos_config":
+                        settings["qos"] = self._process_qos_config(child.children[0])
+                    elif len(child.children) >= 2:
+                        name = str(child.children[0])
+                        value = str(child.children[1])
+                        settings[name] = value
+        return settings
+
+    def _process_client(self, node: Tree) -> ClientNode:
+        """Process client."""
+        service_node = node.children[0]
+        if isinstance(service_node, Tree):
+            # Handle service_path structure
+            service_parts = []
+            for child in service_node.children:
+                if hasattr(child, 'value'):
+                    service_parts.append(child.value)
+                else:
+                    service_parts.append(str(child))
+            service = "/" + "/".join(service_parts)
+        else:
+            service = str(service_node)
+        srv_type = str(node.children[1])
+        qos = None
+        if len(node.children) > 2:
+            config = self._process_client_config(node.children[2])
+            qos = config.get("qos") if config else None
+        return ClientNode(service=service, srv_type=srv_type, qos=qos)
+
+    def _process_client_config(self, node: Tree):
+        """Process client configuration."""
+        settings = {}
+        for child in node.children:
+            if isinstance(child, Tree):
+                if child.data == "qos_config":
+                    settings["qos"] = self._process_qos_config(child)
+                elif child.data == "client_setting":
+                    # client_setting can be either qos_config or NAME ":" value
+                    if len(child.children) == 1 and child.children[0].data == "qos_config":
+                        settings["qos"] = self._process_qos_config(child.children[0])
+                    elif len(child.children) >= 2:
+                        name = str(child.children[0])
+                        value = str(child.children[1])
+                        settings[name] = value
+        return settings
+
+    def _process_action_primitive(self, node: Tree) -> ActionNode:
+        """Process action primitive."""
+        name = str(node.children[0])
+        action_type = str(node.children[1])
+        qos = None
+        if len(node.children) > 2:
+            config = self._process_action_config(node.children[2])
+            qos = config.get("qos") if config else None
+        return ActionNode(name=name, action_type=action_type, qos=qos)
+
+    def _process_action_config(self, node: Tree):
+        """Process action configuration."""
+        settings = {}
+        for child in node.children:
+            if isinstance(child, Tree):
+                if child.data == "qos_config":
+                    settings["qos"] = self._process_qos_config(child)
+                elif child.data == "action_setting":
+                    # action_setting can be either qos_config or NAME ":" value
+                    if len(child.children) == 1 and child.children[0].data == "qos_config":
+                        settings["qos"] = self._process_qos_config(child.children[0])
+                    elif len(child.children) >= 2:
+                        name = str(child.children[0])
+                        value = str(child.children[1])
+                        settings[name] = value
+        return settings
+
+    def _process_flag(self, node: Tree) -> FlagNode:
+        """Process flag."""
+        name = str(node.children[0])
+        value = str(node.children[1]) == "true"
+        return FlagNode(name=name, value=value)
+
+    def _process_kernel_def(self, node: Tree) -> KernelNode:
+        """Process kernel definition."""
+        try:
+            name = str(node.children[0])
+            content = self._process_kernel_content(node.children[2])
+            return KernelNode(name=name, content=content)
+        except Exception as e:
+            if self.debug:
+                print(f"Error processing kernel definition: {e}")
+            self.errors.append(f"Kernel definition error: {e}")
+            return KernelNode(name="", content=KernelContentNode())
+
+    def _process_kernel_content(self, node: Tree) -> KernelContentNode:
+        """Process kernel content."""
+        content = KernelContentNode()
+        try:
+            for child in node.children:
+                if isinstance(child, Tree):
+                    if self.debug:
+                        print(f"Processing kernel content child: {child.data}")
+                    if child.data == "block_size":
+                        # Pass the whole block_size node
+                        content.block_size = self._parse_tuple_expression(child)
+                    elif child.data == "grid_size":
+                        # Pass the whole grid_size node
+                        content.grid_size = self._parse_tuple_expression(child)
+                    elif child.data == "shared_memory":
+                        expr_child = child.children[0] if len(child.children) > 0 else None
+                        if expr_child is not None:
+                            if self.debug:
+                                print(f"Processing shared_memory expr: {expr_child}")
+                            content.shared_memory = self._parse_expression(expr_child)
+                    elif child.data == "use_thrust":
+                        if len(child.children) > 0:
+                            value = str(child.children[0])
+                            content.use_thrust = value == "true"
+                    elif child.data == "kernel_input_param":
+                        if len(child.children) > 0:
+                            content.parameters.extend(self._process_kernel_param_list(child.children[0], KernelParameterDirection.IN))
+                    elif child.data == "kernel_output_param":
+                        if len(child.children) > 0:
+                            content.parameters.extend(self._process_kernel_param_list(child.children[0], KernelParameterDirection.OUT))
+                    elif child.data == "cuda_include":
+                        # Handle CUDA include statements
+                        include_path = self._parse_include_path(child.children[0])
+                        content.cuda_includes.append(include_path)
+                    elif child.data == "code_block":
+                        if len(child.children) > 0:
+                            extracted_code = self._extract_code_from_block(child.children[0])
+                            content.code = extracted_code
+        except Exception as e:
+            if self.debug:
+                print(f"Error processing kernel content: {e}")
+            self.errors.append(f"Kernel content error: {e}")
+        return content
+
+    def _process_kernel_param_list(self, node: Tree, direction) -> List[KernelParamNode]:
+        """Process kernel parameter list."""
         params = []
-        
-        for child in tree.children:
-            if isinstance(child, Tree) and child.data == 'pyclass_param':
-                params.append(self._handle_pyclass_param(child))
-        
+        for child in node.children:
+            if isinstance(child, Tree) and child.data == "kernel_param":
+                params.append(self._process_kernel_param(child, direction))
         return params
 
-    def _handle_pyclass_param(self, tree: Tree) -> PyClassParamNode:
-        """Handle Pythonic class parameter definition."""
-        param_name = None
-        param_type = None
-        default_value = None
-        
-        for child in tree.children:
-            if isinstance(child, Token) and child.type == 'NAME':
-                param_name = child.value
-            elif isinstance(child, Tree) and child.data == 'cpp_type':
-                param_type = self._extract_cpp_type(child)
-            elif isinstance(child, Tree) and child.data == 'default_value':
-                default_value = self._extract_value(child)
-        
-        return PyClassParamNode(
-            name=param_name or "", 
-            type=param_type or "", 
-            default_value=ValueNode(default_value) if default_value is not None else None
-        )
+    def _process_kernel_param(self, node: Tree, direction) -> KernelParamNode:
+        """Process kernel parameter."""
+        # Extract cpp_type as string
+        type_node = node.children[0]
+        if isinstance(type_node, Tree):
+            # Descend to the token
+            if len(type_node.children) > 0:
+                if isinstance(type_node.children[0], Tree):
+                    # e.g., cpp_type -> cpp_type_name -> Token
+                    param_type = str(type_node.children[0].children[0])
+                else:
+                    param_type = str(type_node.children[0])
+            else:
+                param_type = str(type_node)
+        else:
+            param_type = str(type_node)
+        param_name = str(node.children[1])
+        size_expr = None
+        if len(node.children) > 2:
+            size_node = node.children[2]
+            if isinstance(size_node, Tree) and size_node.data == "kernel_param_size":
+                # Extract size expression as list, filtering out parentheses and other non-content tokens
+                size_expr = []
+                for child in size_node.children:
+                    if isinstance(child, Tree) and child.data == "kernel_param_size_list":
+                        for size_item in child.children:
+                            if isinstance(size_item, Tree) and size_item.data == "kernel_param_size_item":
+                                size_expr.append(str(size_item.children[0]))
+                            else:
+                                # Filter out parentheses and other non-content tokens
+                                item_str = str(size_item)
+                                if item_str not in ['(', ')', ','] and not item_str.isspace():
+                                    size_expr.append(item_str)
+                    else:
+                        # Filter out parentheses and other non-content tokens
+                        child_str = str(child)
+                        if child_str not in ['(', ')', ','] and not child_str.isspace():
+                            size_expr.append(child_str)
+            else:
+                # For simple size expressions, filter out parentheses
+                size_str = str(size_node)
+                if size_str not in ['(', ')', ','] and not size_str.isspace():
+                    size_expr = [size_str]
+                else:
+                    size_expr = []
+        return KernelParamNode(direction=direction, param_type=param_type, param_name=param_name, size_expr=size_expr)
 
-    def _parse_pyclass_constructor_content(self, content_tree: Tree) -> tuple[List[str], str]:
-        """Parse Pythonic class constructor content."""
-        assignments = []
-        code = ""
+    def _parse_tuple_expression(self, node: Tree) -> tuple:
+        """Parse a tuple expression like (expr, expr, expr)."""
+        if self.debug:
+            print(f"[DEBUG] _parse_tuple_expression called with: {node}")
+            print(f"[DEBUG] node type: {type(node)}")
+            print(f"[DEBUG] node children: {node.children}")
         
-        for child in content_tree.children:
+        if not isinstance(node, Tree) or len(node.children) < 3:
+            if self.debug:
+                print(f"[DEBUG] Returning default values: (256, 1, 1)")
+            return (256, 1, 1)  # Default values
+        
+        # The structure should be: LPAR expr COMMA expr COMMA expr RPAR
+        # So children should be: [LPAR, expr1, COMMA, expr2, COMMA, expr3, RPAR]
+        # We want indices 1, 3, 5 for the three expressions
+        if len(node.children) >= 7:
+            expr1 = self._parse_expression(node.children[1])
+            expr2 = self._parse_expression(node.children[3])
+            expr3 = self._parse_expression(node.children[5])
+            result = (expr1, expr2, expr3)
+            if self.debug:
+                print(f"[DEBUG] Parsed tuple from indices 1,3,5: {result}")
+            return result
+        else:
+            # Fallback: try to extract expressions from available children
+            expressions = []
+            for child in node.children:
+                if isinstance(child, Tree) and child.data == "expr":
+                    expressions.append(self._parse_expression(child))
+            
+            if len(expressions) >= 3:
+                result = tuple(expressions[:3])
+                if self.debug:
+                    print(f"[DEBUG] Parsed tuple from expr children: {result}")
+                return result
+            else:
+                # Pad with default values
+                while len(expressions) < 3:
+                    expressions.append(1)
+                result = tuple(expressions)
+                if self.debug:
+                    print(f"[DEBUG] Padded tuple with defaults: {result}")
+                return result
+
+    def _parse_expression(self, node: Tree) -> int:
+        """Parse a simple expression and return an integer value."""
+        if isinstance(node, Tree):
+            if node.data == "expr":
+                # Handle expression tree
+                if len(node.children) > 0:
+                    atom = node.children[0]
+                    if isinstance(atom, Tree) and atom.data == "signed_atom":
+                        if len(atom.children) > 0:
+                            value = atom.children[0]
+                            if hasattr(value, 'type') and value.type == 'SIGNED_NUMBER':
+                                try:
+                                    return int(value.value)
+                                except ValueError:
+                                    return 256  # Default
+                            elif hasattr(value, 'type') and value.type == 'NAME':
+                                # For variable names, return a default
+                                return 256
+                            else:
+                                return 256
+                        else:
+                            return 256
+                    else:
+                        return 256
+                else:
+                    return 256
+            else:
+                return 256
+        else:
+            # Direct token
+            if hasattr(node, 'type') and node.type == 'SIGNED_NUMBER':
+                try:
+                    return int(node.value)
+                except ValueError:
+                    return 256
+            else:
+                return 256
+
+    def _process_onnx_model_ref(self, node: Tree) -> OnnxModelNode:
+        """Process ONNX model reference."""
+        name = str(node.children[0])
+        # The structure is: NAME LBRACE onnx_model_content RBRACE
+        # So children[2] is the content
+        config = self._process_onnx_model_content(node.children[2])
+        return OnnxModelNode(name=name, config=config)
+
+    def _process_cuda_kernels_block(self, node: Tree):
+        """Process CUDA kernels block."""
+        kernels = []
+        for child in node.children:
+            if isinstance(child, Tree) and child.data == "kernel_def":
+                kernels.append(self._process_kernel_def(child))
+        
+        # Create CudaKernelsNode and return it for use in node content
+        cuda_kernels_node = CudaKernelsNode(kernels=kernels)
+        
+        # Only add to global AST if this is NOT inside a node context
+        if hasattr(self, 'ast') and self.ast is not None and not self.in_node_context:
+            self.ast.cuda_kernels = cuda_kernels_node
+        
+        return cuda_kernels_node
+
+    def _process_use_kernel(self, node: Tree) -> str:
+        """Process use_kernel directive."""
+        return str(node.children[0]).strip('"')
+
+    def _process_qos_config(self, node: Tree) -> QoSNode:
+        """Process QoS configuration."""
+        settings = []
+        for child in node.children:
+            if isinstance(child, Tree) and child.data == "qos_setting":
+                settings.append(self._process_qos_setting(child))
+        return QoSNode(settings=settings)
+
+    def _process_qos_setting(self, node: Tree) -> QoSSettingNode:
+        """Process QoS setting."""
+        name = str(node.children[0])
+        value_node = node.children[1]
+        
+        # Extract the actual value from the expression tree
+        if isinstance(value_node, Tree):
+            if value_node.data == "expr":
+                # Handle expressions - extract the signed_atom
+                if len(value_node.children) > 0:
+                    atom = value_node.children[0]
+                    if isinstance(atom, Tree) and atom.data == "signed_atom":
+                        if len(atom.children) > 0:
+                            value = atom.children[0]
+                            if hasattr(value, 'type'):
+                                if value.type == 'NAME':
+                                    # For QoS enum values like 'reliable', 'best_effort', etc.
+                                    value = value.value
+                                elif value.type == 'SIGNED_NUMBER':
+                                    # For numeric values
+                                    try:
+                                        if '.' in value.value:
+                                            value = float(value.value)
+                                        else:
+                                            value = int(value.value)
+                                    except ValueError:
+                                        value = value.value
+                                else:
+                                    value = value.value
+                            else:
+                                value = str(value)
+                        else:
+                            value = str(atom)
+                    else:
+                        value = str(atom)
+                else:
+                    value = str(value_node)
+            else:
+                value = str(value_node)
+        else:
+            # Direct token
+            if hasattr(value_node, 'type'):
+                if value_node.type == 'NAME':
+                    value = value_node.value
+                elif value_node.type == 'SIGNED_NUMBER':
+                    try:
+                        if '.' in value_node.value:
+                            value = float(value_node.value)
+                        else:
+                            value = int(value_node.value)
+                    except ValueError:
+                        value = value_node.value
+                else:
+                    value = value_node.value
+            else:
+                value = str(value_node)
+        
+        return QoSSettingNode(name=name, value=value)
+
+    def _process_pipeline_def(self, node: Tree):
+        """Process pipeline definition."""
+        name = str(node.children[0])
+        # The structure is: pipeline NAME LBRACE pipeline_content RBRACE
+        content = self._process_pipeline_content(node.children[2])
+        pipeline_node = PipelineNode(name=name, content=content)
+        self.ast.pipelines.append(pipeline_node)
+
+    def _process_pipeline_content(self, node: Tree) -> PipelineContentNode:
+        """Process pipeline content."""
+        stages = []
+        for child in node.children:
+            if isinstance(child, Tree) and child.data == "stage_def":
+                stages.append(self._process_stage_def(child))
+        return PipelineContentNode(stages=stages)
+
+    def _process_stage_def(self, node: Tree) -> StageNode:
+        """Process stage definition."""
+        name = str(node.children[0])
+        # The structure is: stage NAME LBRACE stage_content RBRACE
+        content = self._process_stage_content(node.children[2])
+        return StageNode(name=name, content=content)
+
+    def _process_stage_content(self, node: Tree) -> StageContentNode:
+        """Process stage content."""
+        content = StageContentNode()
+        for child in node.children:
             if isinstance(child, Tree):
-                if child.data == 'pyclass_assign':
-                    assignments.append(self._extract_pyclass_assign(child))
-                elif child.data == 'code_block':
-                    code = self._extract_code_block(child)
-        
-        return assignments, code
+                if child.data == "stage_input":
+                    # Handle stage_input: "input_name"
+                    if len(child.children) >= 1:
+                        input_name = str(child.children[0]).strip('"')
+                        content.inputs.append(StageInputNode(input_name=input_name))
+                elif child.data == "stage_output":
+                    # Handle stage_output: "output_name"
+                    if len(child.children) >= 1:
+                        output_name = str(child.children[0]).strip('"')
+                        content.outputs.append(StageOutputNode(output_name=output_name))
+                elif child.data == "stage_method":
+                    # Handle stage_method: "method_name"
+                    if len(child.children) >= 1:
+                        method_name = str(child.children[0]).strip('"')
+                        content.methods.append(StageMethodNode(method_name=method_name))
+                elif child.data == "stage_model":
+                    # Handle stage_model: "model_name"
+                    if len(child.children) >= 1:
+                        model_name = str(child.children[0]).strip('"')
+                        content.models.append(StageModelNode(model_name=model_name))
+                elif child.data == "stage_topic":
+                    # Handle stage_topic: /topic/path
+                    if len(child.children) >= 1:
+                        topic_path = str(child.children[0])
+                        content.topics.append(StageTopicNode(topic_path=topic_path))
+                elif child.data == "stage_cuda_kernel":
+                    # Handle stage_cuda_kernel: "kernel_name"
+                    if len(child.children) >= 1:
+                        kernel_name = str(child.children[0]).strip('"')
+                        content.cuda_kernels.append(StageCudaKernelNode(kernel_name=kernel_name))
+                elif child.data == "stage_onnx_model":
+                    # Handle stage_onnx_model: "model_name"
+                    if len(child.children) >= 1:
+                        model_name = str(child.children[0]).strip('"')
+                        content.onnx_models.append(StageOnnxModelNode(model_name=model_name))
+        return content
 
-    def _extract_pyclass_assign(self, tree: Tree) -> str:
-        """Extract Pythonic class assignment statement."""
-        parts = []
-        for child in tree.children:
-            if isinstance(child, Token):
-                parts.append(child.value)
-        return " ".join(parts)
+    def _process_onnx_model(self, node: Tree):
+        """Process ONNX model definition."""
+        name = str(node.children[0])
+        # The structure is: onnx_model NAME LBRACE onnx_model_content RBRACE
+        config = self._process_onnx_model_content(node.children[2])
+        onnx_node = OnnxModelNode(name=name, config=config)
+        self.ast.onnx_models.append(onnx_node)
 
-    def _handle_pyclass_method(self, tree: Tree) -> PyClassMethodNode:
-        """Handle Pythonic class method definition."""
-        method_name = None
-        parameters = []
-        return_type = None
-        code = ""
-        
-        for child in tree.children:
-            if isinstance(child, Token) and child.type == 'NAME':
-                method_name = child.value
-            elif isinstance(child, Tree) and child.data == 'pyclass_param_list':
-                parameters = self._handle_pyclass_param_list(child)
-            elif isinstance(child, Tree) and child.data == 'return_type':
-                return_type = self._extract_return_type(child)
-            elif isinstance(child, Tree) and child.data == 'pyclass_method_content':
-                code = self._parse_pyclass_method_content(child)
-        
-        return PyClassMethodNode(
-            name=method_name or "", 
-            parameters=parameters, 
-            return_type=return_type, 
-            code=code
-        )
+    def _process_onnx_model_content(self, node: Tree) -> ModelConfigNode:
+        """Process ONNX model content."""
+        config = ModelConfigNode()
+        for child in node.children:
+            if isinstance(child, Tree):
+                if child.data == "input_def":
+                    config.inputs.append(self._process_input_def(child))
+                elif child.data == "output_def":
+                    config.outputs.append(self._process_output_def(child))
+                elif child.data == "device":
+                    config.device = DeviceNode(device=str(child.children[0]))
+                elif child.data == "optimization":
+                    config.optimizations.append(OptimizationNode(optimization=str(child.children[0])))
+                elif child.data == "config_block":
+                    # Handle config block that contains input_def, output_def, etc.
+                    for config_child in child.children:
+                        if isinstance(config_child, Tree):
+                            if config_child.data == "input_def":
+                                config.inputs.append(self._process_input_def(config_child))
+                            elif config_child.data == "output_def":
+                                config.outputs.append(self._process_output_def(config_child))
+                            elif config_child.data == "device":
+                                config.device = DeviceNode(device=str(config_child.children[0]))
+                            elif config_child.data == "optimization":
+                                config.optimizations.append(OptimizationNode(optimization=str(config_child.children[0])))
+        return config
 
-    def _extract_return_type(self, tree: Tree) -> str:
-        """Extract return type from return_type tree."""
-        for child in tree.children:
-            if isinstance(child, Tree) and child.data == 'cpp_type':
-                return self._extract_cpp_type(child)
-        return ""
+    def _process_input_def(self, node: Tree) -> InputDefNode:
+        """Process input definition."""
+        name = str(node.children[0]).strip('"')
+        type_name = str(node.children[1]).strip('"')
+        return InputDefNode(name=name, type=type_name)
 
-    def _parse_pyclass_method_content(self, content_tree: Tree) -> str:
-        """Parse Pythonic class method content."""
-        code = ""
-        for child in content_tree.children:
-            if isinstance(child, Tree) and child.data == 'code_block':
-                code = self._extract_code_block(child)
-        return code
+    def _process_output_def(self, node: Tree) -> OutputDefNode:
+        """Process output definition."""
+        name = str(node.children[0]).strip('"')
+        type_name = str(node.children[1]).strip('"')
+        return OutputDefNode(name=name, type=type_name)
 
-    def _handle_pyclass_access_section(self, tree: Tree) -> PyClassAccessSectionNode:
-        """Handle Pythonic class access section."""
-        access_specifier = "public"  # Default
-        attributes = []
-        methods = []
-        constructors = []
-        
-        for child in tree.children:
-            if isinstance(child, Token) and child.type == 'NAME':
-                if child.value in ['public', 'private', 'protected']:
-                    access_specifier = child.value
-            elif isinstance(child, Tree):
-                if child.data == 'pyclass_attribute':
-                    attributes.append(self._handle_pyclass_attribute(child))
-                elif child.data == 'pyclass_method':
-                    methods.append(self._handle_pyclass_method(child))
-                elif child.data == 'pyclass_constructor':
-                    constructors.append(self._handle_pyclass_constructor(child))
-        
-        return PyClassAccessSectionNode(
-            access_specifier=access_specifier, 
-            attributes=attributes, 
-            methods=methods, 
-            constructors=constructors
-        ) 
+    def _process_simulation_config(self, node: Tree):
+        """Process simulation configuration."""
+        for child in node.children:
+            if isinstance(child, Tree):
+                if child.data == "simulation_def":
+                    self._process_simulation_def(child)
+                elif child.data == "hil_config":
+                    self._process_hil_config(child)
+
+    def _process_simulation_def(self, node: Tree):
+        """Process simulation definition."""
+        simulator_type = str(node.children[0])
+        content = self._process_simulation_content(node.children[1])
+        simulation_node = SimulationConfigNode(simulator_type=simulator_type, content=content)
+        self.ast.simulation = simulation_node
+
+    def _process_simulation_content(self, node: Tree):
+        """Process simulation content."""
+        # This would need to be implemented based on the simulation AST nodes
+        pass
+
+    def _process_hil_config(self, node: Tree):
+        """Process hardware-in-the-loop configuration."""
+        content = self._process_hil_content(node.children[0])
+        hil_node = HardwareInLoopNode(content=content)
+        self.ast.hil_config = hil_node
+
+    def _process_hil_content(self, node: Tree):
+        """Process HIL content."""
+        # This would need to be implemented based on the HIL AST nodes
+        pass
+
+    def _process_dynamic_config(self, node: Tree):
+        """Process dynamic configuration."""
+        for child in node.children:
+            if isinstance(child, Tree):
+                if child.data == "dynamic_parameters":
+                    self._process_dynamic_parameters(child)
+                elif child.data == "dynamic_remaps":
+                    self._process_dynamic_remaps(child)
+
+    def _process_dynamic_parameters(self, node: Tree):
+        """Process dynamic parameters."""
+        for child in node.children:
+            if isinstance(child, Tree) and child.data == "dynamic_parameter":
+                param = self._process_dynamic_parameter(child)
+                self.ast.dynamic_parameters.append(param)
+
+    def _process_dynamic_parameter(self, node: Tree) -> DynamicParameterNode:
+        """Process dynamic parameter."""
+        param_type = str(node.children[0])
+        name = str(node.children[1])
+        value = self._process_value(node.children[2])
+        config = None
+        if len(node.children) > 3:
+            config = self._process_dynamic_param_config(node.children[3])
+        return DynamicParameterNode(type=param_type, name=name, value=value, config=config)
+
+    def _process_dynamic_param_config(self, node: Tree):
+        """Process dynamic parameter configuration."""
+        # This would need to be implemented based on the dynamic param config AST nodes
+        pass
+
+    def _process_dynamic_remaps(self, node: Tree):
+        """Process dynamic remaps."""
+        for child in node.children:
+            if isinstance(child, Tree) and child.data == "dynamic_remap":
+                remap = self._process_dynamic_remap(child)
+                self.ast.dynamic_remaps.append(remap)
+
+    def _process_dynamic_remap(self, node: Tree) -> DynamicRemapNode:
+        """Process dynamic remap."""
+        from_topic = str(node.children[0])
+        to_topic = str(node.children[1])
+        condition = None
+        if len(node.children) > 2:
+            condition = str(node.children[2])
+        return DynamicRemapNode(from_topic=from_topic, to_topic=to_topic, condition=condition)
+
+    def _process_typedef_def(self, node: Tree):
+        """Process typedef definition."""
+        try:
+            # typedef_def: "typedef" cpp_type NAME ";"
+            if len(node.children) >= 2:
+                cpp_type = self._extract_token_value(node.children[0])
+                new_name = self._extract_token_value(node.children[1])
+                typedef_node = TypedefNode(cpp_type, new_name)
+                self.ast.data_structures.append(typedef_node)
+                if self.debug:
+                    print(f"Added typedef: {new_name} = {cpp_type}")
+            else:
+                if self.debug:
+                    print(f"typedef_def has {len(node.children)} children, expected at least 2")
+                self.errors.append(f"typedef_def has {len(node.children)} children, expected at least 2")
+        except Exception as e:
+            if self.debug:
+                print(f"Error processing typedef definition: {e}")
+            self.errors.append(f"Typedef definition error: {e}")
+    
+    def _process_using_def(self, node: Tree):
+        """Process using definition."""
+        try:
+            # using_def: "using" NAME "=" cpp_type ";"
+            if len(node.children) >= 2:
+                new_name = self._extract_token_value(node.children[0])
+                cpp_type = self._extract_token_value(node.children[1])
+                using_node = UsingNode(cpp_type, new_name)
+                self.ast.data_structures.append(using_node)
+                if self.debug:
+                    print(f"Added using: {new_name} = {cpp_type}")
+            else:
+                if self.debug:
+                    print(f"using_def has {len(node.children)} children, expected at least 2")
+                self.errors.append(f"using_def has {len(node.children)} children, expected at least 2")
+        except Exception as e:
+            if self.debug:
+                print(f"Error processing using definition: {e}")
+            self.errors.append(f"Using definition error: {e}")
+    
+    def _process_enum_def(self, node: Tree):
+        """Process enum definition."""
+        try:
+            # enum_def: "enum" enum_type? NAME LBRACE enum_content RBRACE
+            # enum_type: "class" | "struct"
+            # enum_content: enum_value (COMMA enum_value)* COMMA?
+            # enum_value: NAME ("=" expr)?
+            
+            # Find the name, enum_type, and content
+            name = None
+            enum_type = None
+            content_node = None
+            
+            for child in node.children:
+                if isinstance(child, Token) and child.type == "NAME":
+                    if name is None:
+                        name = child.value
+                elif isinstance(child, Tree) and child.data == "enum_content":
+                    content_node = child
+                elif isinstance(child, Tree) and child.data == "enum_type":
+                    # enum_type node contains the "class" or "struct" token
+                    if child.children and isinstance(child.children[0], Token):
+                        enum_type = child.children[0].value
+                elif isinstance(child, Token) and child.value in ["class", "struct"]:
+                    enum_type = child.value
+            
+            if name and content_node:
+                content = self._process_enum_content(content_node)
+                enum_node = EnumNode(name=name, enum_type=enum_type, content=content)
+                self.ast.data_structures.append(enum_node)
+                if self.debug:
+                    print(f"Added enum: {name} (type: {enum_type})")
+            else:
+                if self.debug:
+                    print(f"enum_def missing name or content")
+                self.errors.append(f"enum_def missing name or content")
+        except Exception as e:
+            if self.debug:
+                print(f"Error processing enum definition: {e}")
+            self.errors.append(f"Enum definition error: {e}")
+    
+    def _process_enum_content(self, node: Tree) -> EnumContentNode:
+        """Process enum content."""
+        content = EnumContentNode()
+        try:
+            for child in node.children:
+                if isinstance(child, Tree) and child.data == "enum_value":
+                    content.values.append(self._process_enum_value(child))
+        except Exception as e:
+            if self.debug:
+                print(f"Error processing enum content: {e}")
+            self.errors.append(f"Enum content error: {e}")
+        return content
+    
+    def _process_enum_value(self, node: Tree) -> EnumValueNode:
+        """Process enum value."""
+        try:
+            name = self._extract_token_value(node.children[0])
+            value = None
+            if len(node.children) > 1:
+                value = self._process_value(node.children[1])
+            return EnumValueNode(name=name, value=value)
+        except Exception as e:
+            if self.debug:
+                print(f"Error processing enum value: {e}")
+            self.errors.append(f"Enum value error: {e}")
+    
+    def _process_pyclass_def(self, node: Tree):
+        """Process Pythonic class definition."""
+        try:
+            # pyclass_def: "pyclass" NAME inheritance? LBRACE pyclass_content RBRACE
+            name = self._extract_token_value(node.children[0])
+            inheritance = None
+            content_node = None
+            
+            for child in node.children[1:]:
+                if isinstance(child, Tree) and child.data == "inheritance":
+                    inheritance = self._process_inheritance(child)
+                elif isinstance(child, Tree) and child.data == "pyclass_content":
+                    content_node = child
+            
+            if content_node:
+                content = self._process_pyclass_content(content_node)
+                pyclass_node = PyClassNode(name=name, inheritance=inheritance, content=content)
+                self.ast.data_structures.append(pyclass_node)
+                if self.debug:
+                    print(f"Added pyclass: {name}")
+            else:
+                if self.debug:
+                    print(f"pyclass_def missing content")
+                self.errors.append(f"pyclass_def missing content")
+        except Exception as e:
+            if self.debug:
+                print(f"Error processing pyclass definition: {e}")
+            self.errors.append(f"Pyclass definition error: {e}")
+    
+    def _process_pyclass_content(self, node: Tree) -> PyClassContentNode:
+        """Process Pythonic class content."""
+        content = PyClassContentNode()
+        try:
+            for child in node.children:
+                if isinstance(child, Tree):
+                    if child.data == "pyclass_attribute":
+                        content.attributes.append(self._process_pyclass_attribute(child))
+                    elif child.data == "pyclass_method":
+                        content.methods.append(self._process_pyclass_method(child))
+                    elif child.data == "pyclass_constructor":
+                        content.constructor = self._process_pyclass_constructor(child)
+                    elif child.data == "pyclass_access_section":
+                        content.access_sections.append(self._process_pyclass_access_section(child))
+        except Exception as e:
+            if self.debug:
+                print(f"Error processing pyclass content: {e}")
+            self.errors.append(f"Pyclass content error: {e}")
+        return content
+    
+    def _process_pyclass_attribute(self, node: Tree) -> PyClassAttributeNode:
+        """Process Pythonic class attribute."""
+        try:
+            name = self._extract_token_value(node.children[0])
+            cpp_type = self._extract_token_value(node.children[1])
+            default_value = None
+            if len(node.children) > 2:
+                default_value = self._process_value(node.children[2])
+            return PyClassAttributeNode(name=name, cpp_type=cpp_type, default_value=default_value)
+        except Exception as e:
+            if self.debug:
+                print(f"Error processing pyclass attribute: {e}")
+            self.errors.append(f"Pyclass attribute error: {e}")
+    
+    def _process_pyclass_method(self, node: Tree) -> PyClassMethodNode:
+        """Process Pythonic class method."""
+        try:
+            name = self._extract_token_value(node.children[0])
+            # TODO: Parse parameters and return type
+            return PyClassMethodNode(name=name)
+        except Exception as e:
+            if self.debug:
+                print(f"Error processing pyclass method: {e}")
+            self.errors.append(f"Pyclass method error: {e}")
+    
+    def _process_pyclass_constructor(self, node: Tree) -> PyClassConstructorNode:
+        """Process Pythonic class constructor."""
+        try:
+            # TODO: Parse parameters and content
+            return PyClassConstructorNode()
+        except Exception as e:
+            if self.debug:
+                print(f"Error processing pyclass constructor: {e}")
+            self.errors.append(f"Pyclass constructor error: {e}")
+    
+    def _process_pyclass_access_section(self, node: Tree) -> PyClassAccessSectionNode:
+        """Process Pythonic class access section."""
+        try:
+            access_specifier = self._extract_token_value(node.children[0])
+            # TODO: Parse section content
+            return PyClassAccessSectionNode(access_specifier=access_specifier)
+        except Exception as e:
+            if self.debug:
+                print(f"Error processing pyclass access section: {e}")
+            self.errors.append(f"Pyclass access section error: {e}") 

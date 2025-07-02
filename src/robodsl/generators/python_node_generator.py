@@ -25,7 +25,7 @@ class PythonNodeGenerator(BaseGenerator):
         generated_files = []
         
         # Create output directory
-        (self.output_dir / 'robodsl').mkdir(parents=True, exist_ok=True)
+        (self.output_dir / 'src').mkdir(parents=True, exist_ok=True)
         
         # Generate files for each node
         for node in ast.nodes:
@@ -39,10 +39,30 @@ class PythonNodeGenerator(BaseGenerator):
         """Generate a Python file for a ROS2 node."""
         context = self._prepare_node_context(node)
         
+        # Determine subdirectory structure based on node name
+        # For subnodes like "sensors.camera", create "src/sensors/camera_node.py"
+        subdir = ""
+        filename = f'{node.name}_node.py'
+        if '.' in node.name:
+            parts = node.name.split('.')
+            if len(parts) > 1:
+                subdir = '/'.join(parts[:-1])
+                filename = f'{parts[-1]}_node.py'
+                print(f"[DEBUG] Node {node.name}: subdir = '{subdir}', filename = '{filename}', parts = {parts}")
+        
         try:
             content = self.render_template('node.py.jinja2', context)
-            py_path = self.get_output_path('robodsl', f'{node.name}_node.py')
-            return self.write_file(py_path, content)
+            print(f"[DEBUG] Before file creation: node.name={node.name}, subdir='{subdir}', filename='{filename}'")
+            if subdir:
+                py_path = self.get_output_path('src', subdir, filename)
+                print(f"[DEBUG] Creating Python file at: {py_path}")
+            else:
+                py_path = self.get_output_path('src', filename)
+                print(f"[DEBUG] Creating Python file at: {py_path}")
+            result = self.write_file(py_path, content)
+            # Make the file executable
+            py_path.chmod(0o755)
+            return result
         except Exception as e:
             print(f"Template error for node {node.name}: {e}")
             # Fallback to simple Python node
@@ -51,14 +71,14 @@ class PythonNodeGenerator(BaseGenerator):
 import rclpy
 from rclpy.node import Node
 
-class {node.name.capitalize()}Node(Node):
+class {node.name.split('.')[-1].capitalize()}Node(Node):
     def __init__(self):
         super().__init__('{node.name}_node')
         self.get_logger().info('{node.name} node started')
 
 def main(args=None):
     rclpy.init(args=args)
-    node = {node.name.capitalize()}Node()
+    node = {node.name.split('.')[-1].capitalize()}Node()
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
@@ -66,8 +86,14 @@ def main(args=None):
 if __name__ == '__main__':
     main()
 """
-            py_path = self.get_output_path('robodsl', f'{node.name}_node.py')
-            return self.write_file(py_path, content)
+            if subdir:
+                py_path = self.get_output_path('src', subdir, f'{node.name.split(".")[-1]}_node.py')
+            else:
+                py_path = self.get_output_path('src', f'{node.name}_node.py')
+            result = self.write_file(py_path, content)
+            # Make the file executable
+            py_path.chmod(0o755)
+            return result
     
     def _prepare_node_context(self, node: NodeNode) -> Dict[str, Any]:
         """Prepare context for Python node template rendering."""
