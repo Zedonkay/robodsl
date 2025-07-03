@@ -237,6 +237,7 @@ class NodeContentNode(ASTNode):
     cuda_kernels: List['KernelNode'] = field(default_factory=list)
     onnx_models: List['OnnxModelNode'] = field(default_factory=list)  # ONNX models within nodes
     used_kernels: List[str] = field(default_factory=list)  # Referenced global CUDA kernels
+    raw_cpp_code: List['RawCppCodeNode'] = field(default_factory=list)  # Raw C++ code within nodes
 
 
 @dataclass
@@ -702,6 +703,13 @@ class HardwareInLoopNode(ASTNode):
 
 
 @dataclass
+class RawCppCodeNode(ASTNode):
+    """Raw C++ code node that gets passed through as-is."""
+    code: str
+    location: str = "global"  # "global" for outside nodes, "node" for inside nodes
+
+
+@dataclass
 class RoboDSLAST(ASTNode):
     """Root AST node."""
     includes: List[IncludeNode] = field(default_factory=list)
@@ -719,4 +727,6 @@ class RoboDSLAST(ASTNode):
     dynamic_remaps: List[DynamicRemapNode] = field(default_factory=list)
     # Simulation configuration
     simulation: Optional[SimulationConfigNode] = None
-    hil_config: Optional[HardwareInLoopNode] = None 
+    hil_config: Optional[HardwareInLoopNode] = None
+    # Raw C++ code blocks
+    raw_cpp_code: List[RawCppCodeNode] = field(default_factory=list)  # Global C++ code outside nodes 

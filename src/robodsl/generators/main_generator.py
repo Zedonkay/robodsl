@@ -97,6 +97,12 @@ class MainGenerator(BaseGenerator):
         all_generated_files.extend(config_files)
         print(f"Generated {len(config_files)} config files")
         
+        # Generate global raw C++ code files
+        print("Generating global raw C++ code files...")
+        raw_cpp_files = self._generate_global_raw_cpp_code(ast)
+        all_generated_files.extend(raw_cpp_files)
+        print(f"Generated {len(raw_cpp_files)} global raw C++ code files")
+        
         # Generate ONNX integration files
         print("Generating ONNX integration files...")
         onnx_files = self._generate_onnx_integration(ast)
@@ -141,6 +147,30 @@ class MainGenerator(BaseGenerator):
         
         print(f"Total generated files: {len(all_generated_files)}")
         return all_generated_files
+    
+    def _generate_global_raw_cpp_code(self, ast: RoboDSLAST) -> List[Path]:
+        """Generate global raw C++ code files that get passed through as-is."""
+        generated_files = []
+        
+        if hasattr(ast, 'raw_cpp_code') and ast.raw_cpp_code:
+            # Create src directory if it doesn't exist
+            src_dir = Path(self.output_dir) / 'src'
+            src_dir.mkdir(parents=True, exist_ok=True)
+            
+            for i, cpp_block in enumerate(ast.raw_cpp_code):
+                if cpp_block.location == "global":
+                    # Generate a unique filename for each global C++ code block
+                    filename = f"global_cpp_code_{i}.cpp"
+                    file_path = src_dir / filename
+                    
+                    # Write the raw C++ code directly to the file
+                    file_path.write_text(cpp_block.code)
+                    generated_files.append(file_path)
+                    
+                    if self.debug:
+                        print(f"Generated global C++ code file: {file_path}")
+        
+        return generated_files
     
     def _generate_readme(self, ast: RoboDSLAST) -> Path:
         """Generate a README.md file for the package."""

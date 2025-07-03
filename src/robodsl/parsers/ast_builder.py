@@ -25,7 +25,7 @@ from ..core.ast import (
     StageTopicNode, StageCudaKernelNode, StageOnnxModelNode,
     PipelineContentNode, ModelConfigNode, InputDefNode, OutputDefNode,
     DeviceNode, OptimizationNode, SimulationWorldNode, SimulationRobotNode,
-    SimulationPluginNode, KernelParameterDirection
+    SimulationPluginNode, KernelParameterDirection, RawCppCodeNode
 )
 
 
@@ -37,11 +37,15 @@ class ASTBuilder:
         self.ast = None
         self.errors = []
         self.in_node_context = False  # Track if we're processing inside a node
+        self.source_text = ""  # Store the original source text
+        self.cpp_block_index = 0  # Track which cpp block we're processing
     
-    def build(self, tree: Tree) -> RoboDSLAST:
+    def build(self, tree: Tree, source_text: str = "") -> RoboDSLAST:
         """Build AST from Lark parse tree."""
         self.ast = RoboDSLAST()
         self.errors = []
+        self.source_text = source_text
+        self.cpp_block_index = 0  # Reset block index
         
         if self.debug:
             print(f"Building AST from tree: {tree.data}")
@@ -762,6 +766,8 @@ class ASTBuilder:
                             content.cuda_kernels.extend(kernels_block.kernels)
                     elif child.data == "use_kernel":
                         content.used_kernels.append(self._process_use_kernel(child))
+                    elif child.data == "raw_cpp_code":
+                        content.raw_cpp_code.append(self._process_raw_cpp_code(child))
                     else:
                         if self.debug:
                             print(f"    No handler for {child.data}")
@@ -1766,4 +1772,193 @@ class ASTBuilder:
         except Exception as e:
             if self.debug:
                 print(f"Error processing pyclass access section: {e}")
-            self.errors.append(f"Pyclass access section error: {e}") 
+            self.errors.append(f"Pyclass access section error: {e}")
+
+    def _process_raw_cpp_code(self, node: Tree) -> RawCppCodeNode:
+        """Process raw C++ code block that gets passed through as-is."""
+        try:
+            # Try to extract code from source text first for perfect preservation
+            if self.source_text:
+                code = self._extract_cpp_code_from_source(node, self.source_text)
+            else:
+                # Fallback to the enhanced method for C++ content
+                code = self._extract_cpp_code_from_block(node)
+            
+            location = "node" if self.in_node_context else "global"
+            
+            raw_cpp_node = RawCppCodeNode(code=code, location=location)
+            
+            # If this is global code (not inside a node), add it to the AST
+            if location == "global":
+                self.ast.raw_cpp_code.append(raw_cpp_node)
+                self.cpp_block_index += 1  # Increment for next global block
+            
+            if self.debug:
+                print(f"Processed raw C++ code block (location: {location}): {len(code)} characters")
+            
+            return raw_cpp_node
+        except Exception as e:
+            if self.debug:
+                print(f"Error processing raw C++ code block: {e}")
+            self.errors.append(f"Raw C++ code block error: {e}")
+            return RawCppCodeNode(code="", location="global")
+    
+    def _extract_cpp_code_from_block(self, cpp_block_node: Tree) -> str:
+        """Extract C++ code from a raw C++ code block, preserving all syntax including comments."""
+        if self.debug:
+            print(f"[DEBUG] _extract_cpp_code_from_block called")
+            print(f"[DEBUG] cpp_block_node: {cpp_block_node}")
+            print(f"[DEBUG] cpp_block_node type: {type(cpp_block_node)}")
+            print(f"[DEBUG] cpp_block_node children: {cpp_block_node.children}")
+        
+        def collect_cpp_code(node):
+            """Recursively collect C++ code, preserving all tokens including comments and whitespace."""
+            if isinstance(node, Token):
+                # For tokens, return the value as-is
+                return str(node.value)
+            elif isinstance(node, Tree):
+                # For tree nodes, recursively collect from children
+                result = ""
+                for child in node.children:
+                    result += collect_cpp_code(child)
+                return result
+            else:
+                return str(node)
+        
+        try:
+            # The cpp_block_node should have children that are cpp_raw_content nodes
+            code_parts = []
+            for child in cpp_block_node.children:
+                if isinstance(child, Tree):
+                    if child.data == "cpp_raw_content":
+                        # Each cpp_raw_content can contain text or nested braces
+                        for content_child in child.children:
+                            code_parts.append(collect_cpp_code(content_child))
+                    elif child.data == "cpp_balanced_braces":
+                        # Handle nested braces
+                        code_parts.append(collect_cpp_code(child))
+                    else:
+                        # Fallback: treat as regular content
+                        code_parts.append(collect_cpp_code(child))
+                else:
+                    # Direct token (like LBRACE, RBRACE)
+                    code_parts.append(collect_cpp_code(child))
+            
+            # Join all parts
+            code = "".join(code_parts)
+            
+            if self.debug:
+                print(f"[DEBUG] Extracted code: {repr(code)}")
+            
+            return code
+        except Exception as e:
+            if self.debug:
+                print(f"[DEBUG] Error in _extract_cpp_code_from_block: {e}")
+            # Fallback to the original method
+            return self._extract_code_from_block(cpp_block_node) 
+
+    def _extract_cpp_code_from_source(self, node: Tree, source_text: str) -> str:
+        """Extract C++ code directly from source text for perfect preservation."""
+        try:
+            # Determine if we're in a node context
+            is_node_context = self.in_node_context
+            
+            if is_node_context:
+                # For node-level blocks, we need to find the specific block within the node
+                # Since we don't have precise line information, fall back to the block method
+                return self._extract_cpp_code_from_block(node)
+            else:
+                # For global blocks, use the index-based approach
+                lines = source_text.split('\n')
+                cpp_blocks = []
+                
+                i = 0
+                while i < len(lines):
+                    line = lines[i]
+                    if 'cpp:' in line:
+                        # Find the opening brace
+                        brace_pos = line.find('{', line.find('cpp:'))
+                        if brace_pos != -1:
+                            # Found a cpp block, extract it
+                            start_line = i
+                            start_col = brace_pos
+                            
+                            # Find the matching closing brace
+                            brace_count = 0
+                            end_line = None
+                            end_col = None
+                            
+                            for j, search_line in enumerate(lines[i:], i):
+                                if j == i:
+                                    # First line: start from the brace position
+                                    line_start = brace_pos
+                                else:
+                                    line_start = 0
+                                
+                                for k, char in enumerate(search_line[line_start:], line_start):
+                                    if char == '{':
+                                        if brace_count == 0:
+                                            # This is the opening brace
+                                            pass
+                                        brace_count += 1
+                                    elif char == '}':
+                                        brace_count -= 1
+                                        if brace_count == 0:
+                                            # This is the matching closing brace
+                                            end_line = j
+                                            end_col = k
+                                            break
+                                
+                                if end_line is not None:
+                                    break
+                            
+                            if end_line is not None:
+                                # Extract the code between the braces
+                                if start_line == end_line:
+                                    # Same line
+                                    code = lines[start_line][start_col+1:end_col]
+                                else:
+                                    # Multiple lines
+                                    code_parts = []
+                                    # First line: from after the opening brace to end
+                                    code_parts.append(lines[start_line][start_col+1:])
+                                    # Middle lines: full lines
+                                    for k in range(start_line + 1, end_line):
+                                        code_parts.append(lines[k])
+                                    # Last line: from start to before the closing brace
+                                    code_parts.append(lines[end_line][:end_col])
+                                    code = '\n'.join(code_parts)
+                                
+                                # If the code is only whitespace, return '{}'
+                                if code.strip() == "":
+                                    code = "{}"
+                                
+                                cpp_blocks.append(code)
+                                i = end_line + 1
+                                continue
+                    
+                    i += 1
+                
+                # Return the block at the current index
+                if cpp_blocks:
+                    if self.cpp_block_index < len(cpp_blocks):
+                        return cpp_blocks[self.cpp_block_index]
+                    else:
+                        # Fallback to first block if index is out of range
+                        return cpp_blocks[0]
+                
+                # If no cpp blocks found but we have source text, try to find empty blocks
+                if 'cpp:' in source_text and '{' in source_text and '}' in source_text:
+                    # Look for empty cpp blocks like "cpp: { }"
+                    import re
+                    empty_pattern = r'cpp:\s*\{\s*\}'
+                    if re.search(empty_pattern, source_text):
+                        return "{}"
+            
+            # Fallback to the original method
+            return self._extract_cpp_code_from_block(node)
+            
+        except Exception as e:
+            if self.debug:
+                print(f"Error in _extract_cpp_code_from_source: {e}")
+            return self._extract_cpp_code_from_block(node)

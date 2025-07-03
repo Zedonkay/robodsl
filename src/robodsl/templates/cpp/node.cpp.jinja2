@@ -3,6 +3,13 @@
 #include "{{ include_path }}"
 #include <memory>
 
+{% if global_cpp_code %}
+// Global C++ code blocks (passed through as-is)
+{% for cpp_block in global_cpp_code %}
+{{ cpp_block.code }}
+{% endfor %}
+{% endif %}
+
 {% if namespace %}
 namespace {{ namespace }} {
 {% endif %}
@@ -859,6 +866,11 @@ void {{ class_name }}::{{ method.name }}(
 ) {
 {{ method.code | indent(4) }}
 }
+{% endfor %}
+
+// Raw C++ code blocks (passed through as-is)
+{% for cpp_block in raw_cpp_code %}
+{{ cpp_block.code | indent(0) }}
 {% endfor %}
 
 {% if namespace %}

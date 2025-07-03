@@ -46,8 +46,8 @@ class RoboDSLParser:
             # Parse with Lark (comments are handled by grammar)
             parse_tree = self.parser.parse(content)
 
-            # Build AST
-            ast = self.ast_builder.build(parse_tree)
+            # Build AST with source text for perfect C++ code preservation
+            ast = self.ast_builder.build(parse_tree, content)
             
             # Perform semantic analysis
             if not self.semantic_analyzer.analyze(ast):
@@ -112,8 +112,8 @@ class RoboDSLParser:
         try:
             # Parse with Lark (comments are handled by grammar)
             parse_tree = self.parser.parse(content)
-            # Build AST
-            ast = self.ast_builder.build(parse_tree)
+            # Build AST with source text for perfect C++ code preservation
+            ast = self.ast_builder.build(parse_tree, content)
             # Perform semantic analysis
             if not self.semantic_analyzer.analyze(ast):
                 errors = self.semantic_analyzer.get_errors()

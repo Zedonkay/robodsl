@@ -1,15 +1,13 @@
-// RoboDSL Grammar - Phase 1.5+ (Enhanced)
-
 %ignore _WS
 %ignore COMMENT   // Officially recognize // as a comment
 %ignore BLOCK_COMMENT
 %ignore _NL
 
-start: include_stmt* (data_structure | custom_interface | node_def | cuda_kernels_block | onnx_model | pipeline_def | simulation_config | dynamic_config)*
+start: include_stmt* (data_structure | custom_interface | node_def | cuda_kernels_block | onnx_model | pipeline_def | simulation_config | dynamic_config | raw_cpp_code)*
 
 // Include statements
 include_stmt: "include" ("<" include_path ">" | STRING)
-include_path: STRING | NAME ("/" NAME)* ("." NAME)?
+include_path: NAME ("/" NAME)* ("." NAME)?
 
 // Data structure definitions
 data_structure: struct_def SEMICOLON?
@@ -144,7 +142,7 @@ using_def: "using" NAME "=" cpp_type ";"
 // Array specifications
 array_spec: LSQB expr? RSQB
 node_def: "node" NODE_NAME LBRACE node_content RBRACE
-node_content: (parameter | lifecycle | timer | remap | namespace | ros_primitive | flag | cpp_method | kernel_def | onnx_model_ref | cuda_kernels_block | use_kernel)*
+node_content: (parameter | lifecycle | timer | remap | namespace | ros_primitive | flag | cpp_method | kernel_def | onnx_model_ref | cuda_kernels_block | use_kernel | raw_cpp_code)*
 
 // Pipeline definitions (Phase 4) - Enhanced with CUDA/ONNX integration
 pipeline_def: "pipeline" NAME LBRACE pipeline_content RBRACE
@@ -255,6 +253,12 @@ dotted_name: NAME (DOT NAME | LPAR (dotted_name (COMMA dotted_name)*)? RPAR)+
 code_block: "code" ":"? balanced_braces
 balanced_braces: "{" balanced_content* "}"
 balanced_content: /[^{}]+/ | balanced_braces
+
+// Raw C++ code blocks that get passed through as-is
+// Enhanced to better handle C++ syntax for IntelliSense support
+raw_cpp_code: "cpp" ":"? LBRACE cpp_raw_content* RBRACE
+cpp_raw_content: /[^{}]+/ | cpp_balanced_braces
+cpp_balanced_braces: "{" cpp_raw_content* "}"
 
 // Values
 // Note: SIGNED_NUMBER can be int or float; AST builder will parse as int if no decimal

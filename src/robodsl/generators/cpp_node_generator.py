@@ -164,6 +164,26 @@ class CppNodeGenerator(BaseGenerator):
                 }
                 cpp_methods.append(method_info)
         
+        # Prepare raw C++ code blocks (node-level)
+        raw_cpp_code = []
+        if hasattr(node.content, 'raw_cpp_code'):
+            for cpp_block in node.content.raw_cpp_code:
+                raw_cpp_code.append({
+                    'code': cpp_block.code,
+                    'location': cpp_block.location
+                })
+        
+        # Prepare global C++ code blocks
+        global_cpp_code = []
+        ast = getattr(self, 'ast', None)
+        if ast and hasattr(ast, 'raw_cpp_code') and ast.raw_cpp_code:
+            for cpp_block in ast.raw_cpp_code:
+                if cpp_block.location == "global":
+                    global_cpp_code.append({
+                        'code': cpp_block.code,
+                        'location': cpp_block.location
+                    })
+        
         return {
             'class_name': f"{node.name.capitalize()}Node",
             'base_class': 'rclcpp_lifecycle::LifecycleNode' if is_lifecycle else 'rclcpp::Node',
@@ -172,10 +192,10 @@ class CppNodeGenerator(BaseGenerator):
             'includes': list(set(includes)),  # Remove duplicates
             'ros2_includes': ros2_includes,
             'is_lifecycle': is_lifecycle,
-            'publishers': [{'name': pub.topic.split('/')[-1], 'msg_type': pub.msg_type} for pub in node.content.publishers],
-            'subscribers': [{'name': sub.topic.split('/')[-1], 'msg_type': sub.msg_type, 'callback_name': f"on_{sub.topic.split('/')[-1]}"} for sub in node.content.subscribers],
-            'services': [{'name': srv.service.split('/')[-1], 'srv_type': srv.srv_type, 'callback_name': f"on_{srv.service.split('/')[-1]}"} for srv in node.content.services],
-            'actions': [{'name': action.name, 'action_type': action.action_type} for action in node.content.actions],
+            'publishers': [{'name': pub.topic.split('/')[-1], 'msg_type': pub.msg_type, 'topic': pub.topic, 'qos': pub.qos} for pub in node.content.publishers],
+            'subscribers': [{'name': sub.topic.split('/')[-1], 'msg_type': sub.msg_type, 'topic': sub.topic, 'callback_name': f"on_{sub.topic.split('/')[-1]}", 'qos': sub.qos} for sub in node.content.subscribers],
+            'services': [{'name': srv.service.split('/')[-1], 'srv_type': srv.srv_type, 'service': srv.service, 'callback_name': f"on_{srv.service.split('/')[-1]}", 'qos': srv.qos} for srv in node.content.services],
+            'actions': [{'name': action.name, 'action_type': action.action_type, 'topic': action.name} for action in node.content.actions],
             'timers': [{'name': timer.name, 'callback_name': f"on_{timer.name}"} for timer in node.content.timers],
             'parameters': [{'name': param.name, 'type': 'auto'} for param in node.content.parameters],
             'cuda_kernels': cuda_kernels,
@@ -183,7 +203,9 @@ class CppNodeGenerator(BaseGenerator):
             'cuda_default_input_type': 'float',
             'cuda_default_output_type': 'float',
             'cuda_default_param_type': 'CudaParams',
-            'cpp_methods': cpp_methods
+            'cpp_methods': cpp_methods,
+            'raw_cpp_code': raw_cpp_code,
+            'global_cpp_code': global_cpp_code
         }
     
     def _prepare_kernel_context(self, kernel: KernelNode) -> Dict[str, Any]:
