@@ -825,5 +825,165 @@ class TestPerformance:
         assert len(method.code) > 1000  # Should contain the large code block
 
 
+class TestAllDSLFeatures:
+    def test_node_valid(self):
+        dsl = """
+        node my_node {
+            parameter int foo = 1
+        }
+        """
+        ast = parse_robodsl(dsl)
+        assert len(ast.nodes) == 1
+        assert ast.nodes[0].name == "my_node"
+
+    def test_node_invalid_missing_brace(self):
+        dsl = "node my_node { parameter int foo = 1 "  # missing closing brace
+        with pytest.raises(ParseError):
+            parse_robodsl(dsl)
+
+    def test_parameter_types(self):
+        dsl = """
+        node n {
+            parameter int i = 1
+            parameter float f = 2.0
+            parameter string s = "hi"
+            parameter bool b = true
+            parameter list l = [1,2,3]
+            parameter dict d = {x: 1}
+        }
+        """
+        ast = parse_robodsl(dsl)
+        ptypes = [p.type for p in ast.nodes[0].content.parameters]
+        assert set(ptypes) == {"int","float","string","bool","list","dict"}
+
+    def test_parameter_invalid_type(self):
+        dsl = "node n { parameter unknown_type foo = 1 }"
+        with pytest.raises(SemanticError):
+            parse_robodsl(dsl)
+
+    def test_publisher_valid(self):
+        dsl = "node n { publisher /t: \"std_msgs/msg/String\" }"
+        ast = parse_robodsl(dsl)
+        pubs = ast.nodes[0].content.publishers
+        assert len(pubs) == 1 and pubs[0].topic == "/t"
+
+    def test_publisher_invalid_missing_type(self):
+        dsl = "node n { publisher /t: }"
+        with pytest.raises(ParseError):
+            parse_robodsl(dsl)
+
+    def test_subscriber_valid(self):
+        dsl = "node n { subscriber /t: \"std_msgs/msg/String\" }"
+        ast = parse_robodsl(dsl)
+        subs = ast.nodes[0].content.subscribers
+        assert len(subs) == 1 and subs[0].topic == "/t"
+
+    def test_service_valid(self):
+        dsl = "node n { service /s: \"std_srvs/Empty\" }"
+        ast = parse_robodsl(dsl)
+        svcs = ast.nodes[0].content.services
+        assert len(svcs) == 1 and svcs[0].service == "/s"
+
+    def test_action_valid(self):
+        dsl = "node n { action /a: \"nav2_msgs/action/NavigateToPose\" }"
+        ast = parse_robodsl(dsl)
+        acts = ast.nodes[0].content.actions
+        assert len(acts) == 1 and isinstance(acts[0].name, str) and acts[0].name == "/a"
+
+    def test_timer_valid(self):
+        dsl = "node n { timer t: 1.0 }"
+        ast = parse_robodsl(dsl)
+        timers = ast.nodes[0].content.timers
+        assert len(timers) == 1 and timers[0].name == "t"
+
+    def test_remap_valid(self):
+        dsl = "node n { remap from: /a to: /b }"
+        ast = parse_robodsl(dsl)
+        remaps = ast.nodes[0].content.remaps
+        assert len(remaps) == 1
+
+    def test_namespace_valid(self):
+        dsl = "node n { namespace: /ns }"
+        ast = parse_robodsl(dsl)
+        ns = ast.nodes[0].content.namespace
+        assert ns is not None and ns.namespace == "/ns"
+
+    def test_flag_valid(self):
+        dsl = "node n { flag f: true }"
+        ast = parse_robodsl(dsl)
+        flags = ast.nodes[0].content.flags
+        assert len(flags) == 1 and flags[0].name == "f"
+
+    def test_method_valid(self):
+        dsl = """
+        node n {
+            method m {
+                input: int x
+                output: int y
+                code: { y = x+1; }
+            }
+        }
+        """
+        ast = parse_robodsl(dsl)
+        meths = ast.nodes[0].content.cpp_methods
+        assert len(meths) == 1 and meths[0].name == "m"
+
+    def test_kernel_valid(self):
+        dsl = """
+        cuda_kernels {
+            kernel k {
+                input: float* in (N)
+                output: float* out (N)
+                block_size: (256,1,1)
+                code: { out[0] = in[0]; }
+            }
+        }
+        """
+        ast = parse_robodsl(dsl)
+        assert ast.cuda_kernels and len(ast.cuda_kernels.kernels) == 1
+
+    def test_onnx_model_valid(self):
+        dsl = """
+        onnx_model m {
+            input: \"in\" -> \"float32[1,3,224,224]\"
+            output: \"out\" -> \"float32[1,1000]\"
+            device: cuda
+            optimization: tensorrt
+        }
+        """
+        ast = parse_robodsl(dsl)
+        assert ast.onnx_models and len(ast.onnx_models) == 1
+
+    def test_pipeline_valid(self):
+        dsl = """
+        pipeline p {
+            stage s1 { input: \"a\" output: \"b\" }
+        }
+        """
+        ast = parse_robodsl(dsl)
+        assert ast.pipelines and len(ast.pipelines) == 1
+
+    def test_include_valid(self):
+        dsl = "include <rclcpp/rclcpp.hpp>\nnode n { parameter int x = 1 }"
+        ast = parse_robodsl(dsl)
+        assert ast.includes and ast.includes[0].path == "rclcpp/rclcpp.hpp"
+
+    def test_comment_ignored(self):
+        dsl = """
+        // This is a comment
+        node n { parameter int x = 1 } // trailing comment
+        """
+        ast = parse_robodsl(dsl)
+        assert len(ast.nodes) == 1
+
+    def test_raw_cpp_block(self):
+        dsl = """
+        cpp: { int x = 0; }
+        node n { parameter int x = 1 }
+        """
+        ast = parse_robodsl(dsl)
+        assert ast.raw_cpp_code and "int x = 0;" in ast.raw_cpp_code[0].code
+
+
 if __name__ == "__main__":
     pytest.main([__file__]) 

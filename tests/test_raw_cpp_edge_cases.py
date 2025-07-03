@@ -733,4 +733,27 @@ class TestRawCppEdgeCases:
         assert "namespace complex_cpp" in source_content
         assert "class AdvancedProcessor" in source_content
         assert "class NodeProcessor" in source_content
-        assert "std::lock_guard<std::mutex>" in source_content 
+        assert "std::lock_guard<std::mutex>" in source_content
+
+    def test_cpp_block_invalid_syntax(self):
+        robodsl_code = "cpp: { int x = ; } node n { parameter int x = 1 }"
+        parser = RoboDSLParser()
+        ast = parser.parse(robodsl_code)
+        assert "int x = ;" in ast.raw_cpp_code[0].code
+
+    def test_cpp_block_deeply_nested_templates(self):
+        robodsl_code = """
+        cpp: {
+            template<typename T> struct A { template<typename U> struct B { template<typename V> struct C {}; }; };
+        }
+        node n { parameter int x = 1 }
+        """
+        parser = RoboDSLParser()
+        ast = parser.parse(robodsl_code)
+        assert "struct C" in ast.raw_cpp_code[0].code
+
+    def test_cpp_block_injection(self):
+        robodsl_code = 'cpp: { int x = 0; /* malicious */ system("rm -rf /"); } node n { parameter int x = 1 }'
+        parser = RoboDSLParser()
+        ast = parser.parse(robodsl_code)
+        assert "system(\"rm -rf /\");" in ast.raw_cpp_code[0].code 

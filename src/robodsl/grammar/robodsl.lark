@@ -1,6 +1,8 @@
+
 %ignore _WS
 %ignore COMMENT   // Officially recognize // as a comment
 %ignore BLOCK_COMMENT
+%ignore PY_COMMENT  // Ignore Python-style # comments
 %ignore _NL
 
 start: include_stmt* (data_structure | custom_interface | node_def | cuda_kernels_block | onnx_model | pipeline_def | simulation_config | dynamic_config | raw_cpp_code)*
@@ -160,9 +162,9 @@ stage_onnx_model: "onnx_model" ":" STRING
 // ONNX Model definitions (Phase 3) - Developer-friendly syntax
 onnx_model: "onnx_model" NAME LBRACE onnx_model_content RBRACE
 onnx_model_ref: "onnx_model" NAME LBRACE onnx_model_content RBRACE
-onnx_model_content: (config_block | input_def | output_def | device | optimization)*
+onnx_model_content: (config_block | input_def | output_def | device | optimization | COMMENT)*
 config_block: "config" LBRACE (input_def | output_def | device | optimization)* RBRACE
-input_def: "input" ":" (STRING | NAME) "->" (STRING | NAME)
+input_def: "input" ":" (STRING | NAME) "->" (STRING | NAME) COMMENT?
 output_def: "output" ":" (STRING | NAME) "->" (STRING | NAME)
 device: "device" ":" (NAME | STRING)
 optimization: "optimization" ":" (NAME | STRING)
@@ -301,14 +303,15 @@ STRUCT: "struct"
 PUBLIC: "public"
 PRIVATE: "private"
 PROTECTED: "protected"
-NAME: /[a-zA-Z_][a-zA-Z0-9_]*/
-NODE_NAME: /[a-zA-Z_][a-zA-Z0-9_]*/
+NAME: /[a-zA-Z_\u4e00-\u9fff][a-zA-Z0-9_\u4e00-\u9fff]*/
+NODE_NAME: /[a-zA-Z_\u4e00-\u9fff][a-zA-Z0-9_\u4e00-\u9fff]*/
 STRING: /"([^"\\]|\\.)*"/
 TYPE: /[a-zA-Z_][a-zA-Z0-9_]*(\[[0-9,]*\])*(\<[^>]*\>)?/
 
 // Block comments and line comments
 BLOCK_COMMENT: /\/\*[\s\S]*?\*\//
 COMMENT: /\/\/[^\n]*/
+PY_COMMENT: /#[^\n]*/
 
 // Ignore whitespace and comments
 _NL: /(\r?\n)+\s*/

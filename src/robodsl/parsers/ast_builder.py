@@ -1062,8 +1062,22 @@ class ASTBuilder:
 
     def _process_action_primitive(self, node: Tree) -> ActionNode:
         """Process action primitive."""
-        name = str(node.children[0])
-        action_type = str(node.children[1])
+        # Extract topic path properly
+        topic_path_node = node.children[0]
+        if isinstance(topic_path_node, Tree):
+            # topic_path is a Tree with children, extract the path
+            name = "/" + "/".join(str(child) for child in topic_path_node.children)
+        else:
+            name = str(topic_path_node)
+        
+        # Extract action type properly
+        action_type_node = node.children[1]
+        if isinstance(action_type_node, Tree):
+            # topic_type is a Tree, extract the type string
+            action_type = str(action_type_node.children[0]).strip('"')
+        else:
+            action_type = str(action_type_node).strip('"')
+        
         qos = None
         if len(node.children) > 2:
             config = self._process_action_config(node.children[2])

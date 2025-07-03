@@ -231,6 +231,36 @@ class TestPipelineGenerator:
         analysis_content = generated_files["src/analysis_node.cpp"]
         assert "ml_model" in analysis_content
 
+    def test_empty_pipeline(self):
+        dsl = "pipeline p { }"
+        parser = RoboDSLParser()
+        ast = parser.parse(dsl)
+        assert ast.pipelines and len(ast.pipelines[0].content.stages) == 0
+
+    def test_pipeline_cyclic(self):
+        dsl = """
+        pipeline p {
+            stage s1 { input: "s2" output: "s1" }
+            stage s2 { input: "s1" output: "s2" }
+        }
+        """
+        parser = RoboDSLParser()
+        ast = parser.parse(dsl)
+        # No semantic error at parse, but should be detected in analyzer if implemented
+        assert len(ast.pipelines[0].content.stages) == 2
+
+    def test_pipeline_missing_stage_io(self):
+        dsl = "pipeline p { stage s1 { } }"
+        parser = RoboDSLParser()
+        ast = parser.parse(dsl)
+        assert len(ast.pipelines[0].content.stages) == 1
+
+    def test_pipeline_invalid_stage_name(self):
+        dsl = 'pipeline p { stage 123 { input: "a" output: "b" } }'
+        parser = RoboDSLParser()
+        with pytest.raises(Exception):
+            ast = parser.parse(dsl)
+
 
 if __name__ == "__main__":
     pytest.main([__file__]) 

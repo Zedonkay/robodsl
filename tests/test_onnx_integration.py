@@ -306,6 +306,87 @@ class TestOnnxIntegration:
         assert "onnx" in node_integration.lower()
         assert "inference" in node_integration.lower()
 
+    def test_onnx_model_missing_input(self):
+        dsl = '''
+        onnx_model m {
+            output: "out" -> "float32[1,1000]"
+            device: cuda
+        }
+        '''
+        ast = RoboDSLParser().parse(dsl)
+        assert len(ast.onnx_models) == 1
+        assert len(ast.onnx_models[0].config.inputs) == 0
+
+    def test_onnx_model_invalid_device(self):
+        dsl = '''
+        onnx_model m {
+            input: "in" -> "float32[1,3,224,224]"
+            output: "out" -> "float32[1,1000]"
+            device: notarealdevice
+        }
+        '''
+        ast = RoboDSLParser().parse(dsl)
+        assert ast.onnx_models[0].config.device.device == "notarealdevice"
+
+    def test_onnx_model_duplicate_optimizations(self):
+        dsl = '''
+        onnx_model m {
+            input: "in" -> "float32[1,3,224,224]"
+            output: "out" -> "float32[1,1000]"
+            device: cuda
+            optimization: tensorrt
+            optimization: tensorrt
+        }
+        '''
+        ast = RoboDSLParser().parse(dsl)
+        opt_names = [opt.optimization for opt in ast.onnx_models[0].config.optimizations]
+        assert opt_names.count("tensorrt") == 2
+
+    def test_onnx_model_malformed_shape(self):
+        dsl = '''
+        onnx_model m {
+            input: "in" -> "float32[1,3,224,224,]"  # Malformed shape (trailing comma)
+            output: "out" -> "float32[1,1000]"
+            device: cuda
+        }
+        '''
+        ast = RoboDSLParser().parse(dsl)
+        assert ast.onnx_models[0].config.inputs[0].type == "float32[1,3,224,224,]"
+
+    def test_onnx_model_long_name(self):
+        dsl = '''
+        onnx_model this_is_a_very_long_model_name_with_numbers_1234567890 {
+            input: "in" -> "float32[1,3,224,224]"
+            output: "out" -> "float32[1,1000]"
+            device: cuda
+        }
+        '''
+        ast = RoboDSLParser().parse(dsl)
+        assert ast.onnx_models[0].name == "this_is_a_very_long_model_name_with_numbers_1234567890"
+
+    def test_onnx_model_unicode_name(self):
+        dsl = '''
+        onnx_model 模型 {
+            input: "in" -> "float32[1,3,224,224]"
+            output: "out" -> "float32[1,1000]"
+            device: cuda
+        }
+        '''
+        ast = RoboDSLParser().parse(dsl)
+        assert ast.onnx_models[0].name == "模型"
+
+    def test_onnx_model_invalid_optimization(self):
+        dsl = '''
+        onnx_model m {
+            input: "in" -> "float32[1,3,224,224]"
+            output: "out" -> "float32[1,1000]"
+            device: cuda
+            optimization: notarealopt
+        }
+        '''
+        ast = RoboDSLParser().parse(dsl)
+        assert ast.onnx_models[0].config.optimizations[0].optimization == "notarealopt"
+
 
 if __name__ == "__main__":
     pytest.main([__file__]) 

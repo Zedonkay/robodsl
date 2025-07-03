@@ -1,0 +1,38 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.13.2, pytest-8.4.1, pluggy-1.6.0 -- /Users/ishayu/Documents/Random_projects/cuif/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/ishayu/Documents/Random_projects/cuif
+configfile: pytest.ini
+plugins: xdist-3.7.0, anyio-4.9.0, timeout-2.4.0, cov-6.2.1, mock-3.14.1
+collecting ... collected 1 item
+
+tests/test_typecheck_bridge.py::test_typecheck_long_types FAILED         [100%]
+
+=================================== FAILURES ===================================
+__________________________ test_typecheck_long_types ___________________________
+
+    def test_typecheck_long_types():
+        ok, err, debug = check_ros2_type("long", 9223372036854775807)
+        if not ok:
+            print(f"[TYPECHECK DEBUG] {debug}")
+        assert ok
+        ok, err, debug = check_ros2_type("long", 9223372036854775808)
+        if ok:
+            print(f"[TYPECHECK DEBUG] {debug}")
+>       assert not ok
+E       assert not True
+
+tests/test_typecheck_bridge.py:234: AssertionError
+----------------------------- Captured stdout call -----------------------------
+[typecheck debug] [OK] type='long' canon='long' alias='long' branch='long'
+[typecheck debug] [OK] type='long' canon='long' alias='long' branch='long'
+[TYPECHECK DEBUG] [OK] type='long' canon='long' alias='long' branch='long'
+
+----------------------------- Captured stderr call -----------------------------
+[DEBUG] type_str='long', canon='long', alias='long'
+[DEBUG] long check: v=9223372036854775807, LLONG_MIN=-9223372036854775808, LLONG_MAX=9223372036854775807, v>LLONG_MAX=0
+[DEBUG] type_str='long', canon='long', alias='long'
+[DEBUG] long check: v=-9223372036854775808, LLONG_MIN=-9223372036854775808, LLONG_MAX=9223372036854775807, v>LLONG_MAX=0
+=========================== short test summary info ============================
+FAILED tests/test_typecheck_bridge.py::test_typecheck_long_types - assert not...
+============================== 1 failed in 0.28s ===============================
