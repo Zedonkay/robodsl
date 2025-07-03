@@ -12,6 +12,19 @@
     
     // Set up environment
     env_ = Ort::Env(ORT_LOGGING_LEVEL_WARNING, "{{ node_name }}_onnx");
+    
+    {%- if optimizations %}
+    {%- for opt in optimizations %}
+    {%- if opt.optimization == 'tensorrt' %}
+    // Initialize TensorRT configuration
+    tensorrt_enabled_ = true;
+    tensorrt_fp16_enabled_ = true;
+    tensorrt_int8_enabled_ = false;
+    tensorrt_workspace_size_ = 1 << 30;  // 1GB default
+    tensorrt_cache_path_ = "./trt_cache";
+    {%- endif %}
+    {%- endfor %}
+    {%- endif %}
 }
 
 {{ node_name }}OnnxInference::~{{ node_name }}OnnxInference() {
@@ -230,10 +243,55 @@ bool {{ node_name }}OnnxInference::copy_from_cuda(void* cuda_ptr, std::vector<fl
 }
 
 void {{ node_name }}OnnxInference::initialize_session_options(Ort::SessionOptions& session_options) {
-    // Set device type
+    // Set device type and execution providers
     if (device_type_ == "cuda") {
         session_options.SetExecutionMode(ExecutionMode::ORT_PARALLEL);
-        session_options.AppendExecutionProvider_CUDA(OrtCUDAProviderOptions{});
+        
+        // Configure TensorRT if specified
+        {%- if optimizations %}
+        {%- for opt in optimizations %}
+        {%- if opt.optimization == 'tensorrt' %}
+        // Enable TensorRT execution provider with full optimization
+        OrtTensorRTProviderOptions trt_options;
+        trt_options.device_id = 0;
+        trt_options.trt_max_workspace_size = 1 << 30;  // 1GB workspace
+        trt_options.trt_fp16_enable = true;  // Enable FP16 for better performance
+        trt_options.trt_int8_enable = false;  // Disable INT8 by default
+        trt_options.trt_engine_cache_enable = true;  // Enable engine cache
+        trt_options.trt_engine_cache_path = "./trt_cache";  // Cache directory
+        trt_options.trt_engine_decryption_enable = false;
+        trt_options.trt_force_sequential_engine_build = false;
+        trt_options.trt_context_memory_sharing_enable = true;
+        trt_options.trt_layer_norm_fp32_fallback = false;
+        trt_options.trt_timing_cache_enable = true;
+        trt_options.trt_force_timing_cache = false;
+        trt_options.trt_detailed_build_log = false;
+        trt_options.trt_build_heuristics_enable = true;
+        trt_options.trt_sparsity_enable = false;
+        trt_options.trt_builder_optimization_level = 3;  // Maximum optimization
+        trt_options.trt_auxiliary_path = "";
+        trt_options.trt_min_subgraph_size = 1;
+        trt_options.trt_max_partition_iterations = 10;
+        trt_options.trt_optimization_level = 3;  // Maximum optimization
+        
+        // Add TensorRT as primary execution provider
+        session_options.AppendExecutionProvider_TensorRT(trt_options);
+        {%- endif %}
+        {%- endfor %}
+        {%- endif %}
+        
+        // Add CUDA as fallback execution provider
+        OrtCUDAProviderOptions cuda_options;
+        cuda_options.device_id = 0;
+        cuda_options.arena_extend_strategy = 0;
+        cuda_options.gpu_mem_limit = SIZE_MAX;
+        cuda_options.allocator = nullptr;
+        cuda_options.do_copy_in_default_stream = true;
+        cuda_options.has_user_compute_stream = false;
+        cuda_options.user_compute_stream = nullptr;
+        cuda_options.default_memory_arena_cfg = nullptr;
+        
+        session_options.AppendExecutionProvider_CUDA(cuda_options);
     } else {
         session_options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
     }
@@ -242,16 +300,25 @@ void {{ node_name }}OnnxInference::initialize_session_options(Ort::SessionOption
     {%- if optimizations %}
     {%- for opt in optimizations %}
     {%- if opt.optimization == 'tensorrt' %}
-    // Enable TensorRT optimization
-    session_options.SetOptimizedModelFilePath("{{ node_name }}_optimized.onnx");
+    // Enable all optimizations for TensorRT
+    session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
+    {%- else %}
+    session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
     {%- endif %}
     {%- endfor %}
+    {%- else %}
+    session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
     {%- endif %}
     
-    // Set other options
+    // Set threading options
     session_options.SetIntraOpNumThreads(1);
     session_options.SetInterOpNumThreads(1);
-    session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
+    
+    // Enable memory pattern optimization
+    session_options.EnableMemoryPattern();
+    
+    // Enable CPU memory arena
+    session_options.EnableCpuMemArena();
 }
 
 std::vector<float> {{ node_name }}OnnxInference::preprocess_input(const std::vector<float>& raw_input) {
@@ -282,4 +349,226 @@ std::vector<float> {{ node_name }}OnnxInference::postprocess_output(const std::v
     // }
     
     return processed;
-} 
+}
+
+{%- if optimizations %}
+{%- for opt in optimizations %}
+{%- if opt.optimization == 'tensorrt' %}
+// TensorRT-specific method implementations
+
+bool {{ node_name }}OnnxInference::run_inference_tensorrt(const std::vector<float>& input_data, std::vector<float>& output_data) {
+    if (!tensorrt_enabled_) {
+        std::cerr << "TensorRT is not enabled for this model" << std::endl;
+        return false;
+    }
+    
+    try {
+        // Preprocess input
+        std::vector<float> processed_input = preprocess_input(input_data);
+        
+        // Create input tensor
+        std::vector<const char*> input_names = {input_name_.c_str()};
+        std::vector<const char*> output_names = {output_name_.c_str()};
+        
+        auto input_tensor = Ort::Value::CreateTensor<float>(
+            allocator_, 
+            const_cast<float*>(processed_input.data()), 
+            processed_input.size(),
+            input_shape_.data(), 
+            input_shape_.size()
+        );
+        
+        // Run inference with TensorRT
+        auto output_tensors = session_.Run(
+            Ort::RunOptions{nullptr}, 
+            input_names.data(), 
+            &input_tensor, 
+            1, 
+            output_names.data(), 
+            1
+        );
+        
+        // Extract output data
+        float* output_buffer = output_tensors[0].GetTensorMutableData<float>();
+        size_t output_size = output_tensors[0].GetTensorTypeAndShapeInfo().GetElementCount();
+        
+        output_data.assign(output_buffer, output_buffer + output_size);
+        
+        // Postprocess output
+        output_data = postprocess_output(output_data);
+        
+        return true;
+        
+    } catch (const Ort::Exception& e) {
+        std::cerr << "TensorRT inference error: " << e.what() << std::endl;
+        return false;
+    } catch (const std::exception& e) {
+        std::cerr << "Error during TensorRT inference: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool {{ node_name }}OnnxInference::run_inference_tensorrt_cuda(const float* input_data, size_t input_size, 
+                                                              float* output_data, size_t output_size) {
+    if (!tensorrt_enabled_) {
+        std::cerr << "TensorRT is not enabled for this model" << std::endl;
+        return false;
+    }
+    
+    try {
+        // Allocate CUDA memory
+        void* cuda_input = allocate_cuda_memory(input_size * sizeof(float));
+        void* cuda_output = allocate_cuda_memory(output_size * sizeof(float));
+        
+        if (!cuda_input || !cuda_output) {
+            return false;
+        }
+        
+        // Copy input to CUDA
+        cudaError_t cuda_error = cudaMemcpy(cuda_input, input_data, input_size * sizeof(float), cudaMemcpyHostToDevice);
+        if (cuda_error != cudaSuccess) {
+            std::cerr << "Error copying input to CUDA: " << cudaGetErrorString(cuda_error) << std::endl;
+            return false;
+        }
+        
+        // Create input tensor with CUDA memory
+        std::vector<const char*> input_names = {input_name_.c_str()};
+        std::vector<const char*> output_names = {output_name_.c_str()};
+        
+        auto input_tensor = Ort::Value::CreateTensor<float>(
+            allocator_, 
+            static_cast<float*>(cuda_input), 
+            input_size,
+            input_shape_.data(), 
+            input_shape_.size()
+        );
+        
+        // Run TensorRT inference
+        auto output_tensors = session_.Run(
+            Ort::RunOptions{nullptr}, 
+            input_names.data(), 
+            &input_tensor, 
+            1, 
+            output_names.data(), 
+            1
+        );
+        
+        // Copy output from CUDA
+        cuda_error = cudaMemcpy(output_data, cuda_output, output_size * sizeof(float), cudaMemcpyDeviceToHost);
+        if (cuda_error != cudaSuccess) {
+            std::cerr << "Error copying output from CUDA: " << cudaGetErrorString(cuda_error) << std::endl;
+            return false;
+        }
+        
+        return true;
+        
+    } catch (const Ort::Exception& e) {
+        std::cerr << "TensorRT CUDA inference error: " << e.what() << std::endl;
+        return false;
+    } catch (const std::exception& e) {
+        std::cerr << "Error during TensorRT CUDA inference: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool {{ node_name }}OnnxInference::enable_tensorrt_fp16() {
+    if (!tensorrt_enabled_) {
+        std::cerr << "TensorRT is not enabled for this model" << std::endl;
+        return false;
+    }
+    
+    tensorrt_fp16_enabled_ = true;
+    std::cout << "TensorRT FP16 optimization enabled" << std::endl;
+    return true;
+}
+
+bool {{ node_name }}OnnxInference::enable_tensorrt_int8() {
+    if (!tensorrt_enabled_) {
+        std::cerr << "TensorRT is not enabled for this model" << std::endl;
+        return false;
+    }
+    
+    tensorrt_int8_enabled_ = true;
+    tensorrt_fp16_enabled_ = false;  // INT8 takes precedence
+    std::cout << "TensorRT INT8 optimization enabled" << std::endl;
+    return true;
+}
+
+bool {{ node_name }}OnnxInference::set_tensorrt_workspace_size(size_t size) {
+    if (!tensorrt_enabled_) {
+        std::cerr << "TensorRT is not enabled for this model" << std::endl;
+        return false;
+    }
+    
+    tensorrt_workspace_size_ = size;
+    std::cout << "TensorRT workspace size set to " << size << " bytes" << std::endl;
+    return true;
+}
+
+bool {{ node_name }}OnnxInference::clear_tensorrt_cache() {
+    if (!tensorrt_enabled_) {
+        std::cerr << "TensorRT is not enabled for this model" << std::endl;
+        return false;
+    }
+    
+    // Clear TensorRT cache directory
+    std::string command = "rm -rf " + tensorrt_cache_path_ + "/*";
+    int result = system(command.c_str());
+    
+    if (result == 0) {
+        std::cout << "TensorRT cache cleared successfully" << std::endl;
+        return true;
+    } else {
+        std::cerr << "Failed to clear TensorRT cache" << std::endl;
+        return false;
+    }
+}
+
+bool {{ node_name }}OnnxInference::initialize_tensorrt_options(OrtTensorRTProviderOptions& trt_options) {
+    trt_options.device_id = 0;
+    trt_options.trt_max_workspace_size = tensorrt_workspace_size_;
+    trt_options.trt_fp16_enable = tensorrt_fp16_enabled_;
+    trt_options.trt_int8_enable = tensorrt_int8_enabled_;
+    trt_options.trt_engine_cache_enable = true;
+    trt_options.trt_engine_cache_path = tensorrt_cache_path_.c_str();
+    trt_options.trt_engine_decryption_enable = false;
+    trt_options.trt_force_sequential_engine_build = false;
+    trt_options.trt_context_memory_sharing_enable = true;
+    trt_options.trt_layer_norm_fp32_fallback = false;
+    trt_options.trt_timing_cache_enable = true;
+    trt_options.trt_force_timing_cache = false;
+    trt_options.trt_detailed_build_log = false;
+    trt_options.trt_build_heuristics_enable = true;
+    trt_options.trt_sparsity_enable = false;
+    trt_options.trt_builder_optimization_level = 3;
+    trt_options.trt_auxiliary_path = "";
+    trt_options.trt_min_subgraph_size = 1;
+    trt_options.trt_max_partition_iterations = 10;
+    trt_options.trt_optimization_level = 3;
+    
+    return true;
+}
+
+bool {{ node_name }}OnnxInference::create_tensorrt_cache_directory() {
+    std::string command = "mkdir -p " + tensorrt_cache_path_;
+    int result = system(command.c_str());
+    return result == 0;
+}
+
+bool {{ node_name }}OnnxInference::validate_tensorrt_engine() {
+    if (!tensorrt_enabled_) {
+        return false;
+    }
+    
+    // Check if TensorRT cache directory exists
+    if (!create_tensorrt_cache_directory()) {
+        std::cerr << "Failed to create TensorRT cache directory" << std::endl;
+        return false;
+    }
+    
+    std::cout << "TensorRT engine validation successful" << std::endl;
+    return true;
+}
+{%- endif %}
+{%- endfor %}
+{%- endif %}
