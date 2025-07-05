@@ -5,7 +5,7 @@ from pathlib import Path
 import tempfile
 import shutil
 
-from robodsl.parsers.lark_parser import RoboDSLParser
+from robodsl.parsers.lark_parser import parse_robodsl
 from robodsl.generators.pipeline_generator import PipelineGenerator
 from robodsl.core.ast import PipelineNode, StageNode, StageContentNode, PipelineContentNode, StageInputNode, StageOutputNode, StageMethodNode, StageModelNode, StageTopicNode
 
@@ -33,8 +33,8 @@ class TestPipelineGenerator:
         }
         """
         
-        parser = RoboDSLParser()
-        ast = parser.parse(pipeline_text)
+        
+        ast = parse_robodsl(pipeline_text)
         
         # Verify pipeline was parsed
         assert len(ast.pipelines) == 1
@@ -197,8 +197,8 @@ class TestPipelineGenerator:
         }
         """
         
-        parser = RoboDSLParser()
-        ast = parser.parse(pipeline_text)
+        
+        ast = parse_robodsl(pipeline_text)
         
         # Verify complex pipeline was parsed
         assert len(ast.pipelines) == 1
@@ -233,8 +233,8 @@ class TestPipelineGenerator:
 
     def test_empty_pipeline(self):
         dsl = "pipeline p { }"
-        parser = RoboDSLParser()
-        ast = parser.parse(dsl)
+        
+        ast = parse_robodsl(dsl)
         assert ast.pipelines and len(ast.pipelines[0].content.stages) == 0
 
     def test_pipeline_cyclic(self):
@@ -244,22 +244,22 @@ class TestPipelineGenerator:
             stage s2 { input: "s1" output: "s2" }
         }
         """
-        parser = RoboDSLParser()
-        ast = parser.parse(dsl)
+        
+        ast = parse_robodsl(dsl)
         # No semantic error at parse, but should be detected in analyzer if implemented
         assert len(ast.pipelines[0].content.stages) == 2
 
     def test_pipeline_missing_stage_io(self):
         dsl = "pipeline p { stage s1 { } }"
-        parser = RoboDSLParser()
-        ast = parser.parse(dsl)
+        
+        ast = parse_robodsl(dsl)
         assert len(ast.pipelines[0].content.stages) == 1
 
     def test_pipeline_invalid_stage_name(self):
         dsl = 'pipeline p { stage 123 { input: "a" output: "b" } }'
-        parser = RoboDSLParser()
+        
         with pytest.raises(Exception):
-            ast = parser.parse(dsl)
+            ast = parse_robodsl(dsl)
 
 
 if __name__ == "__main__":

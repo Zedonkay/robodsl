@@ -1,3 +1,43 @@
+FROM: "from:"
+TO: "to:"
+NAME: /[a-zA-Z_\u4e00-\u9fff][a-zA-Z0-9_\u4e00-\u9fff]*/
+CUDA_KERNELS: "cuda_kernels"
+KERNEL: "kernel"
+NODE: "node"
+PARAMETER: "parameter"
+PUBLISHER: "publisher"
+USE_KERNEL: "use_kernel"
+
+NODE_NAME: /[a-zA-Z_\u4e00-\u9fff][a-zA-Z0-9_\u4e00-\u9fff]*/
+IDENT: /[a-zA-Z_][a-zA-Z0-9_]*/
+// Punctuation terminals
+LSQB: "["
+RSQB: "]"
+STAR: "*"
+DOT: "."
+LPAR: "("
+RPAR: ")"
+LBRACE: "{"
+RBRACE: "}"
+COMMA: ","
+COLON: ":"
+AMPERSAND: "&"
+STRING: /"([^"\\]|\\.)*"/
+SIGNED_NUMBER: /-?[0-9]+(\.[0-9]+)?/
+// TOPIC_PATH removed - using topic_path rule instead
+BOOLEAN: "true" | "false"
+STRUCT: "struct"
+CLASS: "class"
+PUBLIC: "public"
+PRIVATE: "private"
+PROTECTED: "protected"
+CONST: "const"
+
+// Operator terminals (must be defined before any regex terminals)
+PLUS_OP: "+"
+MINUS_OP: "-"
+MULTIPLY_OP: "*"
+MODULO_OP: "%"
 
 %ignore _WS
 %ignore COMMENT   // Officially recognize // as a comment
@@ -5,16 +45,22 @@
 %ignore PY_COMMENT  // Ignore Python-style # comments
 %ignore _NL
 
-start: include_stmt* (data_structure | custom_interface | node_def | cuda_kernels_block | onnx_model | pipeline_def | simulation_config | dynamic_config | raw_cpp_code)*
+// Concepts (simplified to match test syntax)
+concept_def: "concept" NAME ":" concept_requires
+concept_requires: REQUIRES NAME ":" concept_requirement_list
+concept_requirement_list: concept_requirement+
+concept_requirement: cpp_type "operator" operator_symbol LPAR cpp_type (COMMA cpp_type)* RPAR
+operator_symbol: PLUS_OP | MINUS_OP | MULTIPLY_OP | EQUALS | NOT_EQUALS | LESS_THAN | GREATER_THAN | LESS_EQUAL | GREATER_EQUAL | LEFT_SHIFT | RIGHT_SHIFT | FUNCTION_CALL
+REQUIRES: "requires"
+
+start: include_stmt* (data_structure | custom_interface | node_def | cuda_kernels_block | onnx_model | pipeline_def | simulation_config | dynamic_config | raw_cpp_code | advanced_cpp_feature)*
 
 // Include statements
 include_stmt: "include" ("<" include_path ">" | STRING)
-include_path: NAME ("/" NAME)* ("." NAME)?
 
 // Data structure definitions
 data_structure: struct_def SEMICOLON?
               | class_def SEMICOLON?
-              | pyclass_def SEMICOLON?
               | enum_def SEMICOLON?
               | typedef_def SEMICOLON?
               | using_def SEMICOLON?
@@ -25,7 +71,7 @@ custom_interface: message_def | service_def | action_def
 // Message definitions
 message_def: "message" NAME LBRACE message_content RBRACE
 message_content: message_field*
-message_field: cpp_type NAME default_value? ";"
+message_field: cpp_type (NAME array_spec? default_value? | NAME ":" SIGNED_NUMBER) ";"
 default_value: "=" value
 
 // Service definitions
@@ -46,13 +92,13 @@ action_fields: message_field*
 // Dynamic runtime configuration
 dynamic_config: dynamic_parameters | dynamic_remaps
 dynamic_parameters: "dynamic_parameters" LBRACE dynamic_parameter* RBRACE
-dynamic_parameter: "parameter" TYPE NAME "=" value dynamic_param_config?
+dynamic_parameter: PARAMETER NAME NAME "=" value dynamic_param_config?
 dynamic_param_config: LBRACE dynamic_param_setting* RBRACE
 dynamic_param_setting: (NAME ":" value) | description
 description: "description" ":" STRING
 
 dynamic_remaps: "dynamic_remaps" LBRACE dynamic_remap* RBRACE
-dynamic_remap: "remap" TOPIC_PATH ":" TOPIC_PATH remap_condition?
+dynamic_remap: "remap" ((FROM topic_path TO topic_path) | (FROM topic_path "to" ":" topic_path) | (topic_path ":" topic_path)) remap_condition?
 remap_condition: "when" ":" STRING
 
 // Simulation configuration
@@ -93,43 +139,20 @@ hardware_nodes: "hardware_nodes" ":" node_list
 node_list: NAME (COMMA NAME)*
 bridge_config: "bridge_config" ":" STRING
 
+// Unified block content for structs, classes, and templates
+block_content: (struct_member | cpp_method | include_stmt)*
+
+// Struct member definitions - unified to handle both regular and bitfield members
+struct_member: cpp_type (NAME array_spec? default_value? | NAME ":" SIGNED_NUMBER) ";"
+             | cpp_type NAME ":" SIGNED_NUMBER ";"
+
 // Struct definitions
-struct_def: "struct" NAME LBRACE struct_content RBRACE
-struct_content: (struct_member | cpp_method | include_stmt)*
-struct_member: cpp_type NAME array_spec? ";"?
+struct_def: STRUCT NAME LBRACE block_content RBRACE
 
 // Class definitions
-class_def: "class" NAME inheritance? LBRACE class_content RBRACE
+class_def: "class" NAME inheritance? LBRACE block_content RBRACE
 inheritance: ":" access_specifier? cpp_type (COMMA access_specifier? cpp_type)*
 access_specifier: PUBLIC | PRIVATE | PROTECTED
-class_content: (class_access_section | class_direct_member | class_section_method | include_stmt)*
-class_access_section: access_specifier ":" (class_section_member | class_section_method)*
-class_direct_member: struct_member
-class_section_member: struct_member
-class_section_method: cpp_method
-
-// Pythonic class definition
-pyclass_def: "pyclass" NAME inheritance? LBRACE pyclass_content RBRACE
-pyclass_content: (pyclass_attribute | pyclass_method | pyclass_constructor | pyclass_access_section)*
-
-// Pythonic class attributes (member variables)
-pyclass_attribute: NAME ":" cpp_type default_value?
-
-// Pythonic class constructor
-pyclass_constructor: "def" "__init__" LPAR pyclass_param_list RPAR LBRACE pyclass_constructor_content RBRACE
-pyclass_constructor_content: (pyclass_assign | code_block)*
-pyclass_assign: "self" "." NAME "=" NAME ";"
-
-// Pythonic class methods
-pyclass_method: "def" NAME LPAR pyclass_param_list RPAR return_type? LBRACE pyclass_method_content RBRACE
-pyclass_param_list: pyclass_param (COMMA pyclass_param)*
-pyclass_param: NAME ":" cpp_type default_value?
-return_type: "->" cpp_type
-pyclass_method_content: (code_block)*
-
-// Pythonic access sections
-pyclass_access_section: pyclass_access_specifier ":" (pyclass_attribute | pyclass_method | pyclass_constructor)*
-pyclass_access_specifier: "public" | "private" | "protected"
 
 // Enum definitions
 enum_def: "enum" enum_type? NAME LBRACE enum_content RBRACE
@@ -143,7 +166,7 @@ using_def: "using" NAME "=" cpp_type ";"
 
 // Array specifications
 array_spec: LSQB expr? RSQB
-node_def: "node" NODE_NAME LBRACE node_content RBRACE
+node_def: NODE NODE_NAME LBRACE node_content RBRACE
 node_content: (parameter | lifecycle | timer | remap | namespace | ros_primitive | flag | cpp_method | kernel_def | onnx_model_ref | cuda_kernels_block | use_kernel | raw_cpp_code)*
 
 // Pipeline definitions (Phase 4) - Enhanced with CUDA/ONNX integration
@@ -155,7 +178,7 @@ stage_input: "input" ":" STRING
 stage_output: "output" ":" STRING
 stage_method: "method" ":" STRING
 stage_model: "model" ":" STRING
-stage_topic: "topic" ":" TOPIC_PATH
+stage_topic: "topic" ":" topic_path
 stage_cuda_kernel: "cuda_kernel" ":" STRING
 stage_onnx_model: "onnx_model" ":" STRING
 
@@ -170,7 +193,7 @@ device: "device" ":" (NAME | STRING)
 optimization: "optimization" ":" (NAME | STRING)
 
 // Parameters
-parameter: "parameter" TYPE NAME "=" value
+parameter: PARAMETER NAME NAME "=" value
 
 // Lifecycle configuration
 lifecycle: "lifecycle" LBRACE lifecycle_config RBRACE
@@ -185,10 +208,10 @@ timer_config: LBRACE timer_setting* RBRACE
 timer_setting: NAME ":" (BOOLEAN | NAME)
 
 // Remaps
-remap: "remap" ("from:" TOPIC_PATH "to:" TOPIC_PATH | TOPIC_PATH ":" TOPIC_PATH)
+remap: "remap" ((FROM topic_path TO topic_path) | (FROM topic_path "to" ":" topic_path) | (topic_path ":" topic_path))
 
 // Namespaces
-namespace: "namespace" (":"? TOPIC_PATH)
+namespace: "namespace" (":"? topic_path)
 
 // ROS primitives
 ros_primitive: publisher | subscriber | service | client | action
@@ -230,12 +253,12 @@ method_param_size_list: method_param_size_item (COMMA method_param_size_item)*
 method_param_size_item: SIGNED_NUMBER | NAME | STRING | dotted_name
 
 // CUDA kernels block - Developer-friendly with comma-separated parameters
-cuda_kernels_block: "cuda_kernels" LBRACE kernel_def* RBRACE
-kernel_def: "kernel" NAME LBRACE kernel_content RBRACE
+cuda_kernels_block: CUDA_KERNELS LBRACE kernel_def* RBRACE
+kernel_def: KERNEL NAME LBRACE kernel_content RBRACE
 kernel_content: (block_size | grid_size | shared_memory | use_thrust | kernel_input_param | kernel_output_param | code_block | cuda_include)*
 
-block_size: "block_size" ":" LPAR expr COMMA expr COMMA expr RPAR
-grid_size: "grid_size" ":" LPAR expr COMMA expr COMMA expr RPAR
+block_size: "block_size" ":" tuple_expr
+grid_size: "grid_size" ":" tuple_expr
 shared_memory: "shared_memory" ":" expr
 use_thrust: "use_thrust" ":" BOOLEAN
 kernel_input_param: "input" ":" kernel_param_list
@@ -243,16 +266,14 @@ kernel_output_param: "output" ":" kernel_param_list
 kernel_param_list: kernel_param (COMMA kernel_param)*
 kernel_param: cpp_type NAME kernel_param_size?
 cuda_include: "include" ("<" include_path ">" | STRING)
-cpp_type: cpp_type_name
-cpp_type_name: /((const\s+)?[a-zA-Z_][a-zA-Z0-9_]*(\:\:[a-zA-Z_][a-zA-Z0-9_]*)*(\<[^<>]*(\<[^<>]*\>[^<>]*)*\>)?(\s*const)?(\s*[\*&])*(\[\])*)/
 kernel_param_size: LPAR kernel_param_size_list RPAR
 kernel_param_size_list: kernel_param_size_item (COMMA kernel_param_size_item)*
 kernel_param_size_item: SIGNED_NUMBER | NAME | STRING
 
 dotted_name: NAME (DOT NAME | LPAR (dotted_name (COMMA dotted_name)*)? RPAR)+
 
-// Code blocks use C++/CUDA curly braces, not triple quotes or strings
-code_block: "code" ":"? balanced_braces
+// For advanced C++ features, allow free-form code blocks
+code_block: ("code" ":"?)? balanced_braces
 balanced_braces: "{" balanced_content* "}"
 balanced_content: /[^{}]+/ | balanced_braces
 
@@ -277,41 +298,37 @@ dict_item: NAME ":" value
 dict_sep: COMMA | _NL
 
 // Expressions for block/grid size and parameter sizes
-expr: signed_atom (binop signed_atom)*
-signed_atom: SIGNED_NUMBER | NAME | dotted_name | LPAR expr RPAR
-binop: "+" | "-" | "*" | "/" | "%" | "^"
+expr: comparison_expr
+comparison_expr: arithmetic_expr (COMPOP arithmetic_expr)*
+arithmetic_expr: term (ADDOP term)*
+term: factor (MULOP factor)*
+factor: signed_atom
+signed_atom: SIGNED_NUMBER | simple_name | LPAR expr RPAR | sizeof_expr | function_call
+simple_name: IDENT
+sizeof_expr: "sizeof" LPAR (cpp_type | expr) RPAR
+function_call: IDENT LPAR expr (COMMA expr)* RPAR
+ADDOP: PLUS_OP | MINUS_OP
+MULOP: MULTIPLY_OP | DIVIDE_OP | MODULO_OP
+DIVIDE_OP: "/"
+COMPOP: "==" | "!=" | "<" | ">" | "<=" | ">="
 
-// Topics must start with /
-TOPIC_PATH: /\/[a-zA-Z_][a-zA-Z0-9_\/\.]*/
+tuple_expr: LPAR expr COMMA expr COMMA expr RPAR
 
-// Terminals
-STAR: "*"
-DOT: "."
-LPAR: "("
-RPAR: ")"
-LSQB: "["
-RSQB: "]"
-LBRACE: "{"
-RBRACE: "}"
-COMMA: ","
-LESSTAN: "<"
-MORETHAN: ">"
-SIGNED_NUMBER: /-?[0-9]+(\.[0-9]+)?/
-BOOLEAN: "true" | "false"
-CLASS: "class"
-STRUCT: "struct"
-PUBLIC: "public"
-PRIVATE: "private"
-PROTECTED: "protected"
-NAME: /[a-zA-Z_\u4e00-\u9fff][a-zA-Z0-9_\u4e00-\u9fff]*/
-NODE_NAME: /[a-zA-Z_\u4e00-\u9fff][a-zA-Z0-9_\u4e00-\u9fff]*/
-STRING: /"([^"\\]|\\.)*"/
-TYPE: /[a-zA-Z_][a-zA-Z0-9_]*(\[[0-9,]*\])*(\<[^>]*\>)?/
+// Ensure operators are properly recognized in expressions
+EQUALS: "=="
+NOT_EQUALS: "!="
+LESS_THAN: "<"
+GREATER_THAN: ">"
+LESS_EQUAL: "<="
+GREATER_EQUAL: ">="
+LEFT_SHIFT: "<<"
+RIGHT_SHIFT: ">>"
+FUNCTION_CALL: "()"
 
 // Block comments and line comments
 BLOCK_COMMENT: /\/\*[\s\S]*?\*\//
 COMMENT: /\/\/[^\n]*/
-PY_COMMENT: /#[^\n]*/
+PY_COMMENT: /#[ \t][^\n]*/
 
 // Ignore whitespace and comments
 _NL: /(\r?\n)+\s*/
@@ -319,7 +336,7 @@ _WS: /[ \t]+/
 
 // QoS configuration
 qos_config: "qos" LBRACE qos_setting* RBRACE
-qos_setting: NAME ":" expr
+qos_setting: NAME ":" (expr | NAME)
 
 // Add this to the terminals section near STRING:
 TOPIC_TYPE_STRING: /"[a-zA-Z0-9_\/]+"/
@@ -328,3 +345,108 @@ TOPIC_TYPE_STRING: /"[a-zA-Z0-9_\/]+"/
 use_kernel: "use_kernel" ":" STRING
 
 SEMICOLON: ";"
+
+// Advanced C++ Features (Phase 8)
+advanced_cpp_feature: concept_def | template_def | static_assert | global_var | operator_overload | constructor_def | preprocessor_directive | function_attribute | friend_declaration | user_defined_literal
+
+// Template definitions
+template_def: template_struct | template_class | template_function | template_alias
+template_struct: "template" "<" template_params ">" STRUCT NAME LBRACE block_content RBRACE
+template_class: "template" "<" template_params ">" CLASS NAME inheritance? LBRACE block_content RBRACE
+template_function: "template" "<" template_params ">" cpp_type NAME LPAR function_param_list RPAR balanced_braces
+template_alias: "template" "<" template_params ">" "using" NAME "=" cpp_type ";"
+
+// Template parameters
+template_params: template_param (COMMA template_param)*
+template_param: typename_param | class_param | template_param_with_default
+typename_param: "typename" NAME
+class_param: "class" NAME
+template_param_with_default: ("typename" | "class") NAME "=" cpp_type
+
+// Function declarations for templates
+function_decl: cpp_type NAME LPAR function_param_list RPAR return_type? balanced_braces
+// Alternative function declaration syntax (for attributes)
+function_decl_alt: NAME LPAR function_param_list RPAR return_type balanced_braces
+return_type: "->" cpp_type
+function_param_list: function_param (COMMA function_param)*
+function_param: NAME ":" cpp_type default_value?
+
+cpp_statement: cpp_keyword | cpp_expression | cpp_semicolon
+cpp_keyword: "return" | "if" | "else" | "for" | "while" | "switch" | "case" | "default" | "break" | "continue"
+cpp_expression: /[^;{}]+/
+cpp_semicolon: ";"
+
+// Static assertions
+static_assert: "static_assert" LPAR expr COMMA STRING RPAR ";"
+
+// Global variables and constants
+global_var: global_constexpr | global_device_const | global_static_inline
+global_constexpr: "global" NAME ":" "constexpr" cpp_type "=" value ";"
+global_device_const: "global" "device" NAME ":" "__constant__" cpp_type array_spec "=" array ";"
+global_static_inline: "global" "static" "inline" function_decl
+
+// Operator overloads (accept both 'operator<<' and 'operator <<')
+operator_overload: "def" operator_name LPAR operator_params RPAR return_type? balanced_braces
+operator_name: "operator" operator_symbol | "operator" STRING
+operator_params: operator_param (COMMA operator_param)*
+operator_param: NAME ":" cpp_type
+
+// Constructor definitions (loosen member_init_item)
+constructor_def: constructor_decl | destructor_decl | member_init
+constructor_decl: "def" "__init__" LPAR constructor_params RPAR (":" member_init_list)? balanced_braces
+constructor_params: constructor_param (COMMA constructor_param)*
+constructor_param: NAME ":" cpp_type default_value?
+constructor_init: ":" member_init_list
+member_init_list: member_init_item (COMMA member_init_item)*
+member_init_item: NAME LPAR (NAME | expr)? RPAR
+member_assign: "self" "." NAME "=" expr ";"
+destructor_decl: "def" "__del__" LPAR RPAR balanced_braces
+destructor_body: code_block
+member_init: "member_init" NAME ":" member_init_list
+
+// Preprocessor directives
+preprocessor_directive: pragma_directive | include_directive | conditional_directive | define_directive | error_directive | line_directive
+pragma_directive: "#pragma" NAME
+include_directive: "#include" ("<" include_path ">" | STRING)
+conditional_directive: "#if" "defined" LPAR NAME RPAR | "#ifdef" NAME | "#ifndef" NAME | "#endif"
+define_directive: "#define" NAME value?
+error_directive: "#error" STRING
+line_directive: "#line" SIGNED_NUMBER STRING?
+
+// Function attributes (allow multiple attributes)
+function_attribute: attribute+ function_decl_alt
+attribute: "@" ATTRIBUTE_NAME
+ATTRIBUTE_NAME: "device" | "host" | "forceinline" | "launch_bounds" | "nodiscard" | "likely" | "unlikely" | "alignas" | "noexcept"
+
+// Friend declarations
+friend_declaration: "friend" friend_target SEMICOLON?
+friend_target: "class" NAME   -> class_friend
+            | NAME             -> function_friend
+
+// User-defined literals: allow operator""_suffix
+user_defined_literal: "def" "operator" STRING LITERAL_SUFFIX LPAR literal_param RPAR return_type balanced_braces
+LITERAL_SUFFIX: /_[a-zA-Z_][a-zA-Z0-9_]*/
+
+literal_param: "value" ":" "long" "double"
+
+// Add C++ keywords as terminals
+RETURN: "return"
+IF: "if"
+ELSE: "else"
+FOR: "for"
+WHILE: "while"
+SWITCH: "switch"
+CASE: "case"
+DEFAULT: "default"
+BREAK: "break"
+CONTINUE: "continue"
+
+// C++ types (refactored to avoid ambiguity and reduce/reduce conflicts)
+cpp_type: CONST? base_cpp_type pointer_or_ref*
+base_cpp_type: NAME ("::" NAME)* (LESS_THAN cpp_type (COMMA cpp_type)* GREATER_THAN)? | dotted_name | "long" "double" | "size_t" | "uint32_t"
+pointer_or_ref: STAR | AMPERSAND
+
+// AMPERSAND for references (already defined in terminals section)
+
+// Include path for preprocessor directives
+include_path: /[a-zA-Z0-9_\/\.]+/

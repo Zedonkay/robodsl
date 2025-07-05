@@ -2,7 +2,7 @@
 
 import pytest
 from pathlib import Path
-from robodsl.parsers.lark_parser import RoboDSLParser
+from robodsl.parsers.lark_parser import parse_robodsl
 from robodsl.generators.main_generator import MainGenerator
 
 
@@ -40,8 +40,8 @@ node test_node {
 """
         
         # Parse the code
-        parser = RoboDSLParser()
-        ast = parser.parse(robodsl_code)
+        
+        ast = parse_robodsl(robodsl_code)
         
         # Verify that raw C++ code was parsed
         assert hasattr(ast, 'raw_cpp_code')
@@ -83,8 +83,8 @@ node test_node {
 """
         
         # Parse the code
-        parser = RoboDSLParser()
-        ast = parser.parse(robodsl_code)
+        
+        ast = parse_robodsl(robodsl_code)
         
         # Verify that raw C++ code was parsed inside the node
         assert len(ast.nodes) == 1
@@ -152,8 +152,8 @@ node test_node {
 """
         
         # Parse the code
-        parser = RoboDSLParser()
-        ast = parser.parse(robodsl_code)
+        
+        ast = parse_robodsl(robodsl_code)
         
         # Verify global blocks
         assert len(ast.raw_cpp_code) == 2
@@ -203,8 +203,8 @@ cpp: {
 """
         
         # Parse the code
-        parser = RoboDSLParser()
-        ast = parser.parse(robodsl_code)
+        
+        ast = parse_robodsl(robodsl_code)
         
         # Verify parsing
         assert len(ast.raw_cpp_code) == 1

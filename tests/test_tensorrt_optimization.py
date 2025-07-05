@@ -5,7 +5,7 @@ from pathlib import Path
 import tempfile
 import shutil
 
-from robodsl.parsers.lark_parser import RoboDSLParser
+from robodsl.parsers.lark_parser import parse_robodsl
 from robodsl.generators.onnx_integration import OnnxIntegrationGenerator
 from robodsl.core.ast import OnnxModelNode, ModelConfigNode, InputDefNode, OutputDefNode, DeviceNode, OptimizationNode
 
@@ -24,7 +24,7 @@ class TestTensorRTOptimization:
         }
         '''
         
-        ast = parser.parse(dsl_code)
+        ast = parse_robodsl(dsl_code)
         
         assert len(ast.onnx_models) == 1
         model = ast.onnx_models[0]
@@ -120,7 +120,7 @@ class TestTensorRTOptimization:
         }
         '''
         
-        ast = parser.parse(dsl_code)
+        ast = parse_robodsl(dsl_code)
         
         assert len(ast.onnx_models) == 1
         model = ast.onnx_models[0]
@@ -141,7 +141,7 @@ class TestTensorRTOptimization:
         }
         '''
         
-        ast = parser.parse(dsl_code)
+        ast = parse_robodsl(dsl_code)
         
         assert len(ast.onnx_models) == 1
         model = ast.onnx_models[0]

@@ -6,7 +6,7 @@ import shutil
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 
-from robodsl.parsers.lark_parser import RoboDSLParser
+from robodsl.parsers.lark_parser import parse_robodsl
 from robodsl.generators.onnx_integration import OnnxIntegrationGenerator
 from robodsl.core.ast import (
     OnnxModelNode, ModelConfigNode, InputDefNode, OutputDefNode, 
@@ -62,7 +62,7 @@ class TestTensorRTIntegration:
         }
         '''
         
-        ast = parser.parse(dsl_code)
+        ast = parse_robodsl(dsl_code)
         
         # Check CUDA kernels
         assert ast.cuda_kernels is not None
@@ -130,7 +130,7 @@ class TestTensorRTIntegration:
         }
         '''
         
-        ast = parser.parse(dsl_code)
+        ast = parse_robodsl(dsl_code)
         
         # Check ONNX models
         assert len(ast.onnx_models) == 2
@@ -190,7 +190,7 @@ class TestTensorRTIntegration:
         }
         '''
         
-        ast = parser.parse(dsl_code)
+        ast = parse_robodsl(dsl_code)
         
         # Check ONNX model
         assert len(ast.onnx_models) == 1
@@ -234,7 +234,7 @@ class TestTensorRTIntegration:
             }}
             '''
             
-            ast = parser.parse(dsl_code)
+            ast = parse_robodsl(dsl_code)
             
             # Check ONNX model
             assert len(ast.onnx_models) == 1
@@ -279,7 +279,7 @@ class TestTensorRTIntegration:
         }
         '''
         
-        ast = parser.parse(dsl_code)
+        ast = parse_robodsl(dsl_code)
         
         # Check ONNX model
         assert len(ast.onnx_models) == 1

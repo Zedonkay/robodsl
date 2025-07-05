@@ -1,3 +1,4 @@
+from robodsl.parsers.lark_parser import parse_robodsl
 """Tests for subnode functionality in RoboDSL."""
 
 import os
@@ -52,7 +53,7 @@ def test_add_nested_subnode(test_output_dir):
     """Test adding a deeply nested subnode."""
     runner = CliRunner()
     project_dir = test_output_dir / "test_project"
-    project_dir.mkdir()
+    project_dir.mkdir(parents=True, exist_ok=True)
     
     # Add a deeply nested subnode
     result = runner.invoke(

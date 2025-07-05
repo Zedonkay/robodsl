@@ -1,6 +1,6 @@
 import pytest
 from pathlib import Path
-from robodsl.parsers import parse_robodsl
+from robodsl.parsers.lark_parser import parse_robodsl
 from robodsl.core.ast import (
     StructNode, ClassNode, EnumNode, TypedefNode, UsingNode, NodeNode
 )

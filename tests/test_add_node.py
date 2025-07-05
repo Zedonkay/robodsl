@@ -1,3 +1,4 @@
+from robodsl.parsers.lark_parser import parse_robodsl
 """Tests for the add-node command."""
 
 import os

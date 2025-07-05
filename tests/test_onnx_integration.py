@@ -5,7 +5,7 @@ from pathlib import Path
 import tempfile
 import shutil
 
-from robodsl.parsers.lark_parser import RoboDSLParser
+from robodsl.parsers.lark_parser import parse_robodsl
 from robodsl.generators.onnx_integration import OnnxIntegrationGenerator
 from robodsl.core.ast import OnnxModelNode, ModelConfigNode, InputDefNode, OutputDefNode, DeviceNode, OptimizationNode
 
@@ -13,7 +13,7 @@ from robodsl.core.ast import OnnxModelNode, ModelConfigNode, InputDefNode, Outpu
 class TestOnnxIntegration:
     """Test ONNX integration parsing and generation."""
     
-    def test_onnx_model_parsing(self, parser):
+    def test_onnx_model_parsing(self):
         """Test parsing of ONNX model definitions."""
         # Test basic ONNX model with quoted strings
         dsl_code = '''
@@ -25,7 +25,7 @@ class TestOnnxIntegration:
         }
         '''
         
-        ast = parser.parse(dsl_code)
+        ast = parse_robodsl(dsl_code)
         
         assert len(ast.onnx_models) == 1
         model = ast.onnx_models[0]
@@ -52,7 +52,7 @@ class TestOnnxIntegration:
         # Check optimization
         assert model.config.optimizations[0].optimization == "tensorrt"
     
-    def test_onnx_model_parsing_with_names(self, parser):
+    def test_onnx_model_parsing_with_names(self):
         """Test parsing of ONNX model definitions with unquoted names."""
         # Test ONNX model with unquoted names
         dsl_code = '''
@@ -64,7 +64,7 @@ class TestOnnxIntegration:
         }
         '''
         
-        ast = parser.parse(dsl_code)
+        ast = parse_robodsl(dsl_code)
         
         assert len(ast.onnx_models) == 1
         model = ast.onnx_models[0]
@@ -128,7 +128,7 @@ class TestOnnxIntegration:
         assert "device_type_(\"cuda\")" in impl_content
         assert "tensorrt" in impl_content
     
-    def test_onnx_model_without_optimization(self, parser):
+    def test_onnx_model_without_optimization(self):
         """Test ONNX model without optimization settings."""
         dsl_code = '''
         onnx_model simple_model {
@@ -138,7 +138,7 @@ class TestOnnxIntegration:
         }
         '''
         
-        ast = parser.parse(dsl_code)
+        ast = parse_robodsl(dsl_code)
         
         assert len(ast.onnx_models) == 1
         model = ast.onnx_models[0]
@@ -147,7 +147,7 @@ class TestOnnxIntegration:
         assert model.config.device.device == "cpu"
         assert len(model.config.optimizations) == 0
     
-    def test_onnx_model_multiple_inputs_outputs(self, parser):
+    def test_onnx_model_multiple_inputs_outputs(self):
         """Test ONNX model with multiple inputs and outputs."""
         dsl_code = '''
         onnx_model multi_io_model {
@@ -160,7 +160,7 @@ class TestOnnxIntegration:
         }
         '''
         
-        ast = parser.parse(dsl_code)
+        ast = parse_robodsl(dsl_code)
         
         assert len(ast.onnx_models) == 1
         model = ast.onnx_models[0]
@@ -223,7 +223,7 @@ class TestOnnxIntegration:
         assert "self.device = device" in python_content
         assert 'device: str = "cpu"' in python_content
     
-    def test_invalid_onnx_model(self, parser):
+    def test_invalid_onnx_model(self):
         """Test handling of invalid ONNX model definitions."""
         # Test with missing input
         dsl_code = '''
@@ -233,14 +233,14 @@ class TestOnnxIntegration:
         }
         '''
         
-        ast = parser.parse(dsl_code)
+        ast = parse_robodsl(dsl_code)
         
         # Should still parse but with empty inputs
         assert len(ast.onnx_models) == 1
         model = ast.onnx_models[0]
         assert len(model.config.inputs) == 0
     
-    def test_onnx_model_in_node_context(self, parser):
+    def test_onnx_model_in_node_context(self):
         """Test ONNX model usage within node context."""
         dsl_code = '''
         onnx_model classifier {
@@ -256,7 +256,7 @@ class TestOnnxIntegration:
         }
         '''
     
-        ast = parser.parse(dsl_code)
+        ast = parse_robodsl(dsl_code)
         assert ast is not None
         assert len(ast.nodes) == 1
         assert len(ast.onnx_models) == 1
@@ -313,7 +313,7 @@ class TestOnnxIntegration:
             device: cuda
         }
         '''
-        ast = RoboDSLParser().parse(dsl)
+        ast = parse_robodsl(dsl)
         assert len(ast.onnx_models) == 1
         assert len(ast.onnx_models[0].config.inputs) == 0
 
@@ -325,7 +325,7 @@ class TestOnnxIntegration:
             device: notarealdevice
         }
         '''
-        ast = RoboDSLParser().parse(dsl)
+        ast = parse_robodsl(dsl)
         assert ast.onnx_models[0].config.device.device == "notarealdevice"
 
     def test_onnx_model_duplicate_optimizations(self):
@@ -338,7 +338,7 @@ class TestOnnxIntegration:
             optimization: tensorrt
         }
         '''
-        ast = RoboDSLParser().parse(dsl)
+        ast = parse_robodsl(dsl)
         opt_names = [opt.optimization for opt in ast.onnx_models[0].config.optimizations]
         assert opt_names.count("tensorrt") == 2
 
@@ -350,7 +350,7 @@ class TestOnnxIntegration:
             device: cuda
         }
         '''
-        ast = RoboDSLParser().parse(dsl)
+        ast = parse_robodsl(dsl)
         assert ast.onnx_models[0].config.inputs[0].type == "float32[1,3,224,224,]"
 
     def test_onnx_model_long_name(self):
@@ -361,7 +361,7 @@ class TestOnnxIntegration:
             device: cuda
         }
         '''
-        ast = RoboDSLParser().parse(dsl)
+        ast = parse_robodsl(dsl)
         assert ast.onnx_models[0].name == "this_is_a_very_long_model_name_with_numbers_1234567890"
 
     def test_onnx_model_unicode_name(self):
@@ -372,7 +372,7 @@ class TestOnnxIntegration:
             device: cuda
         }
         '''
-        ast = RoboDSLParser().parse(dsl)
+        ast = parse_robodsl(dsl)
         assert ast.onnx_models[0].name == "模型"
 
     def test_onnx_model_invalid_optimization(self):
@@ -384,7 +384,7 @@ class TestOnnxIntegration:
             optimization: notarealopt
         }
         '''
-        ast = RoboDSLParser().parse(dsl)
+        ast = parse_robodsl(dsl)
         assert ast.onnx_models[0].config.optimizations[0].optimization == "notarealopt"
 
 

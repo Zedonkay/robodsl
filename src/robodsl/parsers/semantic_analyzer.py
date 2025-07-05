@@ -202,10 +202,18 @@ class SemanticAnalyzer:
             # Only error if the type is empty or clearly invalid (e.g., not a valid identifier or type string)
             if not param.type or not isinstance(param.type, str) or param.type.strip() == "":
                 self.errors.append(f"Parameter '{param.name}' in node '{node_name}' has an invalid or empty type")
-            self._validate_parameter_type(param.name, param.type, param.value.value)
+            
+            # Only validate parameter type if we have a value
+            if param.value is not None and hasattr(param.value, 'value'):
+                self._validate_parameter_type(param.name, param.type, param.value.value)
+            elif param.value is None:
+                self.errors.append(f"Parameter '{param.name}' in node '{node_name}' has no value")
             
             # Add to symbol table with declared type (preferred) or inferred type
-            param_type = param.type if param.type else self._infer_parameter_type(param.value.value)
+            if param.value is not None and hasattr(param.value, 'value'):
+                param_type = param.type if param.type else self._infer_parameter_type(param.value.value)
+            else:
+                param_type = param.type if param.type else "auto"
             self.symbol_table.add_parameter(param.name, param_type)
 
     def _infer_parameter_type(self, value: Any) -> str:

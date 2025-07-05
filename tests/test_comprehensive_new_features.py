@@ -13,7 +13,7 @@ from pathlib import Path
 # Add the src directory to the path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from robodsl.parsers.lark_parser import RoboDSLParser
+from robodsl.parsers.lark_parser import parse_robodsl
 from robodsl.generators.message_generator import MessageGenerator
 from robodsl.generators.simulation_generator import SimulationGenerator
 from robodsl.generators.dynamic_runtime_generator import DynamicRuntimeGenerator
@@ -30,7 +30,7 @@ def test_parser_with_new_features():
 message CustomImage {
     uint32 width;
     uint32 height;
-    uint8[] data;
+    uint8 data[];
     string format = "RGB";
 }
 
@@ -126,8 +126,8 @@ node perception_node {
 """
     
     try:
-        parser = RoboDSLParser()
-        ast = parser.parse(test_content)
+        
+        ast = parse_robodsl(test_content)
         
         print("✅ Parser test passed!")
         print(f"   - Messages: {len(ast.messages)}")
@@ -151,12 +151,12 @@ def test_message_generator():
     
     try:
         # Create test AST with messages, services, and actions
-        parser = RoboDSLParser()
+        
         test_content = """
 message CustomImage {
     uint32 width;
     uint32 height;
-    uint8[] data;
+    uint8 data[];
     string format = "RGB";
 }
 
@@ -181,7 +181,7 @@ action NavigationAction {
     float64 final_distance;
 }
 """
-        ast = parser.parse(test_content)
+        ast = parse_robodsl(test_content)
         
         generator = MessageGenerator(output_dir="test_output/msg")
         
@@ -215,7 +215,7 @@ def test_simulation_generator():
     
     try:
         # Create test AST with simulation config
-        parser = RoboDSLParser()
+        
         test_content = """
 simulation gazebo {
     world {
@@ -242,7 +242,7 @@ hardware_in_loop {
     bridge_config: "hil_bridge.yaml"
 }
 """
-        ast = parser.parse(test_content)
+        ast = parse_robodsl(test_content)
         
         generator = SimulationGenerator(output_dir="test_output/launch")
         
@@ -270,7 +270,7 @@ def test_dynamic_runtime_generator():
     
     try:
         # Create test AST with dynamic runtime config
-        parser = RoboDSLParser()
+        
         test_content = """
 dynamic_parameters {
     parameter float64 max_speed = 2.0 {
@@ -289,7 +289,7 @@ dynamic_remaps {
     remap /cmd_vel: /hardware/cmd_vel when: "hardware_mode"
 }
 """
-        ast = parser.parse(test_content)
+        ast = parse_robodsl(test_content)
         
         generator = DynamicRuntimeGenerator(output_dir="test_output/config")
         
@@ -331,8 +331,8 @@ message TestMessage {
 }
 """
     try:
-        parser = RoboDSLParser()
-        ast = parser.parse(message_test)
+        
+        ast = parse_robodsl(message_test)
         print(f"✅ Message parsing: {len(ast.messages)} messages parsed")
     except Exception as e:
         print(f"❌ Message parsing failed: {e}")
@@ -347,8 +347,8 @@ service TestService {
 }
 """
     try:
-        parser = RoboDSLParser()
-        ast = parser.parse(service_test)
+        
+        ast = parse_robodsl(service_test)
         print(f"✅ Service parsing: {len(ast.services)} services parsed")
     except Exception as e:
         print(f"❌ Service parsing failed: {e}")
@@ -365,8 +365,8 @@ action TestAction {
 }
 """
     try:
-        parser = RoboDSLParser()
-        ast = parser.parse(action_test)
+        
+        ast = parse_robodsl(action_test)
         print(f"✅ Action parsing: {len(ast.actions)} actions parsed")
     except Exception as e:
         print(f"❌ Action parsing failed: {e}")
@@ -383,8 +383,8 @@ dynamic_parameters {
 }
 """
     try:
-        parser = RoboDSLParser()
-        ast = parser.parse(dynamic_test)
+        
+        ast = parse_robodsl(dynamic_test)
         print(f"✅ Dynamic parameters: {len(ast.dynamic_parameters)} parameters parsed")
     except Exception as e:
         print(f"❌ Dynamic parameters failed: {e}")
@@ -400,8 +400,8 @@ simulation gazebo {
 }
 """
     try:
-        parser = RoboDSLParser()
-        ast = parser.parse(sim_test)
+        
+        ast = parse_robodsl(sim_test)
         print(f"✅ Simulation config: {ast.simulation is not None}")
     except Exception as e:
         print(f"❌ Simulation config failed: {e}")

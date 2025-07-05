@@ -5,7 +5,7 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
-from robodsl.parsers.lark_parser import RoboDSLParser
+from robodsl.parsers.lark_parser import parse_robodsl
 from robodsl.generators.cpp_node_generator import CppNodeGenerator
 from robodsl.generators.cuda_kernel_generator import CudaKernelGenerator
 from pathlib import Path
@@ -39,8 +39,7 @@ def test_cuda_includes():
     """
     
     # Parse the code
-    parser = RoboDSLParser()
-    ast = parser.parse(robodsl_code)
+    ast = parse_robodsl(robodsl_code)
     
     print("AST parsed successfully")
     print(f"Number of CUDA kernels: {len(ast.cuda_kernels.kernels)}")

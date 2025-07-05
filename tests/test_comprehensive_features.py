@@ -501,7 +501,7 @@ class TestSemanticValidation:
         with pytest.raises(SemanticError) as exc_info:
             parse_robodsl(content)
         
-        assert "Duplicate kernel name" in str(exc_info.value)
+        assert "Duplicate CUDA kernel name" in str(exc_info.value)
     
     def test_invalid_qos_values(self):
         """Test detection of invalid QoS values."""

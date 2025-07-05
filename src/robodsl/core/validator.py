@@ -260,30 +260,48 @@ class RoboDSLValidator:
         # Check for large QoS depths
         for node in ast.nodes:
             for pub in node.content.publishers:
-                if pub.qos and pub.qos.depth and pub.qos.depth > 100:
-                    issues.append(ValidationIssue(
-                        level=ValidationLevel.WARNING,
-                        message=f"Large QoS depth ({pub.qos.depth}) for topic '{pub.topic}' may cause memory issues",
-                        rule_id="large_qos_depth"
-                    ))
+                if pub.qos and pub.qos.depth:
+                    try:
+                        depth_value = int(pub.qos.depth) if isinstance(pub.qos.depth, str) else pub.qos.depth
+                        if depth_value > 100:
+                            issues.append(ValidationIssue(
+                                level=ValidationLevel.WARNING,
+                                message=f"Large QoS depth ({depth_value}) for topic '{pub.topic}' may cause memory issues",
+                                rule_id="large_qos_depth"
+                            ))
+                    except (ValueError, TypeError):
+                        # Skip if depth is not a valid number
+                        pass
             
             for sub in node.content.subscribers:
-                if sub.qos and sub.qos.depth and sub.qos.depth > 100:
-                    issues.append(ValidationIssue(
-                        level=ValidationLevel.WARNING,
-                        message=f"Large QoS depth ({sub.qos.depth}) for topic '{sub.topic}' may cause memory issues",
-                        rule_id="large_qos_depth"
-                    ))
+                if sub.qos and sub.qos.depth:
+                    try:
+                        depth_value = int(sub.qos.depth) if isinstance(sub.qos.depth, str) else sub.qos.depth
+                        if depth_value > 100:
+                            issues.append(ValidationIssue(
+                                level=ValidationLevel.WARNING,
+                                message=f"Large QoS depth ({depth_value}) for topic '{sub.topic}' may cause memory issues",
+                                rule_id="large_qos_depth"
+                            ))
+                    except (ValueError, TypeError):
+                        # Skip if depth is not a valid number
+                        pass
         
         # Check for CUDA kernels with large shared memory
         if ast.cuda_kernels:
             for kernel in ast.cuda_kernels.kernels:
-                if kernel.content.shared_memory and kernel.content.shared_memory > 16384:
-                    issues.append(ValidationIssue(
-                        level=ValidationLevel.WARNING,
-                        message=f"Large shared memory ({kernel.content.shared_memory} bytes) for kernel '{kernel.name}'",
-                        rule_id="large_shared_memory"
-                    ))
+                if kernel.content.shared_memory:
+                    try:
+                        shared_memory_value = int(kernel.content.shared_memory) if isinstance(kernel.content.shared_memory, str) else kernel.content.shared_memory
+                        if shared_memory_value > 16384:
+                            issues.append(ValidationIssue(
+                                level=ValidationLevel.WARNING,
+                                message=f"Large shared memory ({shared_memory_value} bytes) for kernel '{kernel.name}'",
+                                rule_id="large_shared_memory"
+                            ))
+                    except (ValueError, TypeError):
+                        # Skip if shared_memory is not a valid number
+                        pass
         
         return issues
 

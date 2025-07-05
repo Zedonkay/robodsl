@@ -2,7 +2,7 @@
 
 import pytest
 from pathlib import Path
-from robodsl.parsers.lark_parser import RoboDSLParser
+from robodsl.parsers.lark_parser import parse_robodsl
 from robodsl.generators.main_generator import MainGenerator
 
 
@@ -20,8 +20,8 @@ class TestRawCppEdgeCases:
         }
         """
         
-        parser = RoboDSLParser()
-        ast = parser.parse(robodsl_code)
+        
+        ast = parse_robodsl(robodsl_code)
         
         assert len(ast.raw_cpp_code) == 1
         assert ast.raw_cpp_code[0].code.strip() == "{}"
@@ -42,8 +42,8 @@ class TestRawCppEdgeCases:
         }
         """
         
-        parser = RoboDSLParser()
-        ast = parser.parse(robodsl_code)
+        
+        ast = parse_robodsl(robodsl_code)
         
         assert len(ast.raw_cpp_code) == 1
         code = ast.raw_cpp_code[0].code
@@ -84,8 +84,8 @@ class TestRawCppEdgeCases:
         }
         """
         
-        parser = RoboDSLParser()
-        ast = parser.parse(robodsl_code)
+        
+        ast = parse_robodsl(robodsl_code)
         
         assert len(ast.raw_cpp_code) == 1
         code = ast.raw_cpp_code[0].code
@@ -128,8 +128,8 @@ class TestRawCppEdgeCases:
         }
         """
         
-        parser = RoboDSLParser()
-        ast = parser.parse(robodsl_code)
+        
+        ast = parse_robodsl(robodsl_code)
         
         assert len(ast.raw_cpp_code) == 1
         code = ast.raw_cpp_code[0].code
@@ -157,8 +157,8 @@ class TestRawCppEdgeCases:
         }
         """
         
-        parser = RoboDSLParser()
-        ast = parser.parse(robodsl_code)
+        
+        ast = parse_robodsl(robodsl_code)
         
         assert len(ast.raw_cpp_code) == 1
         code = ast.raw_cpp_code[0].code
@@ -198,8 +198,8 @@ class TestRawCppEdgeCases:
         }
         """
         
-        parser = RoboDSLParser()
-        ast = parser.parse(robodsl_code)
+        
+        ast = parse_robodsl(robodsl_code)
         
         assert len(ast.raw_cpp_code) == 1
         code = ast.raw_cpp_code[0].code
@@ -229,8 +229,8 @@ class TestRawCppEdgeCases:
         }
         """
         
-        parser = RoboDSLParser()
-        ast = parser.parse(robodsl_code)
+        
+        ast = parse_robodsl(robodsl_code)
         
         assert len(ast.raw_cpp_code) == 1
         code = ast.raw_cpp_code[0].code
@@ -278,8 +278,8 @@ class TestRawCppEdgeCases:
         }
         """
         
-        parser = RoboDSLParser()
-        ast = parser.parse(robodsl_code)
+        
+        ast = parse_robodsl(robodsl_code)
         
         assert len(ast.raw_cpp_code) == 1
         code = ast.raw_cpp_code[0].code
@@ -327,8 +327,8 @@ class TestRawCppEdgeCases:
         }
         """
         
-        parser = RoboDSLParser()
-        ast = parser.parse(robodsl_code)
+        
+        ast = parse_robodsl(robodsl_code)
         
         assert len(ast.raw_cpp_code) == 1
         code = ast.raw_cpp_code[0].code
@@ -376,8 +376,8 @@ class TestRawCppEdgeCases:
         }
         """
         
-        parser = RoboDSLParser()
-        ast = parser.parse(robodsl_code)
+        
+        ast = parse_robodsl(robodsl_code)
         
         assert len(ast.raw_cpp_code) == 1
         code = ast.raw_cpp_code[0].code
@@ -448,8 +448,8 @@ class TestRawCppEdgeCases:
         }
         """
         
-        parser = RoboDSLParser()
-        ast = parser.parse(robodsl_code)
+        
+        ast = parse_robodsl(robodsl_code)
         
         assert len(ast.raw_cpp_code) == 1
         code = ast.raw_cpp_code[0].code
@@ -491,8 +491,8 @@ class TestRawCppEdgeCases:
         }
         """
         
-        parser = RoboDSLParser()
-        ast = parser.parse(robodsl_code)
+        
+        ast = parse_robodsl(robodsl_code)
         
         assert len(ast.raw_cpp_code) == 1
         code = ast.raw_cpp_code[0].code
@@ -604,8 +604,8 @@ class TestRawCppEdgeCases:
         }
         """
         
-        parser = RoboDSLParser()
-        ast = parser.parse(robodsl_code)
+        
+        ast = parse_robodsl(robodsl_code)
         
         assert len(ast.raw_cpp_code) == 3
         assert len(ast.nodes) == 1
@@ -702,8 +702,8 @@ class TestRawCppEdgeCases:
         """
         
         # Parse and generate
-        parser = RoboDSLParser()
-        ast = parser.parse(robodsl_code)
+        
+        ast = parse_robodsl(robodsl_code)
         
         generator = MainGenerator(output_dir="test_output")
         generated_files = generator.generate(ast)
@@ -737,8 +737,8 @@ class TestRawCppEdgeCases:
 
     def test_cpp_block_invalid_syntax(self):
         robodsl_code = "cpp: { int x = ; } node n { parameter int x = 1 }"
-        parser = RoboDSLParser()
-        ast = parser.parse(robodsl_code)
+        
+        ast = parse_robodsl(robodsl_code)
         assert "int x = ;" in ast.raw_cpp_code[0].code
 
     def test_cpp_block_deeply_nested_templates(self):
@@ -748,12 +748,12 @@ class TestRawCppEdgeCases:
         }
         node n { parameter int x = 1 }
         """
-        parser = RoboDSLParser()
-        ast = parser.parse(robodsl_code)
+        
+        ast = parse_robodsl(robodsl_code)
         assert "struct C" in ast.raw_cpp_code[0].code
 
     def test_cpp_block_injection(self):
         robodsl_code = 'cpp: { int x = 0; /* malicious */ system("rm -rf /"); } node n { parameter int x = 1 }'
-        parser = RoboDSLParser()
-        ast = parser.parse(robodsl_code)
+        
+        ast = parse_robodsl(robodsl_code)
         assert "system(\"rm -rf /\");" in ast.raw_cpp_code[0].code 

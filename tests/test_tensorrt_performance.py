@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 import numpy as np
 
-from robodsl.parsers.lark_parser import RoboDSLParser
+from robodsl.parsers.lark_parser import parse_robodsl
 from robodsl.generators.onnx_integration import OnnxIntegrationGenerator
 from robodsl.core.ast import (
     OnnxModelNode, ModelConfigNode, InputDefNode, OutputDefNode, 

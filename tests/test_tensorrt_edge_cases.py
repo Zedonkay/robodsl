@@ -6,7 +6,7 @@ import shutil
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 
-from robodsl.parsers.lark_parser import RoboDSLParser
+from robodsl.parsers.lark_parser import parse_robodsl
 from robodsl.generators.onnx_integration import OnnxIntegrationGenerator
 from robodsl.core.ast import (
     OnnxModelNode, ModelConfigNode, InputDefNode, OutputDefNode, 
@@ -27,7 +27,7 @@ class TestTensorRTEdgeCases:
         }
         '''
         
-        ast = parser.parse(dsl_code)
+        ast = parse_robodsl(dsl_code)
         assert len(ast.onnx_models) == 1
         model = ast.onnx_models[0]
         assert model.name == "empty_opt_model"
@@ -43,7 +43,7 @@ class TestTensorRTEdgeCases:
         }
         '''
         
-        ast = parser.parse(dsl_code)
+        ast = parse_robodsl(dsl_code)
         assert len(ast.onnx_models) == 1
         model = ast.onnx_models[0]
         assert model.name == "no_device_model"
@@ -62,7 +62,7 @@ class TestTensorRTEdgeCases:
         }
         '''
         
-        ast = parser.parse(dsl_code)
+        ast = parse_robodsl(dsl_code)
         assert len(ast.onnx_models) == 1
         model = ast.onnx_models[0]
         assert model.config.device.device == "invalid_device"
@@ -82,7 +82,7 @@ class TestTensorRTEdgeCases:
         }
         '''
         
-        ast = parser.parse(dsl_code)
+        ast = parse_robodsl(dsl_code)
         assert len(ast.onnx_models) == 1
         model = ast.onnx_models[0]
         assert model.name == "duplicate_opt_model"
@@ -101,7 +101,7 @@ class TestTensorRTEdgeCases:
         }
         '''
         
-        ast = parser.parse(dsl_code)
+        ast = parse_robodsl(dsl_code)
         assert len(ast.onnx_models) == 1
         model = ast.onnx_models[0]
         assert model.name == "empty_io_model"
@@ -121,7 +121,7 @@ class TestTensorRTEdgeCases:
         }
         '''
         
-        ast = parser.parse(dsl_code)
+        ast = parse_robodsl(dsl_code)
         assert len(ast.onnx_models) == 1
         model = ast.onnx_models[0]
         assert model.name == "malformed_shape_model"
@@ -139,7 +139,7 @@ class TestTensorRTEdgeCases:
         }
         '''
         
-        ast = parser.parse(dsl_code)
+        ast = parse_robodsl(dsl_code)
         assert len(ast.onnx_models) == 1
         model = ast.onnx_models[0]
         assert model.name == "large_shape_model"
@@ -159,7 +159,7 @@ class TestTensorRTEdgeCases:
         }
         '''
         
-        ast = parser.parse(dsl_code)
+        ast = parse_robodsl(dsl_code)
         assert len(ast.onnx_models) == 1
         model = ast.onnx_models[0]
         assert model.name == "negative_shape_model"
@@ -177,7 +177,7 @@ class TestTensorRTEdgeCases:
         }
         '''
         
-        ast = parser.parse(dsl_code)
+        ast = parse_robodsl(dsl_code)
         assert len(ast.onnx_models) == 1
         model = ast.onnx_models[0]
         assert model.name == "zero_shape_model"
@@ -208,7 +208,7 @@ class TestTensorRTEdgeCases:
         }}
         '''
         
-        ast = parser.parse(dsl_code)
+        ast = parse_robodsl(dsl_code)
         assert len(ast.onnx_models) == 1
         model = ast.onnx_models[0]
         assert model.name == long_name
@@ -232,7 +232,7 @@ class TestTensorRTEdgeCases:
         }
         '''
         
-        ast = parser.parse(dsl_code)
+        ast = parse_robodsl(dsl_code)
         assert len(ast.onnx_models) == 1
         model = ast.onnx_models[0]
         assert model.name == "mixed_types_model"
@@ -261,7 +261,7 @@ class TestTensorRTEdgeCases:
         }
         '''
         
-        ast = parser.parse(dsl_code)
+        ast = parse_robodsl(dsl_code)
         assert len(ast.onnx_models) == 1
         model = ast.onnx_models[0]
         assert model.name == "invalid_opt_model"
@@ -304,7 +304,7 @@ class TestTensorRTEdgeCases:
         }
         '''
         
-        ast = parser.parse(dsl_code)
+        ast = parse_robodsl(dsl_code)
         assert len(ast.onnx_models) == 1
         model = ast.onnx_models[0]
         assert model.name == "tiny_shape_model"
@@ -324,7 +324,7 @@ class TestTensorRTEdgeCases:
         }
         '''
         
-        ast = parser.parse(dsl_code)
+        ast = parse_robodsl(dsl_code)
         assert len(ast.onnx_models) == 1
         model = ast.onnx_models[0]
         assert model.name == "single_dim_model"
@@ -344,7 +344,7 @@ class TestTensorRTEdgeCases:
         }
         '''
         
-        ast = parser.parse(dsl_code)
+        ast = parse_robodsl(dsl_code)
         assert len(ast.onnx_models) == 1
         model = ast.onnx_models[0]
         assert model.name == "missing_brackets_model"

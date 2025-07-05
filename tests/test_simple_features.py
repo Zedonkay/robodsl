@@ -1,3 +1,4 @@
+from robodsl.parsers.lark_parser import parse_robodsl
 #!/usr/bin/env python3
 """
 Simple test script for new RoboDSL features.
@@ -31,12 +32,12 @@ def test_grammar_parsing():
 message CustomImage {
     uint32 width;
     uint32 height;
-    uint8[] data;
+    uint8 data[];
     string format = "RGB";
 }
 """
         try:
-            tree = parser.parse(message_test)
+            tree = parse_robodsl(message_test)
             print("✅ Message grammar parsing: PASSED")
         except Exception as e:
             print(f"❌ Message grammar parsing: FAILED - {e}")
@@ -52,7 +53,7 @@ service ImageProcessing {
 }
 """
         try:
-            tree = parser.parse(service_test)
+            tree = parse_robodsl(service_test)
             print("✅ Service grammar parsing: PASSED")
         except Exception as e:
             print(f"❌ Service grammar parsing: FAILED - {e}")
@@ -73,7 +74,7 @@ action NavigationAction {
 }
 """
         try:
-            tree = parser.parse(action_test)
+            tree = parse_robodsl(action_test)
             print("✅ Action grammar parsing: PASSED")
         except Exception as e:
             print(f"❌ Action grammar parsing: FAILED - {e}")
@@ -90,7 +91,7 @@ dynamic_parameters {
 }
 """
         try:
-            tree = parser.parse(dynamic_test)
+            tree = parse_robodsl(dynamic_test)
             print("✅ Dynamic parameters grammar parsing: PASSED")
         except Exception as e:
             print(f"❌ Dynamic parameters grammar parsing: FAILED - {e}")
@@ -107,7 +108,7 @@ simulation gazebo {
 }
 """
         try:
-            tree = parser.parse(sim_test)
+            tree = parse_robodsl(sim_test)
             print("✅ Simulation config grammar parsing: PASSED")
         except Exception as e:
             print(f"❌ Simulation config grammar parsing: FAILED - {e}")

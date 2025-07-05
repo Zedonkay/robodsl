@@ -215,6 +215,7 @@ class MethodParamNode(ASTNode):
     param_name: str
     size_expr: Optional[str] = None
     is_const: bool = False
+    default_value: Optional[str] = None
 
 
 @dataclass
@@ -492,63 +493,7 @@ class PipelineNode(ASTNode):
 
 
 # Pythonic Class AST Nodes
-@dataclass
-class PyClassAttributeNode(ASTNode):
-    """Pythonic class attribute node."""
-    name: str
-    type: str
-    default_value: Optional[ValueNode] = None
 
-
-@dataclass
-class PyClassParamNode(ASTNode):
-    """Pythonic class parameter node."""
-    name: str
-    type: str
-    default_value: Optional[ValueNode] = None
-
-
-@dataclass
-class PyClassConstructorNode(ASTNode):
-    """Pythonic class constructor node."""
-    parameters: List[PyClassParamNode] = field(default_factory=list)
-    assignments: List[str] = field(default_factory=list)  # self.x = x; statements
-    code: str = ""
-
-
-@dataclass
-class PyClassMethodNode(ASTNode):
-    """Pythonic class method node."""
-    name: str
-    parameters: List[PyClassParamNode] = field(default_factory=list)
-    return_type: Optional[str] = None
-    code: str = ""
-
-
-@dataclass
-class PyClassAccessSectionNode(ASTNode):
-    """Pythonic class access section node."""
-    access_specifier: str  # "public", "private", "protected"
-    attributes: List[PyClassAttributeNode] = field(default_factory=list)
-    methods: List[PyClassMethodNode] = field(default_factory=list)
-    constructors: List[PyClassConstructorNode] = field(default_factory=list)
-
-
-@dataclass
-class PyClassContentNode(ASTNode):
-    """Pythonic class content node."""
-    attributes: List[PyClassAttributeNode] = field(default_factory=list)
-    methods: List[PyClassMethodNode] = field(default_factory=list)
-    constructors: List[PyClassConstructorNode] = field(default_factory=list)
-    access_sections: List[PyClassAccessSectionNode] = field(default_factory=list)
-
-
-@dataclass
-class PyClassNode(ASTNode):
-    """Pythonic class definition node."""
-    name: str
-    content: PyClassContentNode
-    inheritance: Optional[InheritanceNode] = None
 
 
 # Custom Message/Service/Action AST Nodes
@@ -709,11 +654,173 @@ class RawCppCodeNode(ASTNode):
     location: str = "global"  # "global" for outside nodes, "node" for inside nodes
 
 
+# Advanced C++ Features AST Nodes (Phase 8)
+
+@dataclass
+class TemplateParamNode(ASTNode):
+    """Template parameter node."""
+    name: str
+    param_type: str  # "typename" or "class"
+    default_value: Optional[str] = None
+
+
+@dataclass
+class TemplateStructNode(ASTNode):
+    """Template struct definition node."""
+    name: str
+    template_params: List[TemplateParamNode]
+    content: StructContentNode
+
+
+@dataclass
+class TemplateClassNode(ASTNode):
+    """Template class definition node."""
+    name: str
+    template_params: List[TemplateParamNode]
+    content: ClassContentNode
+    inheritance: Optional[InheritanceNode] = None
+
+
+@dataclass
+class TemplateFunctionNode(ASTNode):
+    """Template function definition node."""
+    name: str
+    template_params: List[TemplateParamNode]
+    parameters: List[MethodParamNode]
+    return_type: Optional[str] = None
+    code: str = ""
+
+
+@dataclass
+class TemplateAliasNode(ASTNode):
+    """Template alias definition node."""
+    name: str
+    template_params: List[TemplateParamNode]
+    aliased_type: str
+
+
+@dataclass
+class StaticAssertNode(ASTNode):
+    """Static assertion node."""
+    condition: str
+    message: str
+
+
+@dataclass
+class GlobalConstexprNode(ASTNode):
+    """Global constexpr variable node."""
+    name: str
+    type: str
+    value: ValueNode
+
+
+@dataclass
+class GlobalDeviceConstNode(ASTNode):
+    """Global device constant node."""
+    name: str
+    type: str
+    array_size: str
+    values: List[ValueNode]
+
+
+@dataclass
+class GlobalStaticInlineNode(ASTNode):
+    """Global static inline function node."""
+    name: str
+    parameters: List[MethodParamNode]
+    return_type: Optional[str] = None
+    code: str = ""
+
+
+@dataclass
+class OperatorOverloadNode(ASTNode):
+    """Operator overload node."""
+    operator: str
+    parameters: List[MethodParamNode]
+    return_type: Optional[str] = None
+    code: str = ""
+
+
+@dataclass
+class ConstructorNode(ASTNode):
+    """Constructor definition node."""
+    parameters: List[MethodParamNode]
+    member_initializers: List[tuple[str, str]] = field(default_factory=list)  # (member, value)
+    code: str = ""
+
+
+@dataclass
+class DestructorNode(ASTNode):
+    """Destructor definition node."""
+    code: str = ""
+
+
+@dataclass
+class BitfieldMemberNode(ASTNode):
+    """Bitfield member node."""
+    type: str
+    name: str
+    bits: int
+
+
+@dataclass
+class BitfieldNode(ASTNode):
+    """Bitfield definition node."""
+    name: str
+    members: List[BitfieldMemberNode]
+
+
+@dataclass
+class PreprocessorDirectiveNode(ASTNode):
+    """Preprocessor directive node."""
+    directive_type: str  # "pragma", "include", "if", "define", "error", "line"
+    content: str
+
+
+@dataclass
+class FunctionAttributeNode(ASTNode):
+    """Function with attributes node."""
+    attributes: List[str]  # List of attribute names
+    name: str
+    parameters: List[MethodParamNode]
+    return_type: Optional[str] = None
+    code: str = ""
+
+
+@dataclass
+class ConceptRequiresNode(ASTNode):
+    """Concept requires clause node."""
+    type_param: str
+    requirements: List[str]  # List of required operations
+
+
+@dataclass
+class ConceptNode(ASTNode):
+    """Concept definition node."""
+    name: str
+    requires: ConceptRequiresNode
+
+
+@dataclass
+class FriendDeclarationNode(ASTNode):
+    """Friend declaration node."""
+    friend_type: str  # "class" or "function"
+    target: str  # Class name or function declaration
+
+
+@dataclass
+class UserDefinedLiteralNode(ASTNode):
+    """User-defined literal node."""
+    literal_suffix: str
+    return_type: str
+    code: str = ""
+
+
 @dataclass
 class RoboDSLAST(ASTNode):
     """Root AST node."""
     includes: List[IncludeNode] = field(default_factory=list)
-    data_structures: List[Union[StructNode, ClassNode, PyClassNode, EnumNode, TypedefNode, UsingNode]] = field(default_factory=list)
+    data_structures: List[Union[StructNode, ClassNode, EnumNode, TypedefNode, UsingNode]] = field(default_factory=list)
     nodes: List[NodeNode] = field(default_factory=list)
     cuda_kernels: Optional[CudaKernelsNode] = None  # Standalone kernels outside nodes 
     onnx_models: List['OnnxModelNode'] = field(default_factory=list)  # ONNX models
@@ -729,4 +836,10 @@ class RoboDSLAST(ASTNode):
     simulation: Optional[SimulationConfigNode] = None
     hil_config: Optional[HardwareInLoopNode] = None
     # Raw C++ code blocks
-    raw_cpp_code: List[RawCppCodeNode] = field(default_factory=list)  # Global C++ code outside nodes 
+    raw_cpp_code: List[RawCppCodeNode] = field(default_factory=list)  # Global C++ code outside nodes
+    # Advanced C++ features
+    advanced_cpp_features: List[Union[TemplateStructNode, TemplateClassNode, TemplateFunctionNode, TemplateAliasNode, 
+                                     StaticAssertNode, GlobalConstexprNode, GlobalDeviceConstNode, GlobalStaticInlineNode,
+                                     OperatorOverloadNode, ConstructorNode, DestructorNode, BitfieldNode, 
+                                     PreprocessorDirectiveNode, FunctionAttributeNode, ConceptNode, 
+                                     FriendDeclarationNode, UserDefinedLiteralNode]] = field(default_factory=list) 

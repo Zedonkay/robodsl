@@ -6,7 +6,7 @@ using Lark, providing better error handling and more robust parsing.
 
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple, List
 from lark import Lark, ParseError
 import re
 
@@ -25,61 +25,172 @@ class RoboDSLParser:
             grammar_content = f.read()
         
         # Create Lark parser
-        self.parser = Lark(grammar_content, parser='lalr', start='start')
+        self.parser = Lark(grammar_content, parser='lalr', lexer='contextual', start='start')
         self.ast_builder = ASTBuilder(debug=debug)
         self.semantic_analyzer = SemanticAnalyzer(debug=debug)
+        self.debug = debug
     
-    def parse(self, content: str) -> RoboDSLAST:
-        """Parse RoboDSL content and return AST.
+    def _extract_cpp_blocks(self, content: str) -> Tuple[str, List[str]]:
+        """Extract C++ code blocks and replace them with placeholders.
+        
+        Args:
+            content: The original content
+            
+        Returns:
+            Tuple of (processed_content, cpp_blocks)
+        """
+        cpp_blocks = []
+        processed_content = content
+        
+        if self.debug:
+            print(f"DEBUG: Original content: {repr(content)}")
+        
+        # More specific pattern to match C++ code blocks within specific contexts
+        # Look for code blocks within kernel definitions, method definitions, etc.
+        patterns = [
+            # Code blocks: code: { ... } (for both kernels and methods)
+            r'(code\s*:\s*\{)([^{}]*(?:\{[^{}]*\}[^{}]*)*)(\})',
+            # Raw C++ blocks: cpp: { ... }
+            r'(cpp\s*:\s*\{)([^{}]*(?:\{[^{}]*\}[^{}]*)*)(\})',
+            # Attribute-decorated function: one or more @attribute lines, then function signature and { ... }
+            r'((?:@\w+\s*)+\w+\s*\([^)]*\)(?:\s*->\s*[^\{]*)?\s*)\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}',
+            # Template function: template<...> ...(...) ... { ... }
+            r'(template\s*<[^>]*>\s*[^\s]+\s+\w+\s*\([^)]*\)(?:\s*->\s*[^\{]*)?\s*)\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}',
+            # Function/operator/constructor/destructor/user-defined-literal: signature then { ... }
+            r'((?:def|operator\S*|\w+)\s*\([^)]*\)(?:\s*->\s*[^\{]*)?\s*)\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}',
+            # Template content: template<...> struct/class NAME { ... } -> template<...> struct/class NAME CPP_BLOCK_PLACEHOLDER
+            r'(template\s*<[^>]*>\s*(?:struct|class)\s+\w+(?:\s*:\s*[^{{]]*)?\s*)\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}',
+        ]
+        
+        for i, pattern in enumerate(patterns):
+            if self.debug:
+                print(f"DEBUG: Applying pattern {i}: {pattern}")
+            
+            def replace_block(match):
+                # Patterns with only two groups (no suffix)
+                if len(match.groups()) == 2:
+                    prefix = match.group(1)
+                    block_content = match.group(2)
+                    placeholder = f"@@CPP_BLOCK_{len(cpp_blocks)}@@"
+                    cpp_blocks.append(block_content)
+                    if self.debug:
+                        print(f"DEBUG: Replaced special block with placeholder: {placeholder}")
+                        print(f"DEBUG: Block content: {repr(block_content)}")
+                    return f"{prefix}{placeholder}"
+                else:
+                    prefix = match.group(1)
+                    block_content = match.group(2)
+                    suffix = match.group(3)
+                    placeholder = f"@@CPP_BLOCK_{len(cpp_blocks)}@@"
+                    cpp_blocks.append(block_content)
+                    if self.debug:
+                        print(f"DEBUG: Replaced block with placeholder: {placeholder}")
+                        print(f"DEBUG: Block content: {repr(block_content)}")
+                    return f"{prefix}{placeholder}{suffix}"
+            
+            processed_content = re.sub(pattern, replace_block, processed_content)
+            if self.debug:
+                print(f"DEBUG: After pattern {i}: {repr(processed_content)}")
+        
+        if self.debug:
+            print(f"DEBUG: Final processed content: {repr(processed_content)}")
+            print(f"DEBUG: C++ blocks: {cpp_blocks}")
+        
+        return processed_content, cpp_blocks
+    
+    def _restore_cpp_blocks(self, tree, cpp_blocks: List[str]):
+        """Restore C++ code blocks in the parse tree.
+        
+        Args:
+            tree: The parse tree
+            cpp_blocks: List of C++ code blocks to restore
+        """
+        if hasattr(tree, 'children'):
+            for i, child in enumerate(tree.children):
+                if hasattr(child, 'data'):
+                    if child.data == 'function_body':
+                        # Find the placeholder in the function body
+                        if child.children and hasattr(child.children[0], 'value'):
+                            placeholder = child.children[0].value
+                            if placeholder.startswith('@@CPP_BLOCK_') and placeholder.endswith('@@'):
+                                try:
+                                    block_index = int(placeholder[12:-2])  # Extract number from @@CPP_BLOCK_X@@
+                                    if block_index < len(cpp_blocks):
+                                        # Replace the placeholder with the actual C++ code
+                                        child.children[0].value = cpp_blocks[block_index]
+                                except (ValueError, IndexError):
+                                    pass
+                    elif child.data == 'code_block':
+                        # Find the placeholder in the code block
+                        if child.children and hasattr(child.children[0], 'children'):
+                            # Look for placeholders in balanced_content
+                            for content_child in child.children[0].children:
+                                if hasattr(content_child, 'data') and content_child.data == 'balanced_content':
+                                    for token_child in content_child.children:
+                                        if hasattr(token_child, 'value'):
+                                            placeholder = token_child.value
+                                            if placeholder.startswith('@@CPP_BLOCK_') and placeholder.endswith('@@'):
+                                                try:
+                                                    block_index = int(placeholder[12:-2])  # Extract number from @@CPP_BLOCK_X@@
+                                                    if block_index < len(cpp_blocks):
+                                                        # Replace the placeholder with the actual C++ code
+                                                        token_child.value = cpp_blocks[block_index]
+                                                except (ValueError, IndexError):
+                                                    pass
+                self._restore_cpp_blocks(child, cpp_blocks)
+    
+    def parse(self, content: str):
+        """Parse RoboDSL content and return the Lark parse tree.
         
         Args:
             content: The RoboDSL configuration content as a string
-            
+        
         Returns:
-            RoboDSLAST: The parsed AST
-            
+            Lark Tree: The parsed parse tree
+        
         Raises:
             ParseError: If the content cannot be parsed
-            SemanticError: If semantic errors are found
         """
         try:
-            # Parse with Lark (comments are handled by grammar)
-            parse_tree = self.parser.parse(content)
-
-            # Build AST with source text for perfect C++ code preservation
-            ast = self.ast_builder.build(parse_tree, content)
+                        # Check if content contains advanced C++ features
+            has_advanced_cpp = any(keyword in content for keyword in [
+                'template<', 'static_assert', 'global ', 'def operator',
+                'def __init__', 'def __del__', '#pragma',
+                '#include', '#define', '#if', '#ifdef', '#ifndef', '#endif',
+                '@device', '@host', 'concept ', 'friend ', 'operator""'
+            ]) or ' : ' in content  # Check for bitfield members (type name : bits)
             
-            # Perform semantic analysis
-            if not self.semantic_analyzer.analyze(ast):
-                errors = self.semantic_analyzer.get_errors()
-                warnings = self.semantic_analyzer.get_warnings()
-                
-                # Print warnings
-                for warning in warnings:
-                    print(f"Warning: {warning}")
-                
-                # Raise error with all semantic errors
-                raise SemanticError(f"Semantic errors found:\n" + "\n".join(f"  - {error}" for error in errors))
+            if has_advanced_cpp:
+                # For advanced C++ features, parse directly without C++ block extraction
+                if self.debug:
+                    print('Parsing with advanced C++ features - no block extraction')
+                parse_tree = self.parser.parse(content)
+            else:
+                # Extract C++ code blocks and replace with placeholders for regular content
+                processed_content, cpp_blocks = self._extract_cpp_blocks(content)
+                if self.debug:
+                    print('Processed content:', repr(processed_content))
+                # Parse with Lark
+                parse_tree = self.parser.parse(processed_content)
+                # Restore C++ code blocks in the parse tree
+                self._restore_cpp_blocks(parse_tree, cpp_blocks)
             
-            return ast
-            
+            return parse_tree
         except ParseError as e:
             # Provide better error messages for parse errors
             error_str = str(e)
-            
-            # Check if this is a subnode syntax error
-            if "Unexpected token" in error_str and "." in error_str and "NODE_NAME" in error_str:
+            # Only show subnode error for actual subnode parsing issues
+            if ("Unexpected token" in error_str and 
+                "." in error_str and 
+                "NODE_NAME" in error_str and
+                "CPP_BLOCK_PLACEHOLDER" not in error_str):
                 raise ParseError(
                     "Subnodes with dots (.) are not allowed in RoboDSL code. "
                     "Subnodes are a CLI-only feature for organizing files. "
                     "Use a simple node name without dots, or create subnodes using the CLI command: "
                     "'robodsl create-node <node_name>'"
                 )
-            
             raise ParseError(f"Parse error: {error_str}")
-        except SemanticError as e:
-            # Re-raise semantic errors as-is
-            raise e
         except Exception as e:
             raise ParseError(f"Parse error: {str(e)}")
     
@@ -103,15 +214,30 @@ class RoboDSLParser:
         with open(file_path, 'r') as f:
             content = f.read()
         
-        return self.parse(content)
+        # Parse the content to get the parse tree
+        parse_tree = self.parse(content)
+        
+        # Build the AST from the parse tree
+        ast = self.ast_builder.build(parse_tree, content)
+        
+        # Run semantic analysis and raise errors if found
+        if not self.semantic_analyzer.analyze(ast):
+            errors = self.semantic_analyzer.get_errors()
+            if errors:
+                # Raise all semantic errors together
+                from .semantic_analyzer import SemanticError
+                error_message = "; ".join(errors)
+                raise SemanticError(error_message)
+        
+        return ast
 
     def parse_with_issues(self, content: str):
         """Parse RoboDSL content and return (ast, issues). Issues is a list of dicts with keys: level, message, rule_id."""
         issues = []
         ast = None
         try:
-            # Parse with Lark (comments are handled by grammar)
-            parse_tree = self.parser.parse(content)
+            # Parse with proper C++ block handling
+            parse_tree = self.parse(content)
             # Build AST with source text for perfect C++ code preservation
             ast = self.ast_builder.build(parse_tree, content)
             # Perform semantic analysis
@@ -163,6 +289,10 @@ def parse_robodsl(content: str, debug: bool = False) -> RoboDSLAST:
         
     Returns:
         RoboDSLAST: The parsed AST
+        
+    Raises:
+        ParseError: If the content cannot be parsed
+        SemanticError: If semantic errors are found
     """
     global _parser
     if _parser is None:
@@ -171,7 +301,22 @@ def parse_robodsl(content: str, debug: bool = False) -> RoboDSLAST:
         # If debug flag changed, create new parser instance
         _parser = RoboDSLParser(debug=debug)
     
-    return _parser.parse(content)
+    # Parse the content to get the parse tree
+    parse_tree = _parser.parse(content)
+    
+    # Build the AST from the parse tree
+    ast = _parser.ast_builder.build(parse_tree, content)
+    
+    # Run semantic analysis and raise errors if found
+    if not _parser.semantic_analyzer.analyze(ast):
+        errors = _parser.semantic_analyzer.get_errors()
+        if errors:
+            # Raise all semantic errors together
+            from .semantic_analyzer import SemanticError
+            error_message = "; ".join(errors)
+            raise SemanticError(error_message)
+    
+    return ast
 
 
 def parse_robodsl_file(file_path: str) -> RoboDSLAST:
@@ -182,6 +327,11 @@ def parse_robodsl_file(file_path: str) -> RoboDSLAST:
         
     Returns:
         RoboDSLAST: The parsed AST
+        
+    Raises:
+        FileNotFoundError: If the file doesn't exist
+        ParseError: If the file cannot be parsed
+        SemanticError: If semantic errors are found
     """
     global _parser
     if _parser is None:

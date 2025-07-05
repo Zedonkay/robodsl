@@ -1,7 +1,7 @@
 import pytest
 import tempfile
 import os
-from robodsl.parsers.lark_parser import RoboDSLParser
+from robodsl.parsers.lark_parser import parse_robodsl
 from robodsl.generators.main_generator import MainGenerator
 from robodsl.core.ast import StageCudaKernelNode, StageOnnxModelNode, KernelNode, OnnxModelNode
 
@@ -9,7 +9,7 @@ from robodsl.core.ast import StageCudaKernelNode, StageOnnxModelNode, KernelNode
 class TestCudaOnnxPipelineIntegration:
     """Test CUDA and ONNX integration in pipeline stages."""
     
-    def test_pipeline_with_cuda_kernels(self, parser, generator):
+    def test_pipeline_with_cuda_kernels(self, generator):
         """Test pipeline generation with CUDA kernels."""
         robodsl_code = """
         cuda_kernels {
@@ -37,7 +37,7 @@ class TestCudaOnnxPipelineIntegration:
         """
         
         # Parse the code
-        ast = parser.parse(robodsl_code)
+        ast = parse_robodsl(robodsl_code)
         assert ast is not None
         
         # Check that CUDA kernels are parsed
@@ -77,7 +77,7 @@ class TestCudaOnnxPipelineIntegration:
         assert "cudaSetDevice" in cuda_impl
         assert "test_kernel" in cuda_impl
     
-    def test_pipeline_with_onnx_models(self, parser, generator):
+    def test_pipeline_with_onnx_models(self, generator):
         """Test pipeline generation with ONNX models."""
         robodsl_code = """
         onnx_model test_model {
@@ -101,7 +101,7 @@ class TestCudaOnnxPipelineIntegration:
         """
         
         # Parse the code
-        ast = parser.parse(robodsl_code)
+        ast = parse_robodsl(robodsl_code)
         assert ast is not None
         
         # Check that ONNX models are parsed
@@ -140,7 +140,7 @@ class TestCudaOnnxPipelineIntegration:
         assert "Ort::Env" in onnx_impl
         assert "test_model" in onnx_impl
     
-    def test_pipeline_with_both_cuda_and_onnx(self, parser, generator):
+    def test_pipeline_with_both_cuda_and_onnx(self, generator):
         """Test pipeline generation with both CUDA kernels and ONNX models."""
         robodsl_code = """
         cuda_kernels {
@@ -184,7 +184,7 @@ class TestCudaOnnxPipelineIntegration:
         """
         
         # Parse the code
-        ast = parser.parse(robodsl_code)
+        ast = parse_robodsl(robodsl_code)
         assert ast is not None
         
         # Check that both CUDA and ONNX are parsed
@@ -227,7 +227,7 @@ class TestCudaOnnxPipelineIntegration:
         assert "class detectionOnnxManager" in onnx_header
         assert "detector_model_path_" in onnx_header
     
-    def test_ast_builder_cuda_onnx_nodes(self, parser):
+    def test_ast_builder_cuda_onnx_nodes(self):
         """Test AST builder creates correct CUDA and ONNX node types."""
         robodsl_code = """
         cuda_kernels {
@@ -270,7 +270,7 @@ class TestCudaOnnxPipelineIntegration:
         }
         """
         
-        ast = parser.parse(robodsl_code)
+        ast = parse_robodsl(robodsl_code)
         assert ast is not None
         
         # Check CUDA kernel node (standalone kernels)
@@ -293,7 +293,7 @@ class TestCudaOnnxPipelineIntegration:
         assert isinstance(cuda_stage.content.cuda_kernels[0], StageCudaKernelNode)
         assert cuda_stage.content.cuda_kernels[0].kernel_name == "test_kernel"
     
-    def test_comprehensive_ml_pipeline(self, parser, generator):
+    def test_comprehensive_ml_pipeline(self, generator):
         """Test a comprehensive ML pipeline with preprocessing, inference, and postprocessing."""
         robodsl_code = """
         cuda_kernels {
@@ -360,7 +360,7 @@ class TestCudaOnnxPipelineIntegration:
         """
         
         # Parse the code
-        ast = parser.parse(robodsl_code)
+        ast = parse_robodsl(robodsl_code)
         assert ast is not None
         
         # Check that all components are parsed correctly

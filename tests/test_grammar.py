@@ -1,3 +1,4 @@
+from robodsl.parsers.lark_parser import parse_robodsl
 #!/usr/bin/env python3
 """Simple test to validate the RoboDSL grammar."""
 
@@ -28,7 +29,7 @@ def test_grammar():
         }
         """
         
-        parse_tree = parser.parse(test_input)
+        parse_tree = parse_robodsl(test_input)
         print("Test input parsed successfully")
         print(f"Parse tree: {parse_tree}")
         

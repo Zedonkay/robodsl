@@ -13,7 +13,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 import numpy as np
 
-from robodsl.parsers.lark_parser import RoboDSLParser
+from robodsl.parsers.lark_parser import parse_robodsl
 from robodsl.generators.onnx_integration import OnnxIntegrationGenerator
 from robodsl.core.ast import (
     OnnxModelNode, ModelConfigNode, InputDefNode, OutputDefNode, 
@@ -93,7 +93,7 @@ class TestTensorRTComprehensive:
             optimization: tensorrt
         }
         '''
-        ast = parser.parse(dsl_code)
+        ast = parse_robodsl(dsl_code)
         assert len(ast.onnx_models) == 1
         model = ast.onnx_models[0]
         assert model.name == "minimal"
@@ -112,7 +112,7 @@ class TestTensorRTComprehensive:
             optimization: onednn
         }
         '''
-        ast = parser.parse(dsl_code)
+        ast = parse_robodsl(dsl_code)
         model = ast.onnx_models[0]
         assert len(model.config.optimizations) == 3
         opt_names = [opt.optimization for opt in model.config.optimizations]
@@ -129,7 +129,7 @@ class TestTensorRTComprehensive:
             optimization: tensorrt
         }
         '''
-        ast = parser.parse(dsl_code)
+        ast = parse_robodsl(dsl_code)
         model = ast.onnx_models[0]
         assert model.config.device.device == "cpu"
         assert len(model.config.optimizations) == 1
@@ -146,7 +146,7 @@ class TestTensorRTComprehensive:
             optimization: tensorrt
         }
         '''
-        ast = parser.parse(dsl_code)
+        ast = parse_robodsl(dsl_code)
         model = ast.onnx_models[0]
         assert len(model.config.inputs) == 2
         assert len(model.config.outputs) == 2
@@ -372,7 +372,7 @@ class TestTensorRTComprehensive:
         }
         '''
         
-        ast = parser.parse(dsl_code)
+        ast = parse_robodsl(dsl_code)
         assert len(ast.nodes) == 1
         node = ast.nodes[0]
         assert node.name == "tensorrt_node"
@@ -402,7 +402,7 @@ class TestTensorRTComprehensive:
         }
         '''
         
-        ast = parser.parse(dsl_code)
+        ast = parse_robodsl(dsl_code)
         node = ast.nodes[0]
         assert len(node.content.onnx_models) == 2
         assert node.content.onnx_models[0].name == "model1"
@@ -445,7 +445,7 @@ class TestTensorRTComprehensive:
         }
         '''
         
-        ast = parser.parse(dsl_code)
+        ast = parse_robodsl(dsl_code)
         assert len(ast.onnx_models) == 1
         assert len(ast.pipelines) == 1
         
