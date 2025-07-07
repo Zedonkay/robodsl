@@ -11,11 +11,11 @@ from ..core.ast import RoboDSLAST
 class BaseGenerator(ABC):
     """Base class for all code generators."""
     
-    def __init__(self, output_dir: str = ".", template_dirs: Optional[List[Path]] = None):
+    def __init__(self, output_dir: str = "test_output", template_dirs: Optional[List[Path]] = None):
         """Initialize the base generator.
         
         Args:
-            output_dir: Base directory for generated files
+            output_dir: Base directory for generated files (defaults to test_output)
             template_dirs: Additional template directories to search
         """
         self.output_dir = Path(output_dir)

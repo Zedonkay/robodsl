@@ -17,6 +17,9 @@ from .cmake_generator import CMakeGenerator
 from .launch_generator import LaunchGenerator
 from .package_generator import PackageGenerator
 from .main_generator import MainGenerator
+from .advanced_cpp_generator import AdvancedCppGenerator
+from .onnx_integration import OnnxIntegrationGenerator
+from .pipeline_generator import PipelineGenerator
 
 __all__ = [
     'BaseGenerator',
@@ -26,5 +29,8 @@ __all__ = [
     'CMakeGenerator',
     'LaunchGenerator',
     'PackageGenerator',
-    'MainGenerator'
+    'MainGenerator',
+    'AdvancedCppGenerator',
+    'OnnxIntegrationGenerator',
+    'PipelineGenerator'
 ] 

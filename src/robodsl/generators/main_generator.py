@@ -23,11 +23,11 @@ from ..core.ast import RoboDSLAST
 class MainGenerator(BaseGenerator):
     """Main generator that orchestrates all other generators."""
     
-    def __init__(self, output_dir: str = ".", template_dirs: Optional[List[Path]] = None, debug: bool = False):
+    def __init__(self, output_dir: str = "test_output", template_dirs: Optional[List[Path]] = None, debug: bool = False):
         """Initialize the main generator.
         
         Args:
-            output_dir: Base directory for generated files
+            output_dir: Base directory for generated files (defaults to test_output)
             template_dirs: Additional template directories to search
             debug: Whether to enable debug mode
         """
