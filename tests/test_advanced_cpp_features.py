@@ -236,6 +236,11 @@ class TestAdvancedCppFeatures:
         assert isinstance(feature, FunctionAttributeNode)
         assert "device" in feature.attributes
         assert "forceinline" in feature.attributes
+        
+        # Test that it generates valid C++
+        code = self.generator.generate_function_attributes([feature])
+        assert "__device__ __forceinline__ float fast_math(float x)" in code
+        assert "return x * x;" in code
 
     def test_concept_parsing(self):
         """Test parsing of concepts."""
@@ -357,7 +362,8 @@ class TestAdvancedCppFeatures:
         )
         
         code = self.generator.generate_operator_overloads([operator])
-        assert "operator+(int a) -> int" in code
+        assert "int operator+(int a)" in code
+        assert "return a + 1;" in code
 
     def test_bitfield_generation(self):
         """Test generation of bitfields."""
@@ -448,6 +454,17 @@ class TestAdvancedCppFeatures:
         assert "TemplateStructNode" in feature_types
         assert "StaticAssertNode" in feature_types
         assert "GlobalConstexprNode" in feature_types
+        
+        # Test generation produces valid C++
+        generated_code = self.generator._generate_header_file(ast)
+        
+        # Check for valid C++ syntax in generated code
+        assert "template<typename T>" in generated_code
+        assert "struct Vector" in generated_code
+        assert "static_assert(sizeof(int) == 4" in generated_code
+        assert "constexpr float PI = 3.14159" in generated_code
+        assert "__device__ __forceinline__ float fast_math(float x)" in generated_code
+        assert "float operator\"\"_deg(long double value)" in generated_code
 
     def test_error_handling(self):
         """Test error handling for malformed advanced C++ features."""

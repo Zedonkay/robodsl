@@ -45,13 +45,12 @@ class RoboDSLParser:
         if self.debug:
             print(f"DEBUG: Original content: {repr(content)}")
         
+        # First, handle code: { ... } and cpp: { ... } blocks with proper brace balancing
+        processed_content = self._extract_balanced_blocks(processed_content, cpp_blocks, ['code:', 'cpp:'])
+        
         # More specific pattern to match C++ code blocks within specific contexts
         # Look for code blocks within kernel definitions, method definitions, etc.
         patterns = [
-            # Code blocks: code: { ... } (for both kernels and methods)
-            r'(code\s*:\s*\{)([^{}]*(?:\{[^{}]*\}[^{}]*)*)(\})',
-            # Raw C++ blocks: cpp: { ... }
-            r'(cpp\s*:\s*\{)([^{}]*(?:\{[^{}]*\}[^{}]*)*)(\})',
             # Attribute-decorated function: one or more @attribute lines, then function signature and { ... }
             r'((?:@\w+\s*)+\w+\s*\([^)]*\)(?:\s*->\s*[^\{]*)?\s*)\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}',
             # Template function: template<...> ...(...) ... { ... }
@@ -98,6 +97,60 @@ class RoboDSLParser:
         
         return processed_content, cpp_blocks
     
+    def _extract_balanced_blocks(self, content: str, cpp_blocks: List[str], block_types: List[str]) -> str:
+        """Extract balanced brace blocks for code: and cpp: blocks.
+        
+        Args:
+            content: The content to process
+            cpp_blocks: List to store extracted blocks
+            block_types: List of block types to extract (e.g., ['code:', 'cpp:'])
+            
+        Returns:
+            Processed content with placeholders
+        """
+        processed_content = content
+        
+        for block_type in block_types:
+            # Find all occurrences of block_type followed by {
+            pattern = rf'({block_type}\s*{{)'
+            matches = list(re.finditer(pattern, processed_content))
+            
+            # Process matches in reverse order to maintain positions
+            for match in reversed(matches):
+                start_pos = match.end() - 1  # Position of the opening {
+                
+                # Find the matching closing brace
+                brace_count = 0
+                end_pos = start_pos
+                
+                for i, char in enumerate(processed_content[start_pos:], start_pos):
+                    if char == '{':
+                        brace_count += 1
+                    elif char == '}':
+                        brace_count -= 1
+                        if brace_count == 0:
+                            end_pos = i
+                            break
+                
+                if brace_count == 0:
+                    # Extract the block content
+                    block_content = processed_content[start_pos + 1:end_pos]
+                    placeholder = f"@@CPP_BLOCK_{len(cpp_blocks)}@@"
+                    cpp_blocks.append(block_content)
+                    
+                    if self.debug:
+                        print(f"DEBUG: Extracted {block_type} block with placeholder: {placeholder}")
+                        print(f"DEBUG: Block content length: {len(block_content)}")
+                    
+                    # Replace the block with placeholder
+                    processed_content = (
+                        processed_content[:start_pos + 1] + 
+                        placeholder + 
+                        processed_content[end_pos:]
+                    )
+        
+        return processed_content
+    
     def _restore_cpp_blocks(self, tree, cpp_blocks: List[str]):
         """Restore C++ code blocks in the parse tree.
         
@@ -137,6 +190,21 @@ class RoboDSLParser:
                                                         token_child.value = cpp_blocks[block_index]
                                                 except (ValueError, IndexError):
                                                     pass
+                    elif child.data == 'raw_cpp_code':
+                        # Handle raw C++ code blocks specifically
+                        for cpp_child in child.children:
+                            if hasattr(cpp_child, 'data') and cpp_child.data == 'cpp_raw_content':
+                                for content_child in cpp_child.children:
+                                    if hasattr(content_child, 'value'):
+                                        placeholder = content_child.value
+                                        if placeholder.startswith('@@CPP_BLOCK_') and placeholder.endswith('@@'):
+                                            try:
+                                                block_index = int(placeholder[12:-2])  # Extract number from @@CPP_BLOCK_X@@
+                                                if block_index < len(cpp_blocks):
+                                                    # Replace the placeholder with the actual C++ code
+                                                    content_child.value = cpp_blocks[block_index]
+                                            except (ValueError, IndexError):
+                                                pass
                 self._restore_cpp_blocks(child, cpp_blocks)
     
     def parse(self, content: str):
@@ -152,13 +220,19 @@ class RoboDSLParser:
             ParseError: If the content cannot be parsed
         """
         try:
-                        # Check if content contains advanced C++ features
-            has_advanced_cpp = any(keyword in content for keyword in [
+            # Check if content contains advanced C++ features
+            advanced_cpp_keywords = [
                 'template<', 'static_assert', 'global ', 'def operator',
                 'def __init__', 'def __del__', '#pragma',
                 '#include', '#define', '#if', '#ifdef', '#ifndef', '#endif',
                 '@device', '@host', 'concept ', 'friend ', 'operator""'
-            ]) or ' : ' in content  # Check for bitfield members (type name : bits)
+            ]
+            has_advanced_cpp = any(keyword in content for keyword in advanced_cpp_keywords)
+
+            # More precise bitfield detection: look for lines like 'NAME : NUMBER' or 'NAME : NAME : NUMBER' (not just any colon)
+            bitfield_pattern = re.compile(r'^\s*\w+\s*:\s*\w+\s*:\s*\d+\s*;|^\s*\w+\s*:\s*\d+\s*;', re.MULTILINE)
+            has_bitfield = bool(bitfield_pattern.search(content))
+            has_advanced_cpp = has_advanced_cpp or has_bitfield
             
             if has_advanced_cpp:
                 # For advanced C++ features, parse directly without C++ block extraction

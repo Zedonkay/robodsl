@@ -2214,18 +2214,26 @@ class ASTBuilder:
     def _process_function_decl_alt(self, node: Tree) -> dict:
         """Process alternative function declaration (for attributes)."""
         try:
+            if self.debug:
+                print(f"function_decl_alt children: {[ (type(c), getattr(c, 'data', c) if isinstance(c, Tree) else c) for c in node.children ]}")
+            
             # Extract function name (first child)
             func_name = self._extract_token_value(node.children[0])
-            # Extract parameter list (second child, skip LPAR)
+            
+            # Extract parameter list (third child, after LPAR)
             param_list = self._process_function_param_list(node.children[2])
-            # Extract return type (third child)
-            return_type = self._extract_cpp_type_string(node.children[3].children[1])
-            # Extract code block (fourth child)
+            
+            # Extract return type (fifth child, after RPAR, if it exists)
+            return_type = None
             code = ""
-            if len(node.children) > 4:
-                code_node = node.children[4]
-                if isinstance(code_node, Tree) and code_node.data == "balanced_braces":
-                    code = self._extract_code_from_balanced_braces(code_node)
+            
+            # Look for return_type and balanced_braces
+            for i, child in enumerate(node.children):
+                if isinstance(child, Tree):
+                    if child.data == "return_type":
+                        return_type = self._extract_cpp_type_string(child.children[0])
+                    elif child.data == "balanced_braces":
+                        code = self._extract_code_from_balanced_braces(child)
             
             return {
                 'name': func_name,
@@ -2691,7 +2699,6 @@ class ASTBuilder:
                 if isinstance(child, Tree) and child.data == "attribute":
                     if self.debug:
                         print(f"attribute children: {[ (type(c), getattr(c, 'data', c) if isinstance(c, Tree) else c) for c in child.children ]}")
-                        print(f"attribute_name children: {[ (type(c), getattr(c, 'data', c) if isinstance(c, Tree) else c) for c in child.children[0].children ]}")
                     # Extract attribute name from the attribute node
                     attr_child = child.children[0]
                     if isinstance(attr_child, Token):
@@ -2715,7 +2722,10 @@ class ASTBuilder:
                     break
             
             if func_decl_node:
-                func_decl = self._process_function_decl(func_decl_node)
+                if func_decl_node.data == "function_decl_alt":
+                    func_decl = self._process_function_decl_alt(func_decl_node)
+                else:
+                    func_decl = self._process_function_decl(func_decl_node)
                 
                 function_attribute = FunctionAttributeNode(
                     attributes=attributes,

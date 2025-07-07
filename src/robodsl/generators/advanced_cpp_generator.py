@@ -312,10 +312,11 @@ class {node.name}{inheritance_str} {{
         template_params = ", ".join([f"{param.param_type} {param.name}" for param in node.template_params])
         func_params = ", ".join([f"{param.param_type} {param.param_name}" for param in node.parameters])
         
-        return_type = f" -> {node.return_type}" if node.return_type else ""
+        # Proper C++ syntax: return_type function_name(parameters)
+        return_type = node.return_type if node.return_type else "void"
         
         return f"""template<{template_params}>
-{node.name}({func_params}){return_type} {{
+{return_type} {node.name}({func_params}) {{
 {node.code}
 }}"""
 
@@ -339,18 +340,22 @@ using {node.name} = {node.aliased_type};"""
     def _generate_global_static_inline(self, node: GlobalStaticInlineNode) -> str:
         """Generate C++ code for a global static inline function."""
         func_params = ", ".join([f"{param.param_type} {param.param_name}" for param in node.parameters])
-        return_type = f" -> {node.return_type}" if node.return_type else ""
         
-        return f"""static inline {node.name}({func_params}){return_type} {{
+        # Proper C++ syntax: return_type function_name(parameters)
+        return_type = node.return_type if node.return_type else "void"
+        
+        return f"""static inline {return_type} {node.name}({func_params}) {{
 {node.code}
 }}"""
 
     def _generate_operator_overload(self, node: OperatorOverloadNode) -> str:
         """Generate C++ code for an operator overload."""
         func_params = ", ".join([f"{param.param_type} {param.param_name}" for param in node.parameters])
-        return_type = f" -> {node.return_type}" if node.return_type else ""
         
-        return f"""{node.operator}({func_params}){return_type} {{
+        # Proper C++ syntax: return_type operator_symbol(parameters)
+        return_type = node.return_type if node.return_type else "void"
+        
+        return f"""{return_type} {node.operator}({func_params}) {{
 {node.code}
 }}"""
 
@@ -364,13 +369,25 @@ using {node.name} = {node.aliased_type};"""
             init_parts = [f"{member}({value})" for member, value in node.member_initializers]
             init_list = f" : {', '.join(init_parts)}"
         
-        return f"""__init__({func_params}){init_list} {{
+        # For constructors, we need the class name from context
+        # This will be handled by the class generator that calls this method
+        # For standalone constructors, we'll use a placeholder
+        class_name = getattr(node, 'class_name', 'ClassName')
+        
+        # Proper C++ constructor syntax: ClassName(parameters) : init_list
+        return f"""{class_name}({func_params}){init_list} {{
 {node.code}
 }}"""
 
     def _generate_destructor(self, node: DestructorNode) -> str:
         """Generate C++ code for a destructor."""
-        return f"""__del__() {{
+        # For destructors, we need the class name from context
+        # This will be handled by the class generator that calls this method
+        # For standalone destructors, we'll use a placeholder
+        class_name = getattr(node, 'class_name', 'ClassName')
+        
+        # Proper C++ destructor syntax: ~ClassName()
+        return f"""~{class_name}() {{
 {node.code}
 }}"""
 
@@ -391,13 +408,14 @@ using {node.name} = {node.aliased_type};"""
     def _generate_function_attribute(self, node: FunctionAttributeNode) -> str:
         """Generate C++ code for a function with attributes."""
         func_params = ", ".join([f"{param.param_type} {param.param_name}" for param in node.parameters])
-        return_type = f" -> {node.return_type}" if node.return_type else ""
         
         # Generate attributes
         attr_str = " ".join([f"__{attr}__" for attr in node.attributes])
         
-        return f"""{attr_str}
-{node.name}({func_params}){return_type} {{
+        # Proper C++ syntax: return_type function_name(parameters)
+        return_type = node.return_type if node.return_type else "void"
+        
+        return f"""{attr_str} {return_type} {node.name}({func_params}) {{
 {node.code}
 }}"""
 
@@ -421,16 +439,20 @@ concept {node.name} = requires {{
 
     def _generate_user_defined_literal(self, node: UserDefinedLiteralNode) -> str:
         """Generate C++ code for a user-defined literal."""
-        return f"""operator""{node.literal_suffix}(long double value) -> {node.return_type} {{
+        # Proper C++ syntax: return_type operator""_suffix(parameters)
+        return_type = node.return_type if node.return_type else "void"
+        return f"""{return_type} operator""{node.literal_suffix}(long double value) {{
 {node.code}
 }}"""
 
     def _generate_method(self, method) -> str:
         """Generate C++ code for a method."""
         func_params = ", ".join([f"{param.param_type} {param.param_name}" for param in method.inputs])
-        return_type = f" -> {method.return_type}" if hasattr(method, 'return_type') and method.return_type else ""
         
-        return f"""    {method.name}({func_params}){return_type} {{
+        # Proper C++ syntax: return_type method_name(parameters)
+        return_type = method.return_type if hasattr(method, 'return_type') and method.return_type else "void"
+        
+        return f"""    {return_type} {method.name}({func_params}) {{
 {method.code}
     }}"""
 
