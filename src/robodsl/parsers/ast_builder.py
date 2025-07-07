@@ -273,7 +273,13 @@ class ASTBuilder:
                 for i, child in enumerate(node.children):
                     print(f"  child {i}: {type(child)} = {child}")
             
-            type_name = str(node.children[0])
+            # Extract type (first child)
+            if isinstance(node.children[0], Tree) and node.children[0].data == "cpp_type":
+                type_name = self._extract_cpp_type_string(node.children[0])
+            else:
+                type_name = str(node.children[0])
+            
+            # Extract name (second child)
             name = str(node.children[1])
             array_spec = None
             bits = None
@@ -282,7 +288,7 @@ class ASTBuilder:
             if len(node.children) > 2:
                 if hasattr(node.children[2], 'data') and node.children[2].data == "array_spec":
                     array_spec = str(node.children[2])
-                elif len(node.children) == 3 and isinstance(node.children[2], Token):
+                elif len(node.children) == 3 and isinstance(node.children[2], Token) and node.children[2].type == "SIGNED_NUMBER":
                     # This is a bitfield member: type name : bits
                     bits = int(str(node.children[2]))
                     if self.debug:
@@ -300,12 +306,19 @@ class ASTBuilder:
     def _process_class_def(self, node: Tree):
         """Process class definition."""
         try:
-            name = str(node.children[1])  # Use index 1 for name
+            # Find the NAME token among the children
+            name = None
+            for child in node.children:
+                if isinstance(child, Token) and child.type == "NAME":
+                    name = child.value
+                    break
+            if name is None:
+                raise ValueError("Class name (NAME token) not found in class_def")
             inheritance = None
             content_node = None
             
-            # Find inheritance and class_content among the children
-            for child in node.children[2:]:
+            # Find inheritance and class_content among all children
+            for child in node.children:
                 if isinstance(child, Tree):
                     if child.data == "inheritance":
                         inheritance = self._process_inheritance(child)
@@ -317,6 +330,8 @@ class ASTBuilder:
             
             class_node = ClassNode(name=name, content=content_node, inheritance=inheritance)
             self.ast.data_structures.append(class_node)
+            if self.debug:
+                print(f"[DEBUG] Appended ClassNode: {class_node}")
         except Exception as e:
             if self.debug:
                 print(f"Error processing class definition: {e}")
@@ -2010,21 +2025,27 @@ class ASTBuilder:
             return node.value
         elif isinstance(node, Tree):
             if node.data == "cpp_type":
-                # New grammar structure: base_cpp_type pointer_or_ref*
-                base_type = ""
-                pointer_refs = ""
+                # New grammar structure: CONST? base_cpp_type pointer_or_ref*
+                result = ""
+                
+                # Check for const qualifier (first child)
+                if len(node.children) > 0 and isinstance(node.children[0], Token) and node.children[0].type == "CONST":
+                    result += "const "
+                    children_start = 1
+                else:
+                    children_start = 0
                 
                 # Extract base type
-                if len(node.children) > 0 and isinstance(node.children[0], Tree) and node.children[0].data == "base_cpp_type":
-                    base_type = self._extract_cpp_type_string(node.children[0])
+                if len(node.children) > children_start and isinstance(node.children[children_start], Tree) and node.children[children_start].data == "base_cpp_type":
+                    result += self._extract_cpp_type_string(node.children[children_start])
                 
                 # Extract pointer/reference modifiers
-                for i in range(1, len(node.children)):
+                for i in range(children_start + 1, len(node.children)):
                     child = node.children[i]
                     if isinstance(child, Tree) and child.data == "pointer_or_ref":
-                        pointer_refs += self._extract_token_value(child.children[0])
+                        result += self._extract_token_value(child.children[0])
                 
-                return base_type + pointer_refs
+                return result
             elif node.data == "base_cpp_type":
                 # Handle base_cpp_type: NAME ("::" NAME)* ("<" cpp_type ("," cpp_type)* ">")? | "long" "double" | "size_t" | "uint32_t"
                 if len(node.children) == 2 and all(isinstance(c, Token) and c.value in ["long", "double"] for c in node.children):

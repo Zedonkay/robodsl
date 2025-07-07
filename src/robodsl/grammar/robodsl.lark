@@ -53,7 +53,7 @@ concept_requirement: cpp_type "operator" operator_symbol LPAR cpp_type (COMMA cp
 operator_symbol: PLUS_OP | MINUS_OP | MULTIPLY_OP | EQUALS | NOT_EQUALS | LESS_THAN | GREATER_THAN | LESS_EQUAL | GREATER_EQUAL | LEFT_SHIFT | RIGHT_SHIFT | FUNCTION_CALL
 REQUIRES: "requires"
 
-start: include_stmt* (data_structure | custom_interface | node_def | cuda_kernels_block | onnx_model | pipeline_def | simulation_config | dynamic_config | raw_cpp_code | advanced_cpp_feature)*
+start: include_stmt* (data_structure | custom_interface | node_def | cuda_kernels_block | onnx_model | pipeline_def | simulation_config | dynamic_config | raw_cpp_code | advanced_cpp_feature (_NL|SEMICOLON)?)*
 
 // Include statements
 include_stmt: "include" ("<" include_path ">" | STRING)
@@ -150,7 +150,14 @@ struct_member: cpp_type (NAME array_spec? default_value? | NAME ":" SIGNED_NUMBE
 struct_def: STRUCT NAME LBRACE block_content RBRACE
 
 // Class definitions
-class_def: "class" NAME inheritance? LBRACE block_content RBRACE
+class_def: "class" NAME inheritance? LBRACE class_content RBRACE
+class_content: (class_access_section | class_direct_member | class_direct_method | include_stmt)*
+class_access_section: access_specifier COLON class_section_content
+class_section_content: (class_section_member | class_section_method)*
+class_section_member: struct_member
+class_section_method: cpp_method
+class_direct_member: struct_member
+class_direct_method: cpp_method
 inheritance: ":" access_specifier? cpp_type (COMMA access_specifier? cpp_type)*
 access_specifier: PUBLIC | PRIVATE | PROTECTED
 
@@ -347,7 +354,7 @@ use_kernel: "use_kernel" ":" STRING
 SEMICOLON: ";"
 
 // Advanced C++ Features (Phase 8)
-advanced_cpp_feature: concept_def | template_def | static_assert | global_var | operator_overload | constructor_def | preprocessor_directive | function_attribute | friend_declaration | user_defined_literal
+advanced_cpp_feature: concept_def | template_def | static_assert | global_var | operator_overload | constructor_def | preprocessor_directive | function_attribute | function_decl_alt | friend_declaration | user_defined_literal
 
 // Template definitions
 template_def: template_struct | template_class | template_function | template_alias
@@ -366,7 +373,7 @@ template_param_with_default: ("typename" | "class") NAME "=" cpp_type
 // Function declarations for templates
 function_decl: cpp_type NAME LPAR function_param_list RPAR return_type? balanced_braces
 // Alternative function declaration syntax (for attributes)
-function_decl_alt: NAME LPAR function_param_list RPAR return_type balanced_braces
+function_decl_alt: NAME LPAR function_param_list RPAR return_type? balanced_braces
 return_type: "->" cpp_type
 function_param_list: function_param (COMMA function_param)*
 function_param: NAME ":" cpp_type default_value?
@@ -427,7 +434,7 @@ friend_target: "class" NAME   -> class_friend
 user_defined_literal: "def" "operator" STRING LITERAL_SUFFIX LPAR literal_param RPAR return_type balanced_braces
 LITERAL_SUFFIX: /_[a-zA-Z_][a-zA-Z0-9_]*/
 
-literal_param: "value" ":" "long" "double"
+literal_param: "value" ":" LONG DOUBLE
 
 // Add C++ keywords as terminals
 RETURN: "return"
@@ -441,9 +448,13 @@ DEFAULT: "default"
 BREAK: "break"
 CONTINUE: "continue"
 
+// C++ type keywords
+LONG: "long"
+DOUBLE: "double"
+
 // C++ types (refactored to avoid ambiguity and reduce/reduce conflicts)
 cpp_type: CONST? base_cpp_type pointer_or_ref*
-base_cpp_type: NAME ("::" NAME)* (LESS_THAN cpp_type (COMMA cpp_type)* GREATER_THAN)? | dotted_name | "long" "double" | "size_t" | "uint32_t"
+base_cpp_type: NAME ("::" NAME)* (LESS_THAN cpp_type (COMMA cpp_type)* GREATER_THAN)? | dotted_name | LONG DOUBLE | "size_t" | "uint32_t"
 pointer_or_ref: STAR | AMPERSAND
 
 // AMPERSAND for references (already defined in terminals section)
