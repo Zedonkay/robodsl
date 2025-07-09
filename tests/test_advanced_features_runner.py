@@ -16,6 +16,7 @@ from typing import List, Dict, Any, Tuple
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from robodsl.parsers.lark_parser import parse_robodsl
+from conftest import skip_if_no_ros2, skip_if_no_cuda, skip_if_no_tensorrt, skip_if_no_onnx
 from robodsl.generators import MainGenerator
 from test_advanced_features_config import (
     PIPELINE_TEST_CASES,
@@ -288,6 +289,7 @@ class TestAdvancedFeatures:
     
     @pytest.mark.parametrize("test_case", PIPELINE_TEST_CASES)
     def test_pipeline_features(self, test_case):
+        skip_if_no_ros2()
         """Test pipeline generation features."""
         result = self.validator.run_validation(test_case["source"], test_case["name"])
         
@@ -302,6 +304,8 @@ class TestAdvancedFeatures:
     
     @pytest.mark.parametrize("test_case", ONNX_TEST_CASES)
     def test_onnx_features(self, test_case):
+        skip_if_no_ros2()
+        skip_if_no_onnx()
         """Test ONNX model integration features."""
         result = self.validator.run_validation(test_case["source"], test_case["name"])
         
@@ -316,6 +320,8 @@ class TestAdvancedFeatures:
     
     @pytest.mark.parametrize("test_case", TENSORRT_TEST_CASES)
     def test_tensorrt_features(self, test_case):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test TensorRT optimization features."""
         result = self.validator.run_validation(test_case["source"], test_case["name"])
         
@@ -330,6 +336,7 @@ class TestAdvancedFeatures:
     
     @pytest.mark.parametrize("test_case", COMPREHENSIVE_TEST_CASES)
     def test_comprehensive_features(self, test_case):
+        skip_if_no_ros2()
         """Test comprehensive feature integration."""
         result = self.validator.run_validation(test_case["source"], test_case["name"])
         
@@ -344,6 +351,7 @@ class TestAdvancedFeatures:
     
     @pytest.mark.parametrize("test_case", EDGE_CASE_TEST_CASES)
     def test_edge_cases(self, test_case):
+        skip_if_no_ros2()
         """Test edge cases in advanced features."""
         result = self.validator.run_validation(test_case["source"], test_case["name"])
         
@@ -357,6 +365,7 @@ class TestAdvancedFeatures:
         assert result["validation_time"] < 60, f"Validation took too long: {result['validation_time']}s"
     
     def test_large_scale_generation(self):
+        skip_if_no_ros2()
         """Test large-scale advanced features generation."""
         # Create a large-scale test with multiple features
         source = """

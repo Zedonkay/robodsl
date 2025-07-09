@@ -4,6 +4,7 @@ This file defines comprehensive test cases for pipeline, ONNX, and TensorRT vali
 """
 
 import pytest
+from conftest import skip_if_no_cuda, skip_if_no_tensorrt, skip_if_no_onnx
 from typing import List, Dict, Any
 
 # Test case definitions for advanced features validation

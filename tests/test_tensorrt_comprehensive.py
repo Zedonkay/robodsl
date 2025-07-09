@@ -14,6 +14,7 @@ from unittest.mock import Mock, patch, MagicMock
 import numpy as np
 
 from robodsl.parsers.lark_parser import parse_robodsl
+from conftest import skip_if_no_ros2, skip_if_no_cuda, skip_if_no_tensorrt, skip_if_no_onnx
 from robodsl.generators.onnx_integration import OnnxIntegrationGenerator
 from robodsl.core.ast import (
     OnnxModelNode, ModelConfigNode, InputDefNode, OutputDefNode, 
@@ -82,6 +83,8 @@ class TestTensorRTComprehensive:
         }
     
     def test_tensorrt_parsing_edge_cases(self, parser):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test parsing of edge case TensorRT configurations."""
         
         # Test 1: Minimal TensorRT configuration
@@ -154,6 +157,8 @@ class TestTensorRTComprehensive:
         assert model.config.inputs[1].name == "input_data"
     
     def test_tensorrt_generation_edge_cases(self, test_output_dir, edge_case_models):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test code generation for edge case scenarios."""
         generator = OnnxIntegrationGenerator(str(test_output_dir))
         
@@ -185,6 +190,8 @@ class TestTensorRTComprehensive:
         assert "trt_fp16_enable = true" in impl_content
     
     def test_tensorrt_cmake_integration_comprehensive(self, test_output_dir, complex_model_config):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test comprehensive CMake integration scenarios."""
         generator = OnnxIntegrationGenerator(str(test_output_dir))
         
@@ -224,6 +231,8 @@ class TestTensorRTComprehensive:
         assert "CUDA_SEPARABLE_COMPILATION" not in cmake_content
     
     def test_tensorrt_method_generation_comprehensive(self, test_output_dir, complex_model_config):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test comprehensive method generation for TensorRT."""
         generator = OnnxIntegrationGenerator(str(test_output_dir))
         generated_files = generator.generate_onnx_integration(complex_model_config, "complex_node")
@@ -266,6 +275,8 @@ class TestTensorRTComprehensive:
         assert "return false;" in impl_content
     
     def test_tensorrt_initialization_comprehensive(self, test_output_dir, complex_model_config):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test comprehensive initialization scenarios."""
         generator = OnnxIntegrationGenerator(str(test_output_dir))
         generated_files = generator.generate_onnx_integration(complex_model_config, "complex_node")
@@ -290,6 +301,8 @@ class TestTensorRTComprehensive:
         assert "cuda_options.gpu_mem_limit = SIZE_MAX" in impl_content
     
     def test_tensorrt_error_handling(self, test_output_dir):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test comprehensive error handling scenarios."""
         generator = OnnxIntegrationGenerator(str(test_output_dir))
         
@@ -326,6 +339,8 @@ class TestTensorRTComprehensive:
         assert "OrtTensorRTProviderOptions" in impl_content
     
     def test_tensorrt_performance_scenarios(self, test_output_dir):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test performance-related scenarios."""
         generator = OnnxIntegrationGenerator(str(test_output_dir))
         
@@ -355,6 +370,8 @@ class TestTensorRTComprehensive:
         assert "trt_max_workspace_size = 1 << 30" in impl_content
     
     def test_tensorrt_integration_with_nodes(self, parser):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test TensorRT integration within node contexts."""
         
         # Test 1: Node with TensorRT model
@@ -409,6 +426,8 @@ class TestTensorRTComprehensive:
         assert node.content.onnx_models[1].name == "model2"
     
     def test_tensorrt_pipeline_integration(self, parser):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test TensorRT integration within pipeline contexts."""
         
         # Test 1: Pipeline with TensorRT stages
@@ -459,6 +478,8 @@ class TestTensorRTComprehensive:
         assert inference_stage.content.onnx_models[0].model_name == "pipeline_model"
     
     def test_tensorrt_memory_management(self, test_output_dir):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test TensorRT memory management features."""
         generator = OnnxIntegrationGenerator(str(test_output_dir))
         
@@ -489,6 +510,8 @@ class TestTensorRTComprehensive:
         assert "cudaMemcpy" in impl_content
     
     def test_tensorrt_configuration_validation(self, test_output_dir):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test TensorRT configuration validation."""
         generator = OnnxIntegrationGenerator(str(test_output_dir))
         
@@ -527,6 +550,8 @@ class TestTensorRTComprehensive:
         assert "trt_max_workspace_size = 1 << 30" in impl_content
     
     def test_tensorrt_runtime_controls(self, test_output_dir):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test TensorRT runtime control methods."""
         generator = OnnxIntegrationGenerator(str(test_output_dir))
         
@@ -561,6 +586,8 @@ class TestTensorRTComprehensive:
         assert "rm -rf" in impl_content  # Cache clearing command
     
     def test_tensorrt_error_recovery(self, test_output_dir):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test TensorRT error recovery scenarios."""
         generator = OnnxIntegrationGenerator(str(test_output_dir))
         
@@ -594,6 +621,8 @@ class TestTensorRTComprehensive:
         assert "return false;" in impl_content
     
     def test_tensorrt_performance_monitoring(self, test_output_dir):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test TensorRT performance monitoring features."""
         generator = OnnxIntegrationGenerator(str(test_output_dir))
         
@@ -626,6 +655,8 @@ class TestTensorRTComprehensive:
         assert "shape:" in impl_content
     
     def test_tensorrt_integration_compatibility(self, test_output_dir):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test TensorRT integration compatibility with other features."""
         generator = OnnxIntegrationGenerator(str(test_output_dir))
         
@@ -660,6 +691,8 @@ class TestTensorRTComprehensive:
         assert "RCLCPP_ERROR" in node_integration
     
     def test_tensorrt_stress_testing(self, test_output_dir):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test TensorRT under stress conditions."""
         generator = OnnxIntegrationGenerator(str(test_output_dir))
         
@@ -704,6 +737,8 @@ class TestTensorRTComprehensive:
         assert "trt_max_workspace_size = 1 << 30" in impl_content  # Still 1GB default
     
     def test_tensorrt_future_compatibility(self, test_output_dir):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test TensorRT features for future compatibility."""
         generator = OnnxIntegrationGenerator(str(test_output_dir))
         

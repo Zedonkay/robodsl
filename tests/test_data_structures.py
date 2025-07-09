@@ -1,13 +1,15 @@
 import pytest
 from pathlib import Path
 from robodsl.parsers.lark_parser import parse_robodsl
+from conftest import skip_if_no_ros2
 from robodsl.core.ast import (
     StructNode, ClassNode, EnumNode, TypedefNode, UsingNode, NodeNode
 )
 
 def test_data_structures_parsing():
     test_file = Path(__file__).parent / "data_structures_test.robodsl"
-    ast = parse_robodsl(test_file.read_text(), debug=True)
+    content = test_file.read_text()
+    ast = parse_robodsl(content, debug=True)
 
     # Check typedef
     typedefs = [ds for ds in ast.data_structures if isinstance(ds, TypedefNode)]

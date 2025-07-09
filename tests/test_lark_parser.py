@@ -2,6 +2,7 @@
 
 import pytest
 from robodsl.parsers.lark_parser import parse_robodsl
+from conftest import skip_if_no_ros2, skip_if_no_cuda
 from robodsl.parsers.semantic_analyzer import SemanticError
 from lark import ParseError
 from robodsl.core.ast import RoboDSLAST, NodeNode, KernelNode

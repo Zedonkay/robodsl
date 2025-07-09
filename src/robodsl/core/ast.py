@@ -266,6 +266,7 @@ class KernelContentNode(ASTNode):
     shared_memory: Optional[int] = None
     use_thrust: bool = False
     parameters: List[KernelParamNode] = field(default_factory=list)
+    kernel_parameters: List[dict] = field(default_factory=list)  # Kernel parameter definitions
     code: str = ""
     cuda_includes: List[str] = field(default_factory=list)
     defines: Dict[str, str] = field(default_factory=dict)

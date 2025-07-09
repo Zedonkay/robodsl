@@ -18,6 +18,15 @@ struct cudaStream_t;
 
 namespace {{ namespace }} {
 
+{% if struct_name and parameters %}
+// Struct for kernel parameters
+struct {{ struct_name }} {
+{% for param in parameters %}
+    {{ param.type }} {{ param.name }};
+{% endfor %}
+};
+{% endif %}
+
 /**
  * @brief CUDA kernel wrapper class for {{ kernel_name }}
  * 
@@ -58,7 +67,7 @@ public:
      * @param parameters Kernel parameters
      * @return std::vector<{{ output_type }}> Processed output data
      */
-    std::vector<{{ output_type }}> process(const {{ param_type }}& parameters);
+    std::vector<{{ output_type }}> process(const {{ param_type }}{% if param_type != 'void' %}&{% endif %} parameters);
     
     /**
      * @brief Get the last error message, if any

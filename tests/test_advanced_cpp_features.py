@@ -3,6 +3,7 @@
 import pytest
 from pathlib import Path
 from robodsl.parsers.lark_parser import parse_robodsl
+from conftest import skip_if_no_ros2, skip_if_no_tensorrt
 from robodsl.parsers.ast_builder import ASTBuilder
 from robodsl.generators.advanced_cpp_generator import AdvancedCppGenerator
 from robodsl.core.ast import (
@@ -24,6 +25,7 @@ class TestAdvancedCppFeatures:
         self.generator = AdvancedCppGenerator()
 
     def test_template_struct_parsing(self):
+        skip_if_no_ros2()
         """Test parsing of template struct definitions."""
         source = """
         template<typename T> struct Foo {
@@ -42,6 +44,7 @@ class TestAdvancedCppFeatures:
         assert feature.template_params[0].param_type == "typename"
 
     def test_template_class_parsing(self):
+        skip_if_no_ros2()
         """Test parsing of template class definitions."""
         source = """
         template<typename T> class Vector {
@@ -60,6 +63,7 @@ class TestAdvancedCppFeatures:
         assert feature.template_params[0].name == "T"
 
     def test_template_function_parsing(self):
+        skip_if_no_ros2()
         """Test parsing of template function definitions."""
         source = """
         template<typename T> T sqr(x: T) {
@@ -77,6 +81,7 @@ class TestAdvancedCppFeatures:
         assert feature.parameters[0].param_name == "x"
 
     def test_template_alias_parsing(self):
+        skip_if_no_ros2()
         """Test parsing of template alias definitions."""
         source = """
         template<typename T> using Vec = std::vector<T>;
@@ -91,6 +96,7 @@ class TestAdvancedCppFeatures:
         assert feature.aliased_type == "std::vector<T>"
 
     def test_static_assert_parsing(self):
+        skip_if_no_ros2()
         """Test parsing of static assertions."""
         source = """
         static_assert(sizeof(int) == 4, "int must be 4 bytes");
@@ -105,6 +111,7 @@ class TestAdvancedCppFeatures:
         assert feature.message == '"int must be 4 bytes"'
 
     def test_global_constexpr_parsing(self):
+        skip_if_no_ros2()
         """Test parsing of global constexpr variables."""
         source = """
         global PI: constexpr float = 3.14159;
@@ -120,6 +127,7 @@ class TestAdvancedCppFeatures:
         assert feature.value.value == 3.14159
 
     def test_global_device_const_parsing(self):
+        skip_if_no_ros2()
         """Test parsing of global device constants."""
         source = """
         global device LUT: __constant__ int[256] = [1, 2, 3, 4];
@@ -136,6 +144,7 @@ class TestAdvancedCppFeatures:
         assert len(feature.values) == 4
 
     def test_operator_overload_parsing(self):
+        skip_if_no_ros2()
         """Test parsing of operator overloads."""
         source = """
         def operator<<(stream: std::ostream&, obj: Foo&) -> std::ostream& {
@@ -154,6 +163,7 @@ class TestAdvancedCppFeatures:
         assert feature.return_type == "std::ostream&"
 
     def test_constructor_parsing(self):
+        skip_if_no_ros2()
         """Test parsing of constructors."""
         source = """
         def __init__(x: float, y: float, z: float) : x(x), y(y), z(z) {
@@ -170,6 +180,7 @@ class TestAdvancedCppFeatures:
         assert len(feature.member_initializers) == 3
 
     def test_destructor_parsing(self):
+        skip_if_no_ros2()
         """Test parsing of destructors."""
         source = """
         def __del__() {
@@ -184,6 +195,7 @@ class TestAdvancedCppFeatures:
         assert isinstance(feature, DestructorNode)
 
     def test_bitfield_parsing(self):
+        skip_if_no_ros2()
         """Test parsing of bitfields."""
         source = """
         struct Flags {
@@ -205,6 +217,7 @@ class TestAdvancedCppFeatures:
         assert feature.members[2].bits == 4
 
     def test_preprocessor_directive_parsing(self):
+        skip_if_no_ros2()
         """Test parsing of preprocessor directives."""
         source = """
         #pragma once
@@ -221,6 +234,7 @@ class TestAdvancedCppFeatures:
         assert len(directives) >= 3
 
     def test_function_attribute_parsing(self):
+        skip_if_no_ros2()
         """Test parsing of functions with attributes."""
         source = """
         @device @forceinline
@@ -243,6 +257,7 @@ class TestAdvancedCppFeatures:
         assert "return x * x;" in code
 
     def test_concept_parsing(self):
+        skip_if_no_ros2()
         """Test parsing of concepts."""
         source = """
         concept Arithmetic: requires T: T operator+(T, T) T operator*(T, T)
@@ -256,6 +271,7 @@ class TestAdvancedCppFeatures:
         assert feature.name == "Arithmetic"
 
     def test_concept_token_inspection(self):
+        skip_if_no_ros2()
         """Test to inspect tokens produced for concept parsing."""
         from robodsl.parsers.lark_parser import RoboDSLParser
         
@@ -290,6 +306,7 @@ class TestAdvancedCppFeatures:
                 traceback.print_exc()
 
     def test_friend_declaration_parsing(self):
+        skip_if_no_ros2()
         """Test parsing of friend declarations."""
         source = """
         friend class Foo;
@@ -304,6 +321,7 @@ class TestAdvancedCppFeatures:
         assert feature.target == "Foo"
 
     def test_user_defined_literal_parsing(self):
+        skip_if_no_ros2()
         """Test parsing of user-defined literals."""
         source = """
         def operator""_mps(value: long double) -> float {
@@ -320,6 +338,7 @@ class TestAdvancedCppFeatures:
         assert feature.return_type == "float"
 
     def test_template_generation(self):
+        skip_if_no_ros2()
         """Test generation of template code."""
         template_struct = TemplateStructNode(
             name="Foo",
@@ -332,6 +351,7 @@ class TestAdvancedCppFeatures:
         assert "struct Foo" in code
 
     def test_static_assert_generation(self):
+        skip_if_no_ros2()
         """Test generation of static assertions."""
         static_assert = StaticAssertNode(
             condition="sizeof(int) == 4",
@@ -342,6 +362,7 @@ class TestAdvancedCppFeatures:
         assert "static_assert(sizeof(int) == 4" in code
 
     def test_global_constexpr_generation(self):
+        skip_if_no_ros2()
         """Test generation of global constexpr variables."""
         constexpr = GlobalConstexprNode(
             name="PI",
@@ -353,6 +374,7 @@ class TestAdvancedCppFeatures:
         assert "constexpr float PI = 3.14159" in code
 
     def test_operator_overload_generation(self):
+        skip_if_no_ros2()
         """Test generation of operator overloads."""
         operator = OperatorOverloadNode(
             operator="operator+",
@@ -366,6 +388,7 @@ class TestAdvancedCppFeatures:
         assert "return a + 1;" in code
 
     def test_bitfield_generation(self):
+        skip_if_no_ros2()
         """Test generation of bitfields."""
         bitfield = BitfieldNode(
             name="Flags",
@@ -380,6 +403,7 @@ class TestAdvancedCppFeatures:
         assert "enabled : 1" in code
 
     def test_concept_generation(self):
+        skip_if_no_ros2()
         """Test generation of concepts."""
         concept = ConceptNode(
             name="Arithmetic",
@@ -393,6 +417,7 @@ class TestAdvancedCppFeatures:
         assert "concept Arithmetic" in code
 
     def test_user_defined_literal_generation(self):
+        skip_if_no_ros2()
         """Test generation of user-defined literals."""
         literal = UserDefinedLiteralNode(
             literal_suffix="_mps",
@@ -404,6 +429,7 @@ class TestAdvancedCppFeatures:
         assert 'operator""_mps' in code
 
     def test_comprehensive_example(self):
+        skip_if_no_ros2()
         """Test a comprehensive example with multiple advanced C++ features."""
         source = """
         // Template struct
@@ -467,6 +493,7 @@ class TestAdvancedCppFeatures:
         assert "float operator\"\"_deg(long double value)" in generated_code
 
     def test_error_handling(self):
+        skip_if_no_ros2()
         """Test error handling for malformed advanced C++ features."""
         # Test with malformed template
         source = """

@@ -1,4 +1,5 @@
 from robodsl.parsers.lark_parser import parse_robodsl
+from conftest import skip_if_no_ros2, skip_if_no_cuda
 """Tests for RoboDSL validation and linting."""
 
 import pytest
@@ -13,6 +14,7 @@ class TestRoboDSLValidator:
     """Test the RoboDSL validator."""
     
     def test_valid_content(self):
+        skip_if_no_ros2()
         """Test validation of valid RoboDSL content."""
         content = """
         node test_node {
@@ -30,6 +32,7 @@ class TestRoboDSLValidator:
         assert all(issue.level != ValidationLevel.ERROR or 'semantic error' not in (issue.message or '') for issue in issues)
     
     def test_parse_error(self):
+        skip_if_no_ros2()
         """Test validation with parse errors."""
         content = """
         node test_node {
@@ -46,6 +49,7 @@ class TestRoboDSLValidator:
         assert any("parse error" in issue.message.lower() for issue in issues)
     
     def test_semantic_error(self):
+        skip_if_no_ros2()
         """Test validation with semantic errors."""
         content = """
         node test_node {
@@ -62,6 +66,7 @@ class TestRoboDSLValidator:
         assert any("duplicate parameter name" in issue.message.lower() for issue in issues)
     
     def test_style_validation(self):
+        skip_if_no_ros2()
         """Test style validation."""
         content = """
         node test_node {
@@ -77,6 +82,7 @@ class TestRoboDSLValidator:
         assert any(issue.rule_id == "trailing_whitespace" for issue in issues)
     
     def test_naming_conventions(self):
+        skip_if_no_ros2()
         """Test naming convention validation."""
         content = """
         node TestNode {
@@ -94,6 +100,7 @@ class TestRoboDSLValidator:
         assert any(issue.rule_id == "topic_naming_convention" for issue in issues)
     
     def test_best_practices(self):
+        skip_if_no_ros2()
         """Test best practices validation."""
         content = """
         node isolated_node {
@@ -108,6 +115,7 @@ class TestRoboDSLValidator:
         assert any(issue.rule_id == "isolated_node" for issue in issues)
     
     def test_performance_validation(self):
+        skip_if_no_ros2()
         """Test performance validation."""
         content = """
         node test_node {
@@ -131,6 +139,7 @@ class TestRoboDSLValidator:
         assert any(issue.rule_id == "large_qos_depth" for issue in issues)
     
     def test_cuda_kernel_validation(self):
+        skip_if_no_cuda()
         """Test CUDA kernel validation."""
         content = """
         cuda_kernels {
@@ -151,6 +160,7 @@ class TestRoboDSLLinter:
     """Test the RoboDSL linter."""
     
     def test_format_string(self):
+        skip_if_no_ros2()
         """Test string formatting."""
         content = """
         node test_node{
@@ -169,6 +179,7 @@ class TestRoboDSLLinter:
         assert formatted.endswith('\n')
     
     def test_remove_trailing_whitespace(self):
+        skip_if_no_ros2()
         """Test removal of trailing whitespace."""
         content = "node test_node {\n    parameter test_param: 42    \n}"
         
@@ -180,6 +191,7 @@ class TestRoboDSLLinter:
         assert "    parameter test_param: 42    " not in formatted
     
     def test_indentation_fixing(self):
+        skip_if_no_ros2()
         """Test indentation fixing."""
         content = """
         node test_node {
@@ -199,6 +211,7 @@ class TestRoboDSLLinter:
                     assert line.startswith('    ')
     
     def test_check_formatting(self):
+        skip_if_no_ros2()
         """Test formatting check."""
         content = """
         node test_node {
@@ -217,6 +230,7 @@ class TestConvenienceFunctions:
     """Test convenience functions."""
     
     def test_validate_robodsl_file(self, tmp_path):
+        skip_if_no_ros2()
         """Test file validation convenience function."""
         file_path = tmp_path / "test.robodsl"
         file_path.write_text("""
@@ -231,6 +245,7 @@ class TestConvenienceFunctions:
         assert all(issue.level != ValidationLevel.ERROR for issue in issues)
     
     def test_format_robodsl_file(self, tmp_path):
+        skip_if_no_ros2()
         """Test file formatting convenience function."""
         file_path = tmp_path / "test.robodsl"
         file_path.write_text("""

@@ -14,6 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from robodsl.parsers.lark_parser import parse_robodsl
+from conftest import skip_if_no_ros2
 from robodsl.generators.message_generator import MessageGenerator
 from robodsl.generators.simulation_generator import SimulationGenerator
 from robodsl.generators.dynamic_runtime_generator import DynamicRuntimeGenerator

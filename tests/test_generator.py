@@ -12,6 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from robodsl.parsers.lark_parser import parse_robodsl
+from conftest import skip_if_no_ros2
 from robodsl.core.generator import CodeGenerator
 from robodsl.core.ast import RoboDSLAST, NodeNode, NodeContentNode, PublisherNode, SubscriberNode, ServicePrimitiveNode, ParameterNode, ValueNode
 

@@ -6,6 +6,7 @@ import tempfile
 import shutil
 
 from robodsl.parsers.lark_parser import parse_robodsl
+from conftest import skip_if_no_ros2, skip_if_no_cuda
 from robodsl.generators.main_generator import MainGenerator
 from robodsl.core.ast import RoboDSLAST
 
@@ -14,6 +15,7 @@ class TestUseKernelSyntax:
     """Test cases for use_kernel syntax and Thrust integration."""
 
     def test_use_kernel_basic_parsing(self):
+        skip_if_no_ros2()
         """Test basic parsing of use_kernel syntax."""
         robodsl_code = """
         cuda_kernels {
@@ -60,6 +62,7 @@ class TestUseKernelSyntax:
         assert node.content.used_kernels[0] == "test_kernel"
 
     def test_use_kernel_multiple_kernels(self):
+        skip_if_no_ros2()
         """Test using multiple global kernels in a single node."""
         robodsl_code = """
         cuda_kernels {
@@ -132,6 +135,7 @@ class TestUseKernelSyntax:
         assert "kernel2" in node.content.used_kernels
 
     def test_use_kernel_with_embedded_kernels(self):
+        skip_if_no_ros2()
         """Test using both embedded and global kernels in the same node."""
         robodsl_code = """
         cuda_kernels {
@@ -204,6 +208,7 @@ class TestUseKernelSyntax:
         assert node.content.used_kernels[0] == "global_kernel"
 
     def test_use_kernel_code_generation(self):
+        skip_if_no_ros2()
         """Test that use_kernel generates correct C++ code."""
         robodsl_code = """
         cuda_kernels {
@@ -272,6 +277,7 @@ class TestUseKernelSyntax:
             assert "Thrust algorithms are used in this kernel" in cu_content
 
     def test_use_kernel_nonexistent_kernel(self):
+        skip_if_no_ros2()
         """Test that referencing a non-existent kernel doesn't break parsing."""
         robodsl_code = """
         node test_node_2 {
@@ -292,6 +298,7 @@ class TestUseKernelSyntax:
         assert node.content.used_kernels[0] == "nonexistent_kernel"
 
     def test_thrust_usage_detection(self):
+        skip_if_no_ros2()
         """Test that Thrust usage is correctly detected and handled."""
         robodsl_code = """
         cuda_kernels {
@@ -362,6 +369,7 @@ class TestUseKernelSyntax:
             assert "This node uses Thrust algorithms" in header_content
 
     def test_use_kernel_semantic_validation(self):
+        skip_if_no_ros2()
         """Test semantic validation of use_kernel references."""
         robodsl_code = """
         cuda_kernels {
@@ -400,6 +408,7 @@ class TestUseKernelSyntax:
         assert node.content.used_kernels[1] == "kernel1"
 
     def test_use_kernel_in_pipeline_stage(self):
+        skip_if_no_ros2()
         """Test that use_kernel works in pipeline stages as well."""
         robodsl_code = """
         cuda_kernels {

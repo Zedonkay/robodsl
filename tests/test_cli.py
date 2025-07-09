@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 from click.testing import CliRunner
 from robodsl.cli import main
+from conftest import skip_if_no_ros2
 import pytest
 
 def test_cli_help():

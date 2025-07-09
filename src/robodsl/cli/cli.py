@@ -3,6 +3,7 @@
 import os
 import sys
 import click
+import subprocess
 from pathlib import Path
 from typing import Optional, List, Dict
 
@@ -504,6 +505,106 @@ def create_project_structure(project_path: Path) -> None:
     for directory in directories:
         (project_path / directory).mkdir(parents=True, exist_ok=True)
 
+class DependencyChecker:
+    """Check for required dependencies and provide installation instructions."""
+    
+    def __init__(self):
+        self.missing_deps = []
+        self.install_instructions = {
+            'onnxruntime': {
+                'ubuntu': 'sudo apt-get install libonnxruntime-dev',
+                'macos': 'brew install onnxruntime',
+                'pip': 'pip install onnxruntime',
+                'conda': 'conda install -c conda-forge onnxruntime'
+            },
+            'opencv': {
+                'ubuntu': 'sudo apt-get install libopencv-dev',
+                'macos': 'brew install opencv',
+                'pip': 'pip install opencv-python',
+                'conda': 'conda install -c conda-forge opencv'
+            },
+            'tensorrt': {
+                'ubuntu': 'Download from NVIDIA website: https://developer.nvidia.com/tensorrt',
+                'macos': 'Download from NVIDIA website: https://developer.nvidia.com/tensorrt',
+                'pip': 'pip install tensorrt',
+                'conda': 'conda install -c nvidia tensorrt'
+            },
+            'cuda': {
+                'ubuntu': 'sudo apt-get install nvidia-cuda-toolkit',
+                'macos': 'Download from NVIDIA website: https://developer.nvidia.com/cuda-downloads',
+                'pip': 'pip install nvidia-cuda-runtime-cu12',
+                'conda': 'conda install -c nvidia cuda'
+            },
+            'ros2': {
+                'ubuntu': 'sudo apt-get install ros-humble-desktop',
+                'macos': 'brew install ros2',
+                'pip': 'pip install ros2',
+                'conda': 'conda install -c conda-forge ros2'
+            }
+        }
+    
+    def check_dependency(self, name: str, test_commands: list) -> bool:
+        """Check if a dependency is available."""
+        for cmd in test_commands:
+            try:
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    return True
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                continue
+        self.missing_deps.append(name)
+        return False
+    
+    def check_all_dependencies(self) -> bool:
+        """Check all required dependencies."""
+        deps = {
+            'onnxruntime': [
+                ['pkg-config', '--exists', 'onnxruntime'],
+                ['python', '-c', 'import onnxruntime; print(onnxruntime.__version__)']
+            ],
+            'opencv': [
+                ['pkg-config', '--exists', 'opencv4'],
+                ['pkg-config', '--exists', 'opencv'],
+                ['python', '-c', 'import cv2; print(cv2.__version__)']
+            ],
+            'tensorrt': [
+                ['pkg-config', '--exists', 'tensorrt'],
+                ['python', '-c', 'import tensorrt; print(tensorrt.__version__)']
+            ],
+            'cuda': [
+                ['nvcc', '--version'],
+                ['python', '-c', 'import torch; print(torch.version.cuda)']
+            ],
+            'ros2': [
+                ['ros2', '--version'],
+                ['python', '-c', 'import rclpy; print(rclpy.__version__)']
+            ]
+        }
+        
+        all_available = True
+        for dep_name, commands in deps.items():
+            if not self.check_dependency(dep_name, commands):
+                all_available = False
+        
+        return all_available
+    
+    def get_install_instructions(self) -> str:
+        """Get installation instructions for missing dependencies."""
+        if not self.missing_deps:
+            return ""
+        
+        instructions = "\nMissing dependencies detected:\n"
+        for dep in self.missing_deps:
+            instructions += f"\n{dep.upper()}:\n"
+            if dep in self.install_instructions:
+                for method, cmd in self.install_instructions[dep].items():
+                    instructions += f"  {method}: {cmd}\n"
+            else:
+                instructions += f"  Please install {dep} manually\n"
+        
+        instructions += "\nAfter installing dependencies, rerun the command.\n"
+        return instructions
+
 @click.group()
 @click.version_option()
 def main() -> None:
@@ -947,6 +1048,19 @@ def generate_launch_description():
     except Exception as e:
         click.echo(f"Error: {str(e)}", err=True)
         sys.exit(1)
+
+@main.command()
+@click.argument('project_dir', default='.')
+def check_dependencies(project_dir: str) -> None:
+    """Check dependencies for the RoboDSL project."""
+    project_dir = Path(project_dir).resolve()
+    click.echo(f"Checking dependencies in {project_dir}...")
+    
+    checker = DependencyChecker()
+    if checker.check_all_dependencies():
+        click.echo("All dependencies are satisfied.")
+    else:
+        click.echo(checker.get_install_instructions())
 
 if __name__ == "__main__":
     main() 

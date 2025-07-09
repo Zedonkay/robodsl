@@ -6,6 +6,7 @@ import tempfile
 import shutil
 
 from robodsl.parsers.lark_parser import parse_robodsl
+from conftest import skip_if_no_ros2, skip_if_no_cuda, skip_if_no_tensorrt, skip_if_no_onnx
 from robodsl.generators.onnx_integration import OnnxIntegrationGenerator
 from robodsl.core.ast import OnnxModelNode, ModelConfigNode, InputDefNode, OutputDefNode, DeviceNode, OptimizationNode
 
@@ -14,6 +15,8 @@ class TestTensorRTOptimization:
     """Test TensorRT optimization parsing and generation."""
     
     def test_tensorrt_model_parsing(self, parser):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test parsing of ONNX model with TensorRT optimization."""
         dsl_code = '''
         onnx_model resnet50 {
@@ -35,6 +38,8 @@ class TestTensorRTOptimization:
         assert model.config.optimizations[0].optimization == "tensorrt"
     
     def test_tensorrt_generation(self, test_output_dir):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test TensorRT integration code generation."""
         generator = OnnxIntegrationGenerator(str(test_output_dir))
         
@@ -84,6 +89,8 @@ class TestTensorRTOptimization:
         assert "trt_builder_optimization_level = 3" in impl_content
     
     def test_cmake_tensorrt_integration(self, test_output_dir):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test CMake integration with TensorRT."""
         generator = OnnxIntegrationGenerator(str(test_output_dir))
         
@@ -109,6 +116,7 @@ class TestTensorRTOptimization:
         assert "CUDA_SEPARABLE_COMPILATION" in cmake_content
     
     def test_multiple_optimizations(self, parser):
+        skip_if_no_ros2()
         """Test ONNX model with multiple optimizations."""
         dsl_code = '''
         onnx_model yolo_model {
@@ -131,6 +139,8 @@ class TestTensorRTOptimization:
         assert "openvino" in optimization_names
     
     def test_tensorrt_without_cuda(self, parser):
+        skip_if_no_cuda()
+        skip_if_no_tensorrt()
         """Test TensorRT optimization without CUDA device (should still work)."""
         dsl_code = '''
         onnx_model cpu_model {
@@ -152,6 +162,8 @@ class TestTensorRTOptimization:
         assert model.config.optimizations[0].optimization == "tensorrt"
     
     def test_tensorrt_methods_generation(self, test_output_dir):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test that TensorRT-specific methods are generated."""
         generator = OnnxIntegrationGenerator(str(test_output_dir))
         
@@ -180,6 +192,8 @@ class TestTensorRTOptimization:
         assert "validate_tensorrt_engine()" in impl_content
     
     def test_tensorrt_initialization(self, test_output_dir):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test TensorRT initialization in constructor."""
         generator = OnnxIntegrationGenerator(str(test_output_dir))
         

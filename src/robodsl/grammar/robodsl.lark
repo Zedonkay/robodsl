@@ -1,3 +1,6 @@
+// C++ block placeholder for extracted code (must be first to avoid conflicts)
+CPP_BLOCK_PLACEHOLDER: "CPP_BLOCK_PLACEHOLDER"
+
 FROM: "from:"
 TO: "to:"
 NAME: /[a-zA-Z_\u4e00-\u9fff][a-zA-Z0-9_\u4e00-\u9fff]*/
@@ -53,7 +56,7 @@ concept_requirement: cpp_type "operator" operator_symbol LPAR cpp_type (COMMA cp
 operator_symbol: PLUS_OP | MINUS_OP | MULTIPLY_OP | EQUALS | NOT_EQUALS | LESS_THAN | GREATER_THAN | LESS_EQUAL | GREATER_EQUAL | LEFT_SHIFT | RIGHT_SHIFT | FUNCTION_CALL
 REQUIRES: "requires"
 
-start: include_stmt* (data_structure | custom_interface | node_def | cuda_kernels_block | onnx_model | pipeline_def | simulation_config | dynamic_config | raw_cpp_code | advanced_cpp_feature (_NL|SEMICOLON)?)*
+start: include_stmt* (data_structure | custom_interface | node_def | cuda_kernels_block | cuda_kernel_def | onnx_model | pipeline_def | simulation_config | dynamic_config | raw_cpp_code | advanced_cpp_feature (_NL|SEMICOLON)?)*
 
 // Include statements
 include_stmt: "include" ("<" include_path ">" | STRING)
@@ -92,7 +95,7 @@ action_fields: message_field*
 // Dynamic runtime configuration
 dynamic_config: dynamic_parameters | dynamic_remaps
 dynamic_parameters: "dynamic_parameters" LBRACE dynamic_parameter* RBRACE
-dynamic_parameter: PARAMETER NAME NAME "=" value dynamic_param_config?
+dynamic_parameter: PARAMETER cpp_type NAME "=" value dynamic_param_config?
 dynamic_param_config: LBRACE dynamic_param_setting* RBRACE
 dynamic_param_setting: (NAME ":" value) | description
 description: "description" ":" STRING
@@ -140,7 +143,7 @@ node_list: NAME (COMMA NAME)*
 bridge_config: "bridge_config" ":" STRING
 
 // Unified block content for structs, classes, and templates
-block_content: (struct_member | cpp_method | include_stmt)*
+block_content: (struct_member | cpp_method | include_stmt | CPP_BLOCK_PLACEHOLDER)*
 
 // Struct member definitions - unified to handle both regular and bitfield members
 struct_member: cpp_type (NAME array_spec? default_value? | NAME ":" SIGNED_NUMBER) ";"
@@ -151,7 +154,7 @@ struct_def: STRUCT NAME LBRACE block_content RBRACE
 
 // Class definitions
 class_def: "class" NAME inheritance? LBRACE class_content RBRACE
-class_content: (class_access_section | class_direct_member | class_direct_method | include_stmt)*
+class_content: (class_access_section | class_direct_member | class_direct_method | include_stmt | CPP_BLOCK_PLACEHOLDER)*
 class_access_section: access_specifier COLON class_section_content
 class_section_content: (class_section_member | class_section_method)*
 class_section_member: struct_member
@@ -200,7 +203,7 @@ device: "device" ":" (NAME | STRING)
 optimization: "optimization" ":" (NAME | STRING)
 
 // Parameters
-parameter: PARAMETER NAME NAME "=" value
+parameter: PARAMETER cpp_type NAME "=" value
 
 // Lifecycle configuration
 lifecycle: "lifecycle" LBRACE lifecycle_config RBRACE
@@ -251,6 +254,7 @@ flag: "flag" NAME ":" BOOLEAN
 
 // Enhanced C++ methods (Phase 2)
 cpp_method: "method" NAME LBRACE method_content RBRACE
+         | "def" NAME LPAR function_param_list RPAR return_type? (balanced_braces | CPP_BLOCK_PLACEHOLDER)
 method_content: (input_param | output_param | code_block)*
 input_param: "input" ":" cpp_type NAME input_param_size?
 output_param: "output" ":" cpp_type NAME output_param_size?
@@ -261,8 +265,12 @@ method_param_size_item: SIGNED_NUMBER | NAME | STRING | dotted_name
 
 // CUDA kernels block - Developer-friendly with comma-separated parameters
 cuda_kernels_block: CUDA_KERNELS LBRACE kernel_def* RBRACE
+
+// Standalone CUDA kernel definition
+cuda_kernel_def: "cuda_kernel" NAME LBRACE kernel_content RBRACE
+
 kernel_def: KERNEL NAME LBRACE kernel_content RBRACE
-kernel_content: (block_size | grid_size | shared_memory | use_thrust | kernel_input_param | kernel_output_param | code_block | cuda_include)*
+kernel_content: (block_size | grid_size | shared_memory | use_thrust | kernel_input_param | kernel_output_param | kernel_parameters | code_block | cuda_include)*
 
 block_size: "block_size" ":" tuple_expr
 grid_size: "grid_size" ":" tuple_expr
@@ -270,8 +278,11 @@ shared_memory: "shared_memory" ":" expr
 use_thrust: "use_thrust" ":" BOOLEAN
 kernel_input_param: "input" ":" kernel_param_list
 kernel_output_param: "output" ":" kernel_param_list
+kernel_parameters: "parameters" ":" LBRACE kernel_parameter_list RBRACE
+kernel_parameter_list: kernel_parameter_def*
+kernel_parameter_def: cpp_type NAME "=" value
 kernel_param_list: kernel_param (COMMA kernel_param)*
-kernel_param: cpp_type NAME kernel_param_size?
+kernel_param: cpp_type NAME (kernel_param_size | array_spec)?
 cuda_include: "include" ("<" include_path ">" | STRING)
 kernel_param_size: LPAR kernel_param_size_list RPAR
 kernel_param_size_list: kernel_param_size_item (COMMA kernel_param_size_item)*
@@ -354,7 +365,7 @@ use_kernel: "use_kernel" ":" STRING
 SEMICOLON: ";"
 
 // Advanced C++ Features (Phase 8)
-advanced_cpp_feature: concept_def | template_def | static_assert | global_var | operator_overload | constructor_def | preprocessor_directive | function_attribute | function_decl_alt | friend_declaration | user_defined_literal
+advanced_cpp_feature: concept_def | template_def | static_assert | global_var | operator_overload | constructor_def | preprocessor_directive | function_attribute | function_decl_alt | function_decl_def | friend_declaration | user_defined_literal
 
 // Template definitions
 template_def: template_struct | template_class | template_function | template_alias
@@ -374,9 +385,11 @@ template_param_with_default: ("typename" | "class") NAME "=" cpp_type
 function_decl: cpp_type NAME LPAR function_param_list RPAR return_type? balanced_braces
 // Alternative function declaration syntax (for attributes)
 function_decl_alt: NAME LPAR function_param_list RPAR return_type? balanced_braces
-return_type: "->" cpp_type
-function_param_list: function_param (COMMA function_param)*
-function_param: NAME ":" cpp_type default_value?
+// Support for 'def' syntax in function declarations
+function_decl_def: "def" NAME LPAR function_param_list RPAR return_type? balanced_braces
+return_type: "->" cpp_type array_spec?
+function_param_list: (function_param (COMMA function_param)*)?
+function_param: NAME ":" cpp_type array_spec? default_value?
 
 cpp_statement: cpp_keyword | cpp_expression | cpp_semicolon
 cpp_keyword: "return" | "if" | "else" | "for" | "while" | "switch" | "case" | "default" | "break" | "continue"
@@ -448,13 +461,16 @@ DEFAULT: "default"
 BREAK: "break"
 CONTINUE: "continue"
 
+
+
 // C++ type keywords
 LONG: "long"
 DOUBLE: "double"
 
 // C++ types (refactored to avoid ambiguity and reduce/reduce conflicts)
 cpp_type: CONST? base_cpp_type pointer_or_ref*
-base_cpp_type: NAME ("::" NAME)* (LESS_THAN cpp_type (COMMA cpp_type)* GREATER_THAN)? | dotted_name | LONG DOUBLE | "size_t" | "uint32_t"
+base_cpp_type: cpp_type_name | LONG DOUBLE | "size_t" | "uint32_t"
+cpp_type_name: NAME ("::" NAME)* (LESS_THAN cpp_type (COMMA cpp_type)* GREATER_THAN)?
 pointer_or_ref: STAR | AMPERSAND
 
 // AMPERSAND for references (already defined in terminals section)

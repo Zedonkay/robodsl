@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from robodsl.parsers.lark_parser import parse_robodsl
 from robodsl.generators import MainGenerator, CudaKernelGenerator
+from conftest import skip_if_no_cuda
 
 
 class CudaCodeValidator:
@@ -149,6 +150,7 @@ class TestCudaCodeValidation:
         self.generator = CudaKernelGenerator()
     
     def test_basic_cuda_kernel_syntax(self, test_output_dir):
+        skip_if_no_cuda()
         """Test that basic CUDA kernel generation produces valid syntax."""
         source = """
         cuda_kernel basic_kernel {
@@ -170,6 +172,7 @@ class TestCudaCodeValidation:
                 f"Generated CUDA file {cuda_file} has syntax errors"
     
     def test_cuda_memory_management(self, test_output_dir):
+        skip_if_no_cuda()
         """Test that generated CUDA code properly manages memory."""
         source = """
         cuda_kernel memory_kernel {
@@ -194,6 +197,7 @@ class TestCudaCodeValidation:
                 f"CUDA memory management issues in {cuda_file}: {memory_issues}"
     
     def test_cuda_kernel_optimization(self, test_output_dir):
+        skip_if_no_cuda()
         """Test that generated CUDA kernels are optimized."""
         source = """
         cuda_kernel optimized_kernel {
@@ -219,6 +223,7 @@ class TestCudaCodeValidation:
                 f"CUDA kernel optimization issues in {cuda_file}: {optimization_issues}"
     
     def test_cuda_error_handling(self, test_output_dir):
+        skip_if_no_cuda()
         """Test that generated CUDA code handles errors properly."""
         source = """
         cuda_kernel error_handling_kernel {
@@ -243,6 +248,7 @@ class TestCudaCodeValidation:
                 f"CUDA error handling issues in {cuda_file}: {error_issues}"
     
     def test_cuda_performance_patterns(self, test_output_dir):
+        skip_if_no_cuda()
         """Test that generated CUDA code uses performance patterns."""
         source = """
         cuda_kernel performance_kernel {
@@ -267,6 +273,7 @@ class TestCudaCodeValidation:
                 f"CUDA performance pattern issues in {cuda_file}: {performance_issues}"
     
     def test_cuda_best_practices(self, test_output_dir):
+        skip_if_no_cuda()
         """Test that generated CUDA code follows best practices."""
         source = """
         cuda_kernel best_practices_kernel {
@@ -291,6 +298,7 @@ class TestCudaCodeValidation:
                 f"CUDA best practice issues in {cuda_file}: {practice_issues}"
     
     def test_complex_cuda_kernel(self, test_output_dir):
+        skip_if_no_cuda()
         """Test complex CUDA kernel generation."""
         source = """
         cuda_kernel complex_kernel {
@@ -328,6 +336,7 @@ class TestCudaCodeValidation:
                 assert 'shared' in content, f"Shared memory should be used in {cuda_file}"
     
     def test_multiple_cuda_kernels(self, test_output_dir):
+        skip_if_no_cuda()
         """Test generation of multiple CUDA kernels."""
         source = """
         cuda_kernel kernel1 {
@@ -371,6 +380,7 @@ class TestCudaCodeValidation:
                 f"Multiple kernel memory issues in {cuda_file}: {memory_issues}"
     
     def test_cuda_with_cpp_integration(self, test_output_dir):
+        skip_if_no_cuda()
         """Test CUDA kernel integration with C++ code."""
         source = """
         cuda_kernel integrated_kernel {

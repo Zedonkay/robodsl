@@ -3,6 +3,7 @@
 import pytest
 from pathlib import Path
 from robodsl.parsers.lark_parser import parse_robodsl
+from conftest import skip_if_no_ros2
 from robodsl.generators.main_generator import MainGenerator
 
 
@@ -10,6 +11,7 @@ class TestRawCppEdgeCases:
     """Test edge cases and complex C++ syntax in raw C++ code blocks."""
     
     def test_empty_cpp_block(self):
+        skip_if_no_ros2()
         """Test empty C++ code blocks."""
         robodsl_code = """
         cpp: {
@@ -28,6 +30,7 @@ class TestRawCppEdgeCases:
         assert len(ast.nodes) == 1
     
     def test_cpp_block_with_only_whitespace(self):
+        skip_if_no_ros2()
         """Test C++ blocks with only whitespace and comments."""
         robodsl_code = """
         cpp: {
@@ -51,6 +54,7 @@ class TestRawCppEdgeCases:
         assert "/* Multi-line comment */" in code
     
     def test_nested_braces(self):
+        skip_if_no_ros2()
         """Test deeply nested braces in C++ code."""
         robodsl_code = """
         cpp: {
@@ -95,6 +99,7 @@ class TestRawCppEdgeCases:
         assert "switch (value)" in code
     
     def test_template_specialization(self):
+        skip_if_no_ros2()
         """Test complex template specializations."""
         robodsl_code = """
         cpp: {
@@ -139,6 +144,7 @@ class TestRawCppEdgeCases:
         assert "template<typename V>" in code
     
     def test_lambda_expressions(self):
+        skip_if_no_ros2()
         """Test lambda expressions and captures."""
         robodsl_code = """
         cpp: {
@@ -168,6 +174,7 @@ class TestRawCppEdgeCases:
         assert "auto lambda4 = [=, &result](int value) mutable" in code
     
     def test_preprocessor_directives(self):
+        skip_if_no_ros2()
         """Test preprocessor directives and macros."""
         robodsl_code = """
         cpp: {
@@ -209,6 +216,7 @@ class TestRawCppEdgeCases:
         assert "#include <iostream>" in code
     
     def test_string_literals(self):
+        skip_if_no_ros2()
         """Test various string literal types."""
         robodsl_code = r"""
         cpp: {
@@ -240,6 +248,7 @@ class TestRawCppEdgeCases:
         assert 'R"(Raw string with "quotes" and \\backslashes)"' in code
     
     def test_operator_overloading(self):
+        skip_if_no_ros2()
         """Test operator overloading."""
         robodsl_code = """
         cpp: {
@@ -290,6 +299,7 @@ class TestRawCppEdgeCases:
         assert "operator double() const" in code
     
     def test_variadic_templates(self):
+        skip_if_no_ros2()
         """Test variadic templates and fold expressions."""
         robodsl_code = """
         cpp: {
@@ -338,6 +348,7 @@ class TestRawCppEdgeCases:
         assert "return (... + values);" in code
     
     def test_concepts_and_constraints(self):
+        skip_if_no_ros2()
         """Test C++20 concepts and constraints."""
         robodsl_code = """
         cpp: {
@@ -388,6 +399,7 @@ class TestRawCppEdgeCases:
         assert "requires Numeric<T>" in code
     
     def test_coroutines(self):
+        skip_if_no_ros2()
         """Test C++20 coroutines."""
         robodsl_code = """
         cpp: {
@@ -459,6 +471,7 @@ class TestRawCppEdgeCases:
         assert "std::suspend_always" in code
     
     def test_attributes(self):
+        skip_if_no_ros2()
         """Test C++ attributes."""
         robodsl_code = """
         cpp: {
@@ -503,6 +516,7 @@ class TestRawCppEdgeCases:
         assert "class [[nodiscard]] ImportantClass" in code
     
     def test_multiple_cpp_blocks_with_complex_content(self):
+        skip_if_no_ros2()
         """Test multiple C++ blocks with very complex content."""
         robodsl_code = """
         cpp: {
@@ -626,6 +640,7 @@ class TestRawCppEdgeCases:
         assert "[[nodiscard]] T get()" in node_code
     
     def test_generation_with_complex_cpp(self):
+        skip_if_no_ros2()
         """Test that complex C++ code gets properly generated."""
         robodsl_code = """
         cpp: {
@@ -736,12 +751,14 @@ class TestRawCppEdgeCases:
         assert "std::lock_guard<std::mutex>" in source_content
 
     def test_cpp_block_invalid_syntax(self):
+        skip_if_no_ros2()
         robodsl_code = "cpp: { int x = ; } node n { parameter int x = 1 }"
         
         ast = parse_robodsl(robodsl_code)
         assert "int x = ;" in ast.raw_cpp_code[0].code
 
     def test_cpp_block_deeply_nested_templates(self):
+        skip_if_no_ros2()
         robodsl_code = """
         cpp: {
             template<typename T> struct A { template<typename U> struct B { template<typename V> struct C {}; }; };
@@ -753,6 +770,7 @@ class TestRawCppEdgeCases:
         assert "struct C" in ast.raw_cpp_code[0].code
 
     def test_cpp_block_injection(self):
+        skip_if_no_ros2()
         robodsl_code = 'cpp: { int x = 0; /* malicious */ system("rm -rf /"); } node n { parameter int x = 1 }'
         
         ast = parse_robodsl(robodsl_code)

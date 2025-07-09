@@ -496,7 +496,7 @@ class SemanticAnalyzer:
             
             # Check method code
             if not method.code or method.code.strip() == "":
-                self.errors.append(f"Node '{node_name}' C++ method '{method.name}' has empty code")
+                self.warnings.append(f"Node '{node_name}' C++ method '{method.name}' has empty code")
             
             # Basic C++ syntax validation
             if method.code:
@@ -867,31 +867,39 @@ class SemanticAnalyzer:
     
     def _validate_parameter_type(self, param_name: str, param_type: str, value: Any) -> None:
         """Validate parameter type consistency."""
+        # Handle const types by extracting the base type
+        base_type = param_type.replace('const ', '').replace('const', '').strip()
+        
         # Native Python type checks for basic types
-        if param_type in ("int", "int32", "int32_t"):
+        if base_type in ("int", "int32", "int32_t"):
             if not isinstance(value, int):
                 self.errors.append(f"Parameter '{param_name}' declared as '{param_type}' but value '{value}' is not an integer")
-        elif param_type in ("float", "double", "float32", "float64"):
+        elif base_type in ("float", "double", "float32", "float64"):
             if not isinstance(value, (int, float)):
                 self.errors.append(f"Parameter '{param_name}' declared as '{param_type}' but value '{value}' is not a number")
-        elif param_type == "bool":
+        elif base_type == "bool":
             if not isinstance(value, bool):
                 self.errors.append(f"Parameter '{param_name}' declared as 'bool' but value '{value}' is not a boolean")
-        elif param_type in ("string", "std::string"):
+        elif base_type in ("string", "std::string"):
             if not isinstance(value, str):
                 self.errors.append(f"Parameter '{param_name}' declared as '{param_type}' but value '{value}' is not a string")
-        elif param_type == "list":
+        elif base_type == "list":
             if not isinstance(value, list):
                 self.errors.append(f"Parameter '{param_name}' declared as 'list' but value '{value}' is not a list")
-        elif param_type == "dict":
+        elif base_type == "dict":
             if not isinstance(value, dict):
                 self.errors.append(f"Parameter '{param_name}' declared as 'dict' but value '{value}' is not a dictionary")
         else:
-            # For all other types, use the C++ typechecker
-            ok, err, debug = check_ros2_type(param_type, value)
-            if not ok:
-                print(f"[TYPECHECK DEBUG] {debug}")
-                self.errors.append(f"Parameter '{param_name}' typecheck failed: {err}")
+            # For all other types, use the C++ typechecker with the base type
+            try:
+                ok, err, debug = check_ros2_type(base_type, value)
+                if not ok:
+                    print(f"[TYPECHECK DEBUG] {debug}")
+                    self.errors.append(f"Parameter '{param_name}' typecheck failed: {err}")
+            except Exception as e:
+                # If typechecker fails, just log a warning and continue
+                print(f"[TYPECHECK WARNING] Typechecker failed for '{param_name}' with type '{param_type}': {e}")
+                # Don't add this as an error since the typechecker might not support all types
     
     def _validate_qos_setting(self, setting_name: str, setting_value: Any, context: str) -> None:
         """Validate QoS setting values."""

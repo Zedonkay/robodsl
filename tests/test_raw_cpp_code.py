@@ -3,6 +3,7 @@
 import pytest
 from pathlib import Path
 from robodsl.parsers.lark_parser import parse_robodsl
+from conftest import skip_if_no_ros2
 from robodsl.generators.main_generator import MainGenerator
 
 
@@ -10,6 +11,7 @@ class TestRawCppCode:
     """Test raw C++ code blocks inside and outside nodes."""
     
     def test_raw_cpp_code_global(self):
+        skip_if_no_ros2()
         """Test raw C++ code blocks outside nodes."""
         robodsl_code = """
 include <iostream>
@@ -64,6 +66,7 @@ node test_node {
         assert "class VectorProcessor" in global_cpp_content
     
     def test_raw_cpp_code_inside_node(self):
+        skip_if_no_ros2()
         """Test raw C++ code blocks inside nodes."""
         robodsl_code = """
 node test_node {
@@ -114,6 +117,7 @@ node test_node {
         assert "class NodeHelper" in source_content
     
     def test_multiple_raw_cpp_blocks(self):
+        skip_if_no_ros2()
         """Test multiple raw C++ code blocks."""
         robodsl_code = """
 // First global block
@@ -168,6 +172,7 @@ node test_node {
         assert any("NodeClass2" in block.code for block in node.content.raw_cpp_code)
     
     def test_raw_cpp_code_with_complex_syntax(self):
+        skip_if_no_ros2()
         """Test raw C++ code with complex C++ syntax."""
         robodsl_code = """
 cpp: {

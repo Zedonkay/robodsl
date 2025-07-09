@@ -38,6 +38,20 @@
 namespace {{ namespace }} {
 {% endif %}
 
+{% if cuda_kernels %}
+// CUDA kernel parameter structs
+{% for kernel in cuda_kernels %}
+{% if kernel.struct_name %}
+// Struct for {{ kernel.kernel_name }} kernel parameters
+struct {{ kernel.struct_name }} {
+{% for param in kernel.parameters %}
+    {{ param.type }} {{ param.name }};
+{% endfor %}
+};
+{% endif %}
+{% endfor %}
+{% endif %}
+
 class {{ class_name }} : public {{ base_class }} {
 public:
     // Referenced global CUDA kernels

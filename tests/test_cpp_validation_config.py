@@ -5,6 +5,7 @@ that generated C++ code is correct, efficient, and follows best practices.
 """
 
 import pytest
+from conftest import skip_if_no_ros2, skip_if_no_cuda
 from typing import List, Dict, Any
 
 # Test case definitions for comprehensive C++ validation

@@ -6,6 +6,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 from robodsl.parsers.lark_parser import parse_robodsl
+from conftest import skip_if_no_ros2, skip_if_no_cuda
 from robodsl.generators.cpp_node_generator import CppNodeGenerator
 from robodsl.generators.cuda_kernel_generator import CudaKernelGenerator
 from pathlib import Path

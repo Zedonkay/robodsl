@@ -2,6 +2,7 @@ import pytest
 import tempfile
 import os
 from robodsl.parsers.lark_parser import parse_robodsl
+from conftest import skip_if_no_ros2, skip_if_no_cuda, skip_if_no_tensorrt, skip_if_no_onnx
 from robodsl.generators.main_generator import MainGenerator
 from robodsl.core.ast import StageCudaKernelNode, StageOnnxModelNode, KernelNode, OnnxModelNode
 
@@ -10,6 +11,7 @@ class TestCudaOnnxPipelineIntegration:
     """Test CUDA and ONNX integration in pipeline stages."""
     
     def test_pipeline_with_cuda_kernels(self, generator):
+        skip_if_no_cuda()
         """Test pipeline generation with CUDA kernels."""
         robodsl_code = """
         cuda_kernels {
@@ -78,6 +80,8 @@ class TestCudaOnnxPipelineIntegration:
         assert "test_kernel" in cuda_impl
     
     def test_pipeline_with_onnx_models(self, generator):
+        skip_if_no_ros2()
+        skip_if_no_onnx()
         """Test pipeline generation with ONNX models."""
         robodsl_code = """
         onnx_model test_model {
@@ -141,6 +145,8 @@ class TestCudaOnnxPipelineIntegration:
         assert "test_model" in onnx_impl
     
     def test_pipeline_with_both_cuda_and_onnx(self, generator):
+        skip_if_no_cuda()
+        skip_if_no_onnx()
         """Test pipeline generation with both CUDA kernels and ONNX models."""
         robodsl_code = """
         cuda_kernels {
@@ -228,6 +234,8 @@ class TestCudaOnnxPipelineIntegration:
         assert "detector_model_path_" in onnx_header
     
     def test_ast_builder_cuda_onnx_nodes(self):
+        skip_if_no_cuda()
+        skip_if_no_onnx()
         """Test AST builder creates correct CUDA and ONNX node types."""
         robodsl_code = """
         cuda_kernels {
@@ -294,6 +302,7 @@ class TestCudaOnnxPipelineIntegration:
         assert cuda_stage.content.cuda_kernels[0].kernel_name == "test_kernel"
     
     def test_comprehensive_ml_pipeline(self, generator):
+        skip_if_no_ros2()
         """Test a comprehensive ML pipeline with preprocessing, inference, and postprocessing."""
         robodsl_code = """
         cuda_kernels {

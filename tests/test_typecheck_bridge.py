@@ -1,5 +1,6 @@
 import pytest
 from robodsl.utils.typecheck_bridge import check_ros2_type
+from conftest import skip_if_no_ros2
 
 def test_typecheck_vector_float():
     ok, err, _ = check_ros2_type("std::vector<float>", [1.0, 2.0, 3.0])

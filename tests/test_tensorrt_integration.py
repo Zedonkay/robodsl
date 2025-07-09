@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 
 from robodsl.parsers.lark_parser import parse_robodsl
+from conftest import skip_if_no_ros2, skip_if_no_cuda, skip_if_no_tensorrt, skip_if_no_onnx
 from robodsl.generators.onnx_integration import OnnxIntegrationGenerator
 from robodsl.core.ast import (
     OnnxModelNode, ModelConfigNode, InputDefNode, OutputDefNode, 
@@ -18,6 +19,8 @@ class TestTensorRTIntegration:
     """Integration testing for TensorRT with other RoboDSL features."""
     
     def test_tensorrt_with_cuda_kernels(self, parser):
+        skip_if_no_cuda()
+        skip_if_no_tensorrt()
         """Test TensorRT integration with CUDA kernels."""
         dsl_code = '''
         cuda_kernels {
@@ -81,6 +84,8 @@ class TestTensorRTIntegration:
         assert len(ast.nodes[0].content.onnx_models) == 1
     
     def test_tensorrt_with_pipelines(self, parser):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test TensorRT integration with pipeline stages."""
         dsl_code = '''
         onnx_model classification_model {
@@ -154,16 +159,22 @@ class TestTensorRTIntegration:
         assert detection_stage.content.onnx_models[0].model_name == "detection_model"
     
     def test_tensorrt_with_simulation(self, parser):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test TensorRT integration with simulation configuration."""
         # This test is skipped because simulation syntax is not fully implemented
         pytest.skip("Simulation syntax is not fully implemented in the current grammar")
     
     def test_tensorrt_with_dynamic_parameters(self, parser):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test TensorRT integration with dynamic parameters."""
         # This test is skipped because dynamic parameters syntax is not fully implemented
         pytest.skip("Dynamic parameters syntax is not fully implemented in the current grammar")
     
     def test_tensorrt_with_multiple_optimizations(self, parser):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test TensorRT with multiple optimization strategies."""
         dsl_code = '''
         onnx_model multi_opt_model {
@@ -205,6 +216,8 @@ class TestTensorRTIntegration:
         assert "onednn" in opt_names
     
     def test_tensorrt_with_different_devices(self, parser):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test TensorRT with different device configurations."""
         device_configs = [
             ("cuda", "cuda"),
@@ -245,6 +258,8 @@ class TestTensorRTIntegration:
             assert model.config.optimizations[0].optimization == "tensorrt"
     
     def test_tensorrt_with_complex_data_types(self, parser):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test TensorRT with complex data type configurations."""
         dsl_code = '''
         onnx_model complex_types_model {
@@ -301,16 +316,22 @@ class TestTensorRTIntegration:
         assert "int32[1,512]" in output_types
     
     def test_tensorrt_with_methods(self, parser):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test TensorRT integration with custom methods."""
         # This test is skipped because method syntax is not fully implemented
         pytest.skip("Method syntax is not fully implemented in the current grammar")
     
     def test_tensorrt_with_timers(self, parser):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test TensorRT integration with timer-based processing."""
         # This test is skipped because timer syntax is not fully implemented
         pytest.skip("Timer syntax is not fully implemented in the current grammar")
     
     def test_tensorrt_with_lifecycle(self, parser):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test TensorRT integration with lifecycle nodes."""
         # This test is skipped because lifecycle syntax is not fully implemented
         pytest.skip("Lifecycle syntax is not fully implemented in the current grammar") 

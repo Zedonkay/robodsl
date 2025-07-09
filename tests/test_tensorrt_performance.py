@@ -12,6 +12,7 @@ from unittest.mock import Mock, patch, MagicMock
 import numpy as np
 
 from robodsl.parsers.lark_parser import parse_robodsl
+from conftest import skip_if_no_ros2, skip_if_no_cuda, skip_if_no_tensorrt, skip_if_no_onnx
 from robodsl.generators.onnx_integration import OnnxIntegrationGenerator
 from robodsl.core.ast import (
     OnnxModelNode, ModelConfigNode, InputDefNode, OutputDefNode, 
@@ -56,6 +57,8 @@ class TestTensorRTPerformance:
         }
     
     def test_tensorrt_code_generation_performance(self, test_output_dir, performance_models):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test performance of code generation for TensorRT models."""
         generator = OnnxIntegrationGenerator(str(test_output_dir))
         
@@ -89,6 +92,8 @@ class TestTensorRTPerformance:
             assert "AppendExecutionProvider_TensorRT" in impl_content
     
     def test_tensorrt_optimization_levels(self, test_output_dir):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test different TensorRT optimization levels."""
         generator = OnnxIntegrationGenerator(str(test_output_dir))
         
@@ -115,6 +120,8 @@ class TestTensorRTPerformance:
         assert "trt_build_heuristics_enable = true" in impl_content
     
     def test_tensorrt_memory_optimization(self, test_output_dir):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test TensorRT memory optimization features."""
         generator = OnnxIntegrationGenerator(str(test_output_dir))
         
@@ -140,6 +147,8 @@ class TestTensorRTPerformance:
         assert "free_cuda_memory" in impl_content
     
     def test_tensorrt_precision_optimization(self, test_output_dir):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test TensorRT precision optimization features."""
         generator = OnnxIntegrationGenerator(str(test_output_dir))
         
@@ -183,6 +192,8 @@ class TestTensorRTPerformance:
         assert "tensorrt_fp16_enabled_ = false" in impl_content  # INT8 takes precedence
     
     def test_tensorrt_cache_performance(self, test_output_dir):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test TensorRT cache performance features."""
         generator = OnnxIntegrationGenerator(str(test_output_dir))
         
@@ -208,6 +219,8 @@ class TestTensorRTPerformance:
         assert "validate_tensorrt_engine()" in impl_content
     
     def test_tensorrt_batch_processing(self, test_output_dir):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test TensorRT batch processing capabilities."""
         generator = OnnxIntegrationGenerator(str(test_output_dir))
         
@@ -234,6 +247,8 @@ class TestTensorRTPerformance:
             assert "trt_builder_optimization_level = 3" in impl_content
     
     def test_tensorrt_multi_gpu_support(self, test_output_dir):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test TensorRT multi-GPU support."""
         generator = OnnxIntegrationGenerator(str(test_output_dir))
         
@@ -257,6 +272,8 @@ class TestTensorRTPerformance:
             assert "cuda_options.device_id = 0" in impl_content
     
     def test_tensorrt_workspace_optimization(self, test_output_dir):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test TensorRT workspace size optimization."""
         generator = OnnxIntegrationGenerator(str(test_output_dir))
         
@@ -282,6 +299,8 @@ class TestTensorRTPerformance:
             assert "set_tensorrt_workspace_size(" in impl_content
     
     def test_tensorrt_inference_methods_performance(self, test_output_dir):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test performance of different TensorRT inference methods."""
         generator = OnnxIntegrationGenerator(str(test_output_dir))
         
@@ -316,6 +335,8 @@ class TestTensorRTPerformance:
         assert "output_names.data()" in impl_content
     
     def test_tensorrt_error_handling_performance(self, test_output_dir):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test performance of TensorRT error handling."""
         generator = OnnxIntegrationGenerator(str(test_output_dir))
         
@@ -348,6 +369,8 @@ class TestTensorRTPerformance:
             assert feature in impl_content, f"Error handling feature {feature} not found"
     
     def test_tensorrt_initialization_performance(self, test_output_dir):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test performance of TensorRT initialization."""
         generator = OnnxIntegrationGenerator(str(test_output_dir))
         
@@ -378,6 +401,8 @@ class TestTensorRTPerformance:
             assert feature in impl_content, f"Initialization feature {feature} not found"
     
     def test_tensorrt_memory_management_performance(self, test_output_dir):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test performance of TensorRT memory management."""
         generator = OnnxIntegrationGenerator(str(test_output_dir))
         
@@ -410,6 +435,8 @@ class TestTensorRTPerformance:
             assert feature in impl_content, f"Memory management feature {feature} not found"
     
     def test_tensorrt_benchmark_scenarios(self, test_output_dir):
+        skip_if_no_ros2()
+        skip_if_no_tensorrt()
         """Test TensorRT benchmark scenarios."""
         generator = OnnxIntegrationGenerator(str(test_output_dir))
         

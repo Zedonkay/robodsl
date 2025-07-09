@@ -2,6 +2,7 @@
 
 import pytest
 from robodsl.parsers.lark_parser import parse_robodsl
+from conftest import skip_if_no_ros2
 from robodsl.core.ast import RoboDSLAST, NodeNode, PublisherNode, SubscriberNode, ServiceNode, ActionNode, QoSNode, QoSSettingNode
 
 def test_qos_config_parsing():

@@ -20,7 +20,99 @@ from typing import List, Dict, Any
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from robodsl.parsers.lark_parser import parse_robodsl
+from conftest import skip_if_no_cuda, skip_if_no_tensorrt, skip_if_no_onnx
 from robodsl.generators import MainGenerator, OnnxIntegrationGenerator
+
+
+class DependencyChecker:
+    """Check for required dependencies and provide installation instructions."""
+    
+    def __init__(self):
+        self.missing_deps = []
+        self.install_instructions = {
+            'onnxruntime': {
+                'ubuntu': 'sudo apt-get install libonnxruntime-dev',
+                'macos': 'brew install onnxruntime',
+                'pip': 'pip install onnxruntime',
+                'conda': 'conda install -c conda-forge onnxruntime'
+            },
+            'opencv': {
+                'ubuntu': 'sudo apt-get install libopencv-dev',
+                'macos': 'brew install opencv',
+                'pip': 'pip install opencv-python',
+                'conda': 'conda install -c conda-forge opencv'
+            },
+            'tensorrt': {
+                'ubuntu': 'Download from NVIDIA website: https://developer.nvidia.com/tensorrt',
+                'macos': 'Download from NVIDIA website: https://developer.nvidia.com/tensorrt',
+                'pip': 'pip install tensorrt',
+                'conda': 'conda install -c nvidia tensorrt'
+            },
+            'cuda': {
+                'ubuntu': 'sudo apt-get install nvidia-cuda-toolkit',
+                'macos': 'Download from NVIDIA website: https://developer.nvidia.com/cuda-downloads',
+                'pip': 'pip install nvidia-cuda-runtime-cu12',
+                'conda': 'conda install -c nvidia cuda'
+            }
+        }
+    
+    def check_dependency(self, name: str, test_commands: list) -> bool:
+        """Check if a dependency is available."""
+        for cmd in test_commands:
+            try:
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    return True
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                continue
+        self.missing_deps.append(name)
+        return False
+    
+    def check_all_dependencies(self) -> bool:
+        """Check all required dependencies."""
+        deps = {
+            'onnxruntime': [
+                ['pkg-config', '--exists', 'onnxruntime'],
+                ['python', '-c', 'import onnxruntime; print(onnxruntime.__version__)']
+            ],
+            'opencv': [
+                ['pkg-config', '--exists', 'opencv4'],
+                ['pkg-config', '--exists', 'opencv'],
+                ['python', '-c', 'import cv2; print(cv2.__version__)']
+            ],
+            'tensorrt': [
+                ['pkg-config', '--exists', 'tensorrt'],
+                ['python', '-c', 'import tensorrt; print(tensorrt.__version__)']
+            ],
+            'cuda': [
+                ['nvcc', '--version'],
+                ['python', '-c', 'import torch; print(torch.version.cuda)']
+            ]
+        }
+        
+        all_available = True
+        for dep_name, commands in deps.items():
+            if not self.check_dependency(dep_name, commands):
+                all_available = False
+        
+        return all_available
+    
+    def get_install_instructions(self) -> str:
+        """Get installation instructions for missing dependencies."""
+        if not self.missing_deps:
+            return ""
+        
+        instructions = "\nMissing dependencies detected:\n"
+        for dep in self.missing_deps:
+            instructions += f"\n{dep.upper()}:\n"
+            if dep in self.install_instructions:
+                for method, cmd in self.install_instructions[dep].items():
+                    instructions += f"  {method}: {cmd}\n"
+            else:
+                instructions += f"  Please install {dep} manually\n"
+        
+        instructions += "\nAfter installing dependencies, rerun the tests.\n"
+        return instructions
 
 
 class OnnxTensorRTValidator:
@@ -35,21 +127,43 @@ class OnnxTensorRTValidator:
             '-std=c++17', '-Wall', '-Wextra', '-O2',
             '-arch=sm_60', '-DNDEBUG'
         ]
+        self.dependency_checker = DependencyChecker()
     
     def validate_syntax(self, cpp_code: str, filename: str = "test.cpp") -> bool:
         """Validate C++ syntax using g++ compiler."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.cpp', delete=False) as f:
-            f.write(cpp_code)
-            temp_file = f.name
-        
-        try:
-            cmd = ['g++'] + self.compiler_flags + ['-c', temp_file, '-o', '/dev/null']
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-            return result.returncode == 0
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            return False
-        finally:
-            os.unlink(temp_file)
+        import tempfile, os
+        # Check if this is a header file
+        if filename.endswith('.hpp') or filename.endswith('.h'):
+            with tempfile.TemporaryDirectory() as tempdir:
+                header_basename = os.path.basename(filename)
+                header_path = os.path.join(tempdir, header_basename)
+                with open(header_path, 'w') as f:
+                    f.write(cpp_code)
+                test_source = f"""
+#include \"{header_basename}\"
+int main() {{ return 0; }}
+"""
+                test_cpp_path = os.path.join(tempdir, 'test.cpp')
+                with open(test_cpp_path, 'w') as f:
+                    f.write(test_source)
+                try:
+                    cmd = ['g++'] + self.compiler_flags + ['-c', test_cpp_path, '-I', tempdir, '-o', os.devnull]
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                    return result.returncode == 0
+                except (subprocess.TimeoutExpired, FileNotFoundError):
+                    return False
+        else:
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.cpp', delete=False) as f:
+                f.write(cpp_code)
+                temp_file = f.name
+            try:
+                cmd = ['g++'] + self.compiler_flags + ['-c', temp_file, '-o', '/dev/null']
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                return result.returncode == 0
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                return False
+            finally:
+                os.unlink(temp_file)
     
     def validate_cuda_syntax(self, cuda_code: str, filename: str = "test.cu") -> bool:
         """Validate CUDA syntax using nvcc compiler."""
@@ -193,6 +307,14 @@ class OnnxTensorRTValidator:
             issues.append("Null pointer checks should be performed")
         
         return issues
+    
+    def check_dependencies(self) -> bool:
+        """Check if required dependencies are available."""
+        return self.dependency_checker.check_all_dependencies()
+    
+    def get_missing_deps_message(self) -> str:
+        """Get message about missing dependencies."""
+        return self.dependency_checker.get_install_instructions()
 
 
 class TestOnnxTensorRTValidation:
@@ -204,7 +326,12 @@ class TestOnnxTensorRTValidation:
         self.generator = MainGenerator()
     
     def test_basic_onnx_model_generation(self, test_output_dir):
+        skip_if_no_onnx()
         """Test basic ONNX model generation produces valid C++ syntax."""
+        # Check dependencies first
+        if not self.validator.check_dependencies():
+            pytest.skip(f"Skipping test due to missing dependencies:{self.validator.get_missing_deps_message()}")
+        
         source = """
         onnx_model basic_model {
             config {
@@ -236,7 +363,13 @@ class TestOnnxTensorRTValidation:
                 f"Generated ONNX file {onnx_file} has syntax errors"
     
     def test_onnx_with_tensorrt_optimization(self, test_output_dir):
+        skip_if_no_tensorrt()
+        skip_if_no_onnx()
         """Test ONNX model generation with TensorRT optimization."""
+        # Check dependencies first
+        if not self.validator.check_dependencies():
+            pytest.skip(f"Skipping test due to missing dependencies:{self.validator.get_missing_deps_message()}")
+        
         source = """
         onnx_model tensorrt_model {
             config {
@@ -281,6 +414,8 @@ class TestOnnxTensorRTValidation:
                 f"TensorRT integration issues in {onnx_file}: {tensorrt_issues}"
     
     def test_onnx_with_cuda_integration(self, test_output_dir):
+        skip_if_no_cuda()
+        skip_if_no_onnx()
         """Test ONNX model generation with CUDA integration."""
         source = """
         onnx_model cuda_model {
@@ -317,6 +452,7 @@ class TestOnnxTensorRTValidation:
                 f"CUDA integration issues in {onnx_file}: {cuda_issues}"
     
     def test_onnx_memory_management(self, test_output_dir):
+        skip_if_no_onnx()
         """Test that ONNX code properly manages memory."""
         source = """
         onnx_model memory_model {
@@ -343,6 +479,7 @@ class TestOnnxTensorRTValidation:
                 f"Memory management issues in {onnx_file}: {memory_issues}"
     
     def test_onnx_performance_optimization(self, test_output_dir):
+        skip_if_no_onnx()
         """Test that ONNX code includes performance optimizations."""
         source = """
         onnx_model perf_model {
@@ -369,6 +506,7 @@ class TestOnnxTensorRTValidation:
                 f"Performance optimization issues in {onnx_file}: {perf_issues}"
     
     def test_onnx_error_handling(self, test_output_dir):
+        skip_if_no_onnx()
         """Test that ONNX code includes proper error handling."""
         source = """
         onnx_model error_model {
@@ -395,7 +533,12 @@ class TestOnnxTensorRTValidation:
                 f"Error handling issues in {onnx_file}: {error_issues}"
     
     def test_complex_onnx_model(self, test_output_dir):
+        skip_if_no_onnx()
         """Test complex ONNX model with multiple features."""
+        # Check dependencies first
+        if not self.validator.check_dependencies():
+            pytest.skip(f"Skipping test due to missing dependencies:{self.validator.get_missing_deps_message()}")
+        
         source = """
         onnx_model complex_model {
             config {
@@ -437,7 +580,12 @@ class TestOnnxTensorRTValidation:
                 f"Too many issues in complex ONNX model {onnx_file}: {total_issues} total issues"
     
     def test_onnx_in_pipeline(self, test_output_dir):
+        skip_if_no_onnx()
         """Test ONNX model integration in pipeline."""
+        # Check dependencies first
+        if not self.validator.check_dependencies():
+            pytest.skip(f"Skipping test due to missing dependencies:{self.validator.get_missing_deps_message()}")
+        
         source = """
         onnx_model pipeline_model {
             config {
@@ -482,6 +630,7 @@ class TestOnnxTensorRTValidation:
                 f"Pipeline file {pipeline_file} has syntax errors"
     
     def test_tensorrt_specific_features(self, test_output_dir):
+        skip_if_no_tensorrt()
         """Test TensorRT-specific features."""
         source = """
         onnx_model tensorrt_features {
@@ -515,7 +664,12 @@ class TestOnnxTensorRTValidation:
                 f"TensorRT workspace size should be configured in {onnx_file}"
     
     def test_onnx_edge_cases(self, test_output_dir):
+        skip_if_no_onnx()
         """Test ONNX model generation with edge cases."""
+        # Check dependencies first
+        if not self.validator.check_dependencies():
+            pytest.skip(f"Skipping test due to missing dependencies:{self.validator.get_missing_deps_message()}")
+        
         source = """
         onnx_model edge_case_model {
             config {
@@ -539,7 +693,12 @@ class TestOnnxTensorRTValidation:
                 f"Edge case ONNX model compilation failed in {onnx_file}"
     
     def test_large_scale_onnx(self, test_output_dir):
+        skip_if_no_onnx()
         """Test large-scale ONNX model generation."""
+        # Check dependencies first
+        if not self.validator.check_dependencies():
+            pytest.skip(f"Skipping test due to missing dependencies:{self.validator.get_missing_deps_message()}")
+        
         source = """
         // Generate multiple ONNX models to test scalability
         """

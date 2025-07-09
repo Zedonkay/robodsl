@@ -6,6 +6,7 @@ import tempfile
 import shutil
 
 from robodsl.parsers.lark_parser import parse_robodsl
+from conftest import skip_if_no_ros2
 from robodsl.generators.pipeline_generator import PipelineGenerator
 from robodsl.core.ast import PipelineNode, StageNode, StageContentNode, PipelineContentNode, StageInputNode, StageOutputNode, StageMethodNode, StageModelNode, StageTopicNode
 
@@ -14,6 +15,7 @@ class TestPipelineGenerator:
     """Test pipeline generator functionality."""
     
     def test_pipeline_parsing(self):
+        skip_if_no_ros2()
         """Test that pipeline syntax is parsed correctly."""
         # Simple pipeline definition
         pipeline_text = """
@@ -65,6 +67,7 @@ class TestPipelineGenerator:
         assert stage2.content.topics[0].topic_path == "/test/topic"
     
     def test_pipeline_generation(self, test_output_dir):
+        skip_if_no_ros2()
         """Test that pipeline generates correct files."""
         generator = PipelineGenerator(output_dir=str(test_output_dir))
         
@@ -128,6 +131,7 @@ class TestPipelineGenerator:
         assert "stage2_node" in launch_content
     
     def test_pipeline_with_models(self, test_output_dir):
+        skip_if_no_ros2()
         """Test pipeline generation with ML models."""
         generator = PipelineGenerator(output_dir=str(test_output_dir))
         
@@ -159,6 +163,7 @@ class TestPipelineGenerator:
         assert "yolo_model" in doc_content
     
     def test_complex_pipeline(self, test_output_dir):
+        skip_if_no_ros2()
         """Test a more complex pipeline with multiple stages and configurations."""
         generator = PipelineGenerator(output_dir=str(test_output_dir))
         
@@ -232,12 +237,14 @@ class TestPipelineGenerator:
         assert "ml_model" in analysis_content
 
     def test_empty_pipeline(self):
+        skip_if_no_ros2()
         dsl = "pipeline p { }"
         
         ast = parse_robodsl(dsl)
         assert ast.pipelines and len(ast.pipelines[0].content.stages) == 0
 
     def test_pipeline_cyclic(self):
+        skip_if_no_ros2()
         dsl = """
         pipeline p {
             stage s1 { input: "s2" output: "s1" }
@@ -250,12 +257,14 @@ class TestPipelineGenerator:
         assert len(ast.pipelines[0].content.stages) == 2
 
     def test_pipeline_missing_stage_io(self):
+        skip_if_no_ros2()
         dsl = "pipeline p { stage s1 { } }"
         
         ast = parse_robodsl(dsl)
         assert len(ast.pipelines[0].content.stages) == 1
 
     def test_pipeline_invalid_stage_name(self):
+        skip_if_no_ros2()
         dsl = 'pipeline p { stage 123 { input: "a" output: "b" } }'
         
         with pytest.raises(Exception):

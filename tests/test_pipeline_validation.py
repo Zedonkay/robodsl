@@ -20,7 +20,89 @@ from typing import List, Dict, Any
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from robodsl.parsers.lark_parser import parse_robodsl
+from conftest import skip_if_no_ros2, skip_if_no_cuda, skip_if_no_tensorrt, skip_if_no_onnx
 from robodsl.generators import MainGenerator, PipelineGenerator
+
+
+class DependencyChecker:
+    """Check for required dependencies and provide installation instructions."""
+    
+    def __init__(self):
+        self.missing_deps = []
+        self.install_instructions = {
+            'ros2': {
+                'ubuntu': 'sudo apt-get install ros-humble-desktop',
+                'macos': 'brew install ros2',
+                'pip': 'pip install ros2',
+                'conda': 'conda install -c conda-forge ros2'
+            },
+            'opencv': {
+                'ubuntu': 'sudo apt-get install libopencv-dev',
+                'macos': 'brew install opencv',
+                'pip': 'pip install opencv-python',
+                'conda': 'conda install -c conda-forge opencv'
+            },
+            'cuda': {
+                'ubuntu': 'sudo apt-get install nvidia-cuda-toolkit',
+                'macos': 'Download from NVIDIA website: https://developer.nvidia.com/cuda-downloads',
+                'pip': 'pip install nvidia-cuda-runtime-cu12',
+                'conda': 'conda install -c nvidia cuda'
+            }
+        }
+    
+    def check_dependency(self, name: str, test_commands: list) -> bool:
+        """Check if a dependency is available."""
+        for cmd in test_commands:
+            try:
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    return True
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                continue
+        self.missing_deps.append(name)
+        return False
+    
+    def check_all_dependencies(self) -> bool:
+        """Check all required dependencies."""
+        deps = {
+            'ros2': [
+                ['ros2', '--version'],
+                ['python', '-c', 'import rclpy; print(rclpy.__version__)']
+            ],
+            'opencv': [
+                ['pkg-config', '--exists', 'opencv4'],
+                ['pkg-config', '--exists', 'opencv'],
+                ['python', '-c', 'import cv2; print(cv2.__version__)']
+            ],
+            'cuda': [
+                ['nvcc', '--version'],
+                ['python', '-c', 'import torch; print(torch.version.cuda)']
+            ]
+        }
+        
+        all_available = True
+        for dep_name, commands in deps.items():
+            if not self.check_dependency(dep_name, commands):
+                all_available = False
+        
+        return all_available
+    
+    def get_install_instructions(self) -> str:
+        """Get installation instructions for missing dependencies."""
+        if not self.missing_deps:
+            return ""
+        
+        instructions = "\nMissing dependencies detected:\n"
+        for dep in self.missing_deps:
+            instructions += f"\n{dep.upper()}:\n"
+            if dep in self.install_instructions:
+                for method, cmd in self.install_instructions[dep].items():
+                    instructions += f"  {method}: {cmd}\n"
+            else:
+                instructions += f"  Please install {dep} manually\n"
+        
+        instructions += "\nAfter installing dependencies, rerun the tests.\n"
+        return instructions
 
 
 class PipelineValidator:
@@ -35,21 +117,51 @@ class PipelineValidator:
             '-std=c++17', '-Wall', '-Wextra', '-O2',
             '-arch=sm_60', '-DNDEBUG'
         ]
+        self.dependency_checker = DependencyChecker()
+    
+    def check_dependencies(self) -> bool:
+        """Check if required dependencies are available."""
+        return self.dependency_checker.check_all_dependencies()
+    
+    def get_missing_deps_message(self) -> str:
+        """Get message about missing dependencies."""
+        return self.dependency_checker.get_install_instructions()
     
     def validate_syntax(self, cpp_code: str, filename: str = "test.cpp") -> bool:
         """Validate C++ syntax using g++ compiler."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.cpp', delete=False) as f:
-            f.write(cpp_code)
-            temp_file = f.name
-        
-        try:
-            cmd = ['g++'] + self.compiler_flags + ['-c', temp_file, '-o', '/dev/null']
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-            return result.returncode == 0
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            return False
-        finally:
-            os.unlink(temp_file)
+        import tempfile, os
+        # Check if this is a header file
+        if filename.endswith('.hpp') or filename.endswith('.h'):
+            with tempfile.TemporaryDirectory() as tempdir:
+                header_basename = os.path.basename(filename)
+                header_path = os.path.join(tempdir, header_basename)
+                with open(header_path, 'w') as f:
+                    f.write(cpp_code)
+                test_source = f"""
+#include \"{header_basename}\"
+int main() {{ return 0; }}
+"""
+                test_cpp_path = os.path.join(tempdir, 'test.cpp')
+                with open(test_cpp_path, 'w') as f:
+                    f.write(test_source)
+                try:
+                    cmd = ['g++'] + self.compiler_flags + ['-c', test_cpp_path, '-I', tempdir, '-o', os.devnull]
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                    return result.returncode == 0
+                except (subprocess.TimeoutExpired, FileNotFoundError):
+                    return False
+        else:
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.cpp', delete=False) as f:
+                f.write(cpp_code)
+                temp_file = f.name
+            try:
+                cmd = ['g++'] + self.compiler_flags + ['-c', temp_file, '-o', '/dev/null']
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                return result.returncode == 0
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                return False
+            finally:
+                os.unlink(temp_file)
     
     def validate_cuda_syntax(self, cuda_code: str, filename: str = "test.cu") -> bool:
         """Validate CUDA syntax using nvcc compiler."""
@@ -168,7 +280,12 @@ class TestPipelineValidation:
         self.generator = PipelineGenerator()
     
     def test_basic_pipeline_generation(self, test_output_dir):
+        skip_if_no_ros2()
         """Test basic pipeline generation produces valid C++ syntax."""
+        # Check dependencies first
+        if not self.validator.check_dependencies():
+            pytest.skip(f"Skipping test due to missing dependencies:{self.validator.get_missing_deps_message()}")
+        
         source = """
         pipeline basic_pipeline {
             stage preprocessing {
@@ -209,6 +326,7 @@ class TestPipelineValidation:
                 f"Generated pipeline C++ file {cpp_file} has syntax errors"
     
     def test_pipeline_with_cuda_kernels(self, test_output_dir):
+        skip_if_no_cuda()
         """Test pipeline generation with CUDA kernels."""
         source = """
         cuda_kernels {
@@ -266,6 +384,8 @@ class TestPipelineValidation:
                 f"Pipeline CUDA file {cuda_file} has syntax errors"
     
     def test_pipeline_with_onnx_models(self, test_output_dir):
+        skip_if_no_ros2()
+        skip_if_no_onnx()
         """Test pipeline generation with ONNX models."""
         source = """
         onnx_model inference_model {
@@ -315,6 +435,7 @@ class TestPipelineValidation:
                 f"ONNX integration issues in {cpp_file}: {onnx_issues}"
     
     def test_complex_pipeline(self, test_output_dir):
+        skip_if_no_ros2()
         """Test complex pipeline with multiple stages and features."""
         source = """
         cuda_kernel preprocess_kernel {
@@ -405,6 +526,7 @@ class TestPipelineValidation:
                 f"Complex pipeline CUDA file {cuda_file} has syntax errors"
     
     def test_pipeline_memory_management(self, test_output_dir):
+        skip_if_no_ros2()
         """Test that pipeline code properly manages memory."""
         source = """
         pipeline memory_test_pipeline {
@@ -437,6 +559,7 @@ class TestPipelineValidation:
                     f"Pipeline classes should have proper cleanup in {cpp_file}"
     
     def test_pipeline_performance_optimization(self, test_output_dir):
+        skip_if_no_ros2()
         """Test that pipeline code includes performance optimizations."""
         source = """
         pipeline performance_pipeline {
@@ -464,6 +587,7 @@ class TestPipelineValidation:
                 f"Too many performance issues in {cpp_file}: {perf_issues}"
     
     def test_pipeline_error_handling(self, test_output_dir):
+        skip_if_no_ros2()
         """Test that pipeline code includes proper error handling."""
         source = """
         pipeline error_handling_pipeline {
@@ -498,6 +622,7 @@ class TestPipelineValidation:
                     f"Pipeline should include error handling in {cpp_file}"
     
     def test_pipeline_ros2_integration(self, test_output_dir):
+        skip_if_no_ros2()
         """Test that pipeline code properly integrates with ROS2."""
         source = """
         pipeline ros2_pipeline {
@@ -525,6 +650,7 @@ class TestPipelineValidation:
                 f"Pipeline should have ROS2 publishers/subscribers in {cpp_file}"
     
     def test_pipeline_edge_cases(self, test_output_dir):
+        skip_if_no_ros2()
         """Test pipeline generation with edge cases."""
         source = """
         pipeline edge_case_pipeline {
@@ -551,12 +677,13 @@ class TestPipelineValidation:
                 f"Edge case pipeline compilation failed in {cpp_file}"
     
     def test_large_scale_pipeline(self, test_output_dir):
+        skip_if_no_ros2()
         """Test large-scale pipeline generation."""
         source = """
-        // Generate multiple stages to test scalability
+        pipeline large_scale_pipeline {
         """
         
-        # Add multiple stages
+        # Add multiple stages inside the pipeline
         for i in range(5):
             source += f"""
             stage stage_{i} {{
@@ -566,13 +693,6 @@ class TestPipelineValidation:
                 topic: /pipeline/stage_{i}
             }}
             """
-        
-        source += """
-        pipeline large_scale_pipeline {
-        """
-        
-        for i in range(5):
-            source += f"    stage stage_{i}\n"
         
         source += "}"
         

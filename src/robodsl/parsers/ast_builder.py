@@ -58,7 +58,30 @@ class ASTBuilder:
         try:
             for child in tree.children:
                 if isinstance(child, Tree):
-                    self._process_node(child)
+                    if child.data == "cuda_kernel_def":
+                        self._process_cuda_kernel_def(child)
+                    elif child.data == "data_structure":
+                        self._process_data_structure(child)
+                    elif child.data == "custom_interface":
+                        self._process_custom_interface(child)
+                    elif child.data == "node_def":
+                        self._process_node_def(child)
+                    elif child.data == "cuda_kernels_block":
+                        self._process_cuda_kernels_block(child)
+                    elif child.data == "onnx_model":
+                        self._process_onnx_model(child)
+                    elif child.data == "pipeline_def":
+                        self._process_pipeline_def(child)
+                    elif child.data == "simulation_config":
+                        self._process_simulation_config(child)
+                    elif child.data == "dynamic_config":
+                        self._process_dynamic_config(child)
+                    elif child.data == "raw_cpp_code":
+                        self._process_raw_cpp_code(child)
+                    elif child.data == "advanced_cpp_feature":
+                        self._process_advanced_cpp_feature(child)
+                    else:
+                        self._process_node(child)
         except Exception as e:
             if self.debug:
                 print(f"Error during AST building: {e}")
@@ -406,7 +429,7 @@ class ASTBuilder:
                     if child.data == "access_specifier":
                         current_access = str(child.children[0]) if child.children else "public"
                     elif child.data == "cpp_type":
-                        class_name = self._extract_token_value(child)
+                        class_name = self._extract_cpp_type_string(child)
                         base_classes.append((current_access, class_name))
                         current_access = "public"  # Reset for next base class
                 else:
@@ -426,48 +449,53 @@ class ASTBuilder:
         try:
             name = str(node.children[0])
             method = CppMethodNode(name=name)
-            print(f"[DEBUG] _process_cpp_method: method name: {name}")
-            # Process method_content child
-            if len(node.children) > 1 and isinstance(node.children[1], Tree) and node.children[1].data == "method_content":
-                method_content = node.children[1]
-                print(f"[DEBUG] Processing method_content with {len(method_content.children)} children")
-                for child in method_content.children:
-                    if isinstance(child, Tree):
-                        print(f"[DEBUG] method_content child: {child}, data: {child.data}")
-                        if child.data == "input_param":
-                            method.inputs.append(self._process_method_param(child))
-                        elif child.data == "output_param":
-                            method.outputs.append(self._process_method_param(child))
-                        elif child.data == "code_block":
-                            print(f"[DEBUG] Calling _extract_code_from_block for code_block: {child}")
-                            method.code = self._extract_code_from_block(child)
-            else:
-                # Legacy format - direct children
-                for child in node.children[1:]:
-                    if isinstance(child, Tree):
-                        print(f"[DEBUG] legacy child: {child}, data: {child.data}")
-                        if child.data == "method_content":
-                            print(f"[DEBUG] Recursively processing legacy method_content child")
-                            for subchild in child.children:
-                                if isinstance(subchild, Tree):
-                                    print(f"[DEBUG] legacy method_content subchild: {subchild}, data: {subchild.data}")
-                                    if subchild.data == "input_param":
-                                        method.inputs.append(self._process_method_param(subchild))
-                                    elif subchild.data == "output_param":
-                                        method.outputs.append(self._process_method_param(subchild))
-                                    elif subchild.data == "code_block":
-                                        print(f"[DEBUG] Calling _extract_code_from_block for code_block: {subchild}")
-                                        method.code = self._extract_code_from_block(subchild)
-                        elif child.data == "input_param":
-                            method.inputs.append(self._process_method_param(child))
-                        elif child.data == "output_param":
-                            method.outputs.append(self._process_method_param(child))
-                        elif child.data == "code_block":
-                            print(f"[DEBUG] Calling _extract_code_from_block for code_block: {child}")
-                            method.code = self._extract_code_from_block(child)
+            if self.debug:
+                print(f"[DEBUG] _process_cpp_method: method name: {name}")
+            
+            # Process method parameters and code
+            for child in node.children[1:]:
+                if isinstance(child, Tree):
+                    if self.debug:
+                        print(f"[DEBUG] Processing child: {child.data}")
+                    
+                    if child.data == "method_content":
+                        # Handle method_content structure
+                        for subchild in child.children:
+                            if isinstance(subchild, Tree):
+                                if subchild.data == "input_param":
+                                    method.inputs.append(self._process_method_param(subchild))
+                                elif subchild.data == "output_param":
+                                    method.outputs.append(self._process_method_param(subchild))
+                                elif subchild.data == "code_block":
+                                    method.code = self._extract_code_from_block(subchild)
+                                elif subchild.data == "balanced_braces":
+                                    method.code = self._extract_code_from_balanced_braces(subchild)
+                    elif child.data == "input_param":
+                        method.inputs.append(self._process_method_param(child))
+                    elif child.data == "output_param":
+                        method.outputs.append(self._process_method_param(child))
+                    elif child.data == "code_block":
+                        method.code = self._extract_code_from_block(child)
+                    elif child.data == "balanced_braces":
+                        method.code = self._extract_code_from_balanced_braces(child)
+                    elif child.data == "function_param_list":
+                        # Handle function parameters directly
+                        method.inputs = self._process_function_param_list(child)
+                    elif child.data == "return_type":
+                        # Handle return type
+                        method.outputs = [MethodParamNode(
+                            param_type=self._extract_cpp_type_string(child.children[0]),
+                            param_name="return_value",
+                            size_expr=None
+                        )]
+            
+            if self.debug:
+                print(f"[DEBUG] Method {name} - inputs: {len(method.inputs)}, outputs: {len(method.outputs)}, code: {method.code[:50] if method.code else 'None'}")
+            
             return method
         except Exception as e:
-            print(f"Error processing C++ method: {e}")
+            if self.debug:
+                print(f"Error processing C++ method: {e}")
             self.errors.append(f"C++ method error: {e}")
             return CppMethodNode(name="")
     
@@ -852,7 +880,8 @@ class ASTBuilder:
                     print(f"Parameter node children: {[str(c) for c in node.children]}")
                 return ParameterNode(type="", name="", value=None)
             
-            param_type = str(node.children[1])  # NAME is at index 1, PARAMETER is at index 0
+            # Use _extract_cpp_type_string to convert cpp_type tree to string
+            param_type = self._extract_cpp_type_string(node.children[1])
             name = str(node.children[2])  # NAME is at index 2
             value = self._process_value(node.children[3])  # value is at index 3
             return ParameterNode(type=param_type, name=name, value=value)
@@ -950,7 +979,12 @@ class ASTBuilder:
         msg_type_node = node.children[1]
         if isinstance(msg_type_node, Tree):
             if msg_type_node.data == "topic_type":
-                msg_type = str(msg_type_node.children[0]).strip('"')
+                # Handle both quoted strings and NAME ("/" NAME)+ syntax
+                if len(msg_type_node.children) == 1:
+                    msg_type = str(msg_type_node.children[0]).strip('"')
+                else:
+                    # Concatenate all children for NAME ("/" NAME)+ syntax
+                    msg_type = "/".join(str(child) for child in msg_type_node.children)
             else:
                 msg_type = str(msg_type_node)
         else:
@@ -985,7 +1019,12 @@ class ASTBuilder:
         msg_type_node = node.children[1]
         if isinstance(msg_type_node, Tree):
             if msg_type_node.data == "topic_type":
-                msg_type = str(msg_type_node.children[0]).strip('"')
+                # Handle both quoted strings and NAME ("/" NAME)+ syntax
+                if len(msg_type_node.children) == 1:
+                    msg_type = str(msg_type_node.children[0]).strip('"')
+                else:
+                    # Concatenate all children for NAME ("/" NAME)+ syntax
+                    msg_type = "/".join(str(child) for child in msg_type_node.children)
             else:
                 msg_type = str(msg_type_node)
         else:
@@ -1020,7 +1059,12 @@ class ASTBuilder:
         srv_type_node = node.children[1]
         if isinstance(srv_type_node, Tree):
             if srv_type_node.data == "topic_type":
-                srv_type = str(srv_type_node.children[0]).strip('"')
+                # Handle both quoted strings and NAME ("/" NAME)+ syntax
+                if len(srv_type_node.children) == 1:
+                    srv_type = str(srv_type_node.children[0]).strip('"')
+                else:
+                    # Concatenate all children for NAME ("/" NAME)+ syntax
+                    srv_type = "/".join(str(child) for child in srv_type_node.children)
             else:
                 srv_type = str(srv_type_node)
         else:
@@ -1092,7 +1136,15 @@ class ASTBuilder:
         name = self._topic_path_to_str(topic_path_node) if isinstance(topic_path_node, Tree) else str(topic_path_node)
         action_type_node = node.children[1]
         if isinstance(action_type_node, Tree):
-            action_type = str(action_type_node.children[0]).strip('"')
+            if action_type_node.data == "topic_type":
+                # Handle both quoted strings and NAME ("/" NAME)+ syntax
+                if len(action_type_node.children) == 1:
+                    action_type = str(action_type_node.children[0]).strip('"')
+                else:
+                    # Concatenate all children for NAME ("/" NAME)+ syntax
+                    action_type = "/".join(str(child) for child in action_type_node.children)
+            else:
+                action_type = str(action_type_node.children[0]).strip('"')
         else:
             action_type = str(action_type_node).strip('"')
         qos = None
@@ -1141,6 +1193,8 @@ class ASTBuilder:
         try:
             for child in node.children:
                 if isinstance(child, Tree):
+                    if self.debug:
+                        print(f"[DEBUG] Processing kernel content child: {child.data}")
                     if child.data == "block_size":
                         # The tuple_expr is at index 0
                         if len(child.children) > 0:
@@ -1179,6 +1233,20 @@ class ASTBuilder:
                         # Handle CUDA include statements
                         include_path = self._parse_include_path(child.children[0])
                         content.cuda_includes.append(include_path)
+                    elif child.data == "kernel_parameters":
+                        # Handle kernel parameters
+                        if self.debug:
+                            print(f"[DEBUG] Found kernel_parameters node with {len(child.children)} children")
+                            for i, grandchild in enumerate(child.children):
+                                print(f"[DEBUG] kernel_parameters child {i}: {type(grandchild)} = {grandchild}")
+                                if isinstance(grandchild, Tree):
+                                    print(f"[DEBUG] kernel_parameters child {i} data: {grandchild.data}")
+                                    print(f"[DEBUG] kernel_parameters child {i} children: {[type(c) for c in grandchild.children]}")
+                        if len(child.children) > 1:
+                            # The kernel_parameter_list is at index 1 (index 0 is '{', index 2 is '}')
+                            content.kernel_parameters = self._process_kernel_parameter_list(child.children[1])
+                            if self.debug:
+                                print(f"[DEBUG] Processed kernel parameters: {content.kernel_parameters}")
                     elif child.data == "code_block":
                         if len(child.children) > 0:
                             extracted_code = self._extract_code_from_block(child.children[0])
@@ -1195,6 +1263,33 @@ class ASTBuilder:
         for child in node.children:
             if isinstance(child, Tree) and child.data == "kernel_param":
                 params.append(self._process_kernel_param(child, direction))
+        return params
+
+    def _process_kernel_parameter_list(self, node: Tree) -> List[dict]:
+        """Process kernel parameter list for kernel parameters."""
+        if self.debug:
+            print(f"[DEBUG] _process_kernel_parameter_list called with node: {node}")
+            print(f"[DEBUG] node data: {node.data}")
+            print(f"[DEBUG] node children: {[type(c) for c in node.children]}")
+            for i, child in enumerate(node.children):
+                print(f"[DEBUG] child {i}: {type(child)} = {child}")
+                if isinstance(child, Tree):
+                    print(f"[DEBUG] child {i} data: {child.data}")
+                    print(f"[DEBUG] child {i} children: {[type(c) for c in child.children]}")
+        params = []
+        for child in node.children:
+            if isinstance(child, Tree) and child.data == "kernel_parameter_def":
+                # Use _extract_cpp_type_string to get the C++ type string
+                param_type = self._extract_cpp_type_string(child.children[0])
+                param_name = str(child.children[1])
+                param_value = self._process_value(child.children[2]).value
+                params.append({
+                    'type': param_type,
+                    'name': param_name,
+                    'value': param_value
+                })
+        if self.debug:
+            print(f"[DEBUG] _process_kernel_parameter_list returning: {params}")
         return params
 
     def _process_kernel_param(self, node: Tree, direction) -> KernelParamNode:
@@ -2020,89 +2115,74 @@ class ASTBuilder:
             self.errors.append(f"Template class error: {e}")
 
     def _extract_cpp_type_string(self, node: Tree) -> str:
-        """Extract a C++ type string from the parse tree, including pointer/array modifiers."""
-        if isinstance(node, Token):
-            return node.value
-        elif isinstance(node, Tree):
-            if node.data == "cpp_type":
-                # New grammar structure: CONST? base_cpp_type pointer_or_ref*
-                result = ""
-                
-                # Check for const qualifier (first child)
-                if len(node.children) > 0 and isinstance(node.children[0], Token) and node.children[0].type == "CONST":
-                    result += "const "
-                    children_start = 1
-                else:
-                    children_start = 0
-                
-                # Extract base type
-                if len(node.children) > children_start and isinstance(node.children[children_start], Tree) and node.children[children_start].data == "base_cpp_type":
-                    result += self._extract_cpp_type_string(node.children[children_start])
-                
-                # Extract pointer/reference modifiers
-                for i in range(children_start + 1, len(node.children)):
+        """Recursively extract a C++ type string from a Lark tree node."""
+        if isinstance(node, str):
+            return node
+        if hasattr(node, 'type'):
+            if node.type == 'NAME':
+                return node.value
+            if node.type == 'CONST':
+                return 'const'
+            if node.type in ('STAR', 'AMPERSAND'):
+                return node.value
+            if node.type == 'LONG':
+                return 'long'
+            if node.type == 'DOUBLE':
+                return 'double'
+            if node.type == 'SIGNED_NUMBER':
+                return node.value
+            if node.type == 'STRING':
+                return node.value
+            if node.type == 'RULE':
+                return ' '.join(self._extract_cpp_type_string(child) for child in node.children)
+        if isinstance(node, Tree):
+            if node.data == 'cpp_type':
+                # Special handling for cpp_type to avoid spaces around pointers/references
+                parts = []
+                for child in node.children:
+                    part = self._extract_cpp_type_string(child)
+                    if part:
+                        parts.append(part)
+                # Join without spaces to handle pointer/reference types correctly
+                return ''.join(parts)
+            elif node.data == 'base_cpp_type':
+                # Join all children with spaces
+                return ' '.join(self._extract_cpp_type_string(child) for child in node.children if self._extract_cpp_type_string(child))
+            elif node.data == 'cpp_type_name':
+                # Join consecutive NAME tokens with '::', and handle template args with no extra spaces
+                parts = []
+                name_parts = []
+                i = 0
+                while i < len(node.children):
                     child = node.children[i]
-                    if isinstance(child, Tree) and child.data == "pointer_or_ref":
-                        result += self._extract_token_value(child.children[0])
-                
-                return result
-            elif node.data == "base_cpp_type":
-                # Handle base_cpp_type: NAME ("::" NAME)* ("<" cpp_type ("," cpp_type)* ">")? | "long" "double" | "size_t" | "uint32_t"
-                if len(node.children) == 2 and all(isinstance(c, Token) and c.value in ["long", "double"] for c in node.children):
-                    return "long double"
-                elif len(node.children) == 1 and isinstance(node.children[0], Token):
-                    return node.children[0].value
-                else:
-                    # Handle complex types like std::vector<T> and std::ostream&
-                    result = ""
-                    name_tokens = []
-                    template_args = []
-                    i = 0
-                    while i < len(node.children):
-                        child = node.children[i]
-                        if isinstance(child, Token) and child.type == "NAME":
-                            name_tokens.append(child.value)
-                            i += 1
-                            continue
-                        if name_tokens:
-                            result += "::".join(name_tokens)
-                            name_tokens = []
-                        if isinstance(child, Token):
-                            if child.value == "::":
-                                pass  # handled by join
-                            elif child.value == "<":
-                                # Start collecting template arguments
-                                i += 1
-                                while i < len(node.children):
-                                    template_child = node.children[i]
-                                    if isinstance(template_child, Tree) and template_child.data == "cpp_type":
-                                        template_args.append(self._extract_cpp_type_string(template_child))
-                                    elif isinstance(template_child, Token) and template_child.value == ">":
-                                        i += 1
-                                        break
-                                    elif isinstance(template_child, Token) and template_child.value == ",":
-                                        i += 1
-                                        continue
-                                    i += 1
-                                if template_args:
-                                    result += "<" + ", ".join(template_args) + ">"
-                                continue
-                            elif child.value == ">":
-                                pass  # handled above
-                            elif child.value == ",":
-                                pass  # handled above
-                            else:
-                                result += child.value
-                        elif isinstance(child, Tree) and child.data == "cpp_type":
-                            result += self._extract_cpp_type_string(child)
+                    if hasattr(child, 'type') and child.type == 'NAME':
+                        name_parts.append(child.value)
                         i += 1
-                    if name_tokens:
-                        result += "::".join(name_tokens)
-                    return result
-            else:
-                return "".join(self._extract_token_value(child) if isinstance(child, Token) else self._extract_cpp_type_string(child) for child in node.children)
-        else:
-            return str(node)
+                        while i < len(node.children) and hasattr(node.children[i], 'type') and node.children[i].type == 'NAME':
+                            name_parts.append(node.children[i].value)
+                            i += 1
+                        parts.append('::'.join(name_parts))
+                        name_parts = []
+                    elif hasattr(child, 'type') and child.type == 'LESS_THAN':
+                        # Template arguments: emit <args> with no spaces
+                        j = i + 1
+                        arg_parts = []
+                        while j < len(node.children) and (not hasattr(node.children[j], 'type') or node.children[j].type != 'GREATER_THAN'):
+                            arg_str = self._extract_cpp_type_string(node.children[j])
+                            if arg_str:
+                                arg_parts.append(arg_str)
+                            j += 1
+                        parts[-1] = parts[-1] + '<' + ','.join(arg_parts) + '>'
+                        i = j + 1
+                    else:
+                        part = self._extract_cpp_type_string(child)
+                        if part:
+                            parts.append(part)
+                        i += 1
+                return ' '.join(parts)
+            # Fallback: join all children with spaces
+            return ' '.join(self._extract_cpp_type_string(child) for child in node.children if self._extract_cpp_type_string(child))
+        return str(node)
 
     def _process_template_alias(self, node: Tree):
         """Process template alias definition."""
@@ -2874,3 +2954,44 @@ class ASTBuilder:
             parts = [child.value for child in node.children if hasattr(child, 'type') and child.type == 'NAME']
             return '/' + '/'.join(parts)
         return str(node)
+
+    def _process_cuda_kernel_def(self, node):
+        """Process standalone cuda_kernel definition and add to ast.cuda_kernels."""
+        from ..core.ast import KernelNode, KernelContentNode, CudaKernelsNode
+        
+        if self.debug:
+            print(f"cuda_kernel_def children: {[type(c) for c in node.children]}")
+            print(f"cuda_kernel_def children values: {[str(c) for c in node.children]}")
+        
+        # The structure is: NAME LBRACE kernel_content RBRACE
+        # So children[0] should be the NAME token
+        if len(node.children) >= 1:
+            name_token = node.children[0]
+            if hasattr(name_token, 'value'):
+                name = name_token.value
+            else:
+                name = str(name_token)
+        else:
+            name = "unknown_kernel"
+            if self.debug:
+                print(f"Warning: cuda_kernel_def has unexpected structure: {len(node.children)} children")
+        
+        if self.debug:
+            print(f"Extracted kernel name: '{name}'")
+        
+        # kernel_content is at children[2]
+        if len(node.children) >= 3:
+            content = self._process_kernel_content(node.children[2])
+        else:
+            content = KernelContentNode()
+            if self.debug:
+                print(f"Warning: No kernel content found")
+        
+        kernel = KernelNode(name=name, content=content)
+        # Add to ast.cuda_kernels
+        if not hasattr(self.ast, 'cuda_kernels') or self.ast.cuda_kernels is None:
+            self.ast.cuda_kernels = CudaKernelsNode(kernels=[])
+        self.ast.cuda_kernels.kernels.append(kernel)
+        return kernel
+
+    # In the main parse logic, after processing a cuda_kernel_def, call this method.

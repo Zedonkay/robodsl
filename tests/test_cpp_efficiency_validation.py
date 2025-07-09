@@ -21,6 +21,7 @@ from typing import List, Dict, Any
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from robodsl.parsers.lark_parser import parse_robodsl
+from conftest import skip_if_no_ros2, skip_if_no_cuda
 from robodsl.generators import MainGenerator
 
 
@@ -148,6 +149,7 @@ class TestCppEfficiencyValidation:
         self.generator = MainGenerator()
     
     def test_memory_allocation_efficiency(self, test_output_dir):
+        skip_if_no_ros2()
         """Test that generated code uses efficient memory allocation patterns."""
         source = """
         node efficient_node {
@@ -173,6 +175,7 @@ class TestCppEfficiencyValidation:
                 f"Memory allocation efficiency issues in {cpp_file}: {allocation_issues}"
     
     def test_algorithm_efficiency(self, test_output_dir):
+        skip_if_no_ros2()
         """Test that generated code uses efficient algorithms."""
         source = """
         node algorithm_node {
@@ -195,6 +198,7 @@ class TestCppEfficiencyValidation:
                 f"Algorithm efficiency issues in {cpp_file}: {algorithm_issues}"
     
     def test_compiler_optimization_compatibility(self, test_output_dir):
+        skip_if_no_ros2()
         """Test that generated code is compatible with aggressive compiler optimizations."""
         source = """
         node optimization_node {
@@ -221,6 +225,7 @@ class TestCppEfficiencyValidation:
                 f"Generated code in {cpp_file} is not compatible with aggressive optimizations"
     
     def test_cache_efficiency(self, test_output_dir):
+        skip_if_no_ros2()
         """Test that generated code is cache-friendly."""
         source = """
         struct CacheFriendlyData {
@@ -253,6 +258,7 @@ class TestCppEfficiencyValidation:
                 f"Cache efficiency issues in {cpp_file}: {cache_issues}"
     
     def test_resource_management_efficiency(self, test_output_dir):
+        skip_if_no_ros2()
         """Test that generated code efficiently manages resources."""
         source = """
         node resource_node {
@@ -276,6 +282,7 @@ class TestCppEfficiencyValidation:
                 f"Resource management efficiency issues in {cpp_file}: {resource_issues}"
     
     def test_cuda_efficiency(self, test_output_dir):
+        skip_if_no_cuda()
         """Test that generated CUDA code is efficient."""
         source = """
         cuda_kernel efficient_kernel {
@@ -306,6 +313,7 @@ class TestCppEfficiencyValidation:
                 pass
     
     def test_vectorization_opportunities(self, test_output_dir):
+        skip_if_no_ros2()
         """Test that generated code provides vectorization opportunities."""
         source = """
         node vectorization_node {
@@ -335,6 +343,7 @@ class TestCppEfficiencyValidation:
                 pass
     
     def test_zero_copy_optimizations(self, test_output_dir):
+        skip_if_no_ros2()
         """Test that generated code avoids unnecessary copies."""
         source = """
         node zero_copy_node {
@@ -362,6 +371,7 @@ class TestCppEfficiencyValidation:
                 pass
     
     def test_compile_time_optimizations(self, test_output_dir):
+        skip_if_no_ros2()
         """Test that generated code leverages compile-time optimizations."""
         source = """
         global CONSTANT: constexpr int = 42;

@@ -46,15 +46,30 @@ class MainGenerator(BaseGenerator):
         self.config_generator = ConfigGenerator(output_dir, template_dirs)
         self.advanced_cpp_generator = AdvancedCppGenerator(output_dir, template_dirs)
     
-    def generate(self, ast: RoboDSLAST) -> List[Path]:
+    def generate(self, ast: RoboDSLAST, output_dir: Optional[str] = None) -> List[Path]:
         """Generate all files from the AST.
         
         Args:
             ast: The parsed RoboDSL AST
+            output_dir: Optional output directory (overrides the one set in constructor)
             
         Returns:
             List of Path objects for all generated files
         """
+        # Use provided output_dir if specified, otherwise use the one from constructor
+        if output_dir is not None:
+            self.output_dir = Path(output_dir)
+            # Update all sub-generators with the new output directory
+            self.cpp_generator.output_dir = self.output_dir
+            self.cuda_generator.output_dir = self.output_dir
+            self.python_generator.output_dir = self.output_dir
+            self.cmake_generator.output_dir = self.output_dir
+            self.launch_generator.output_dir = self.output_dir
+            self.package_generator.output_dir = self.output_dir
+            self.onnx_generator.output_dir = self.output_dir
+            self.pipeline_generator.output_dir = self.output_dir
+            self.config_generator.output_dir = self.output_dir
+            self.advanced_cpp_generator.output_dir = self.output_dir
         all_generated_files = []
         
         # Generate C++ node files

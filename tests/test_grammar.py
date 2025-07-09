@@ -1,4 +1,5 @@
 from robodsl.parsers.lark_parser import parse_robodsl
+from conftest import skip_if_no_ros2
 #!/usr/bin/env python3
 """Simple test to validate the RoboDSL grammar."""
 
