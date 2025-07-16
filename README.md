@@ -12,12 +12,12 @@ RoboDSL simplifies the development of GPU-accelerated robotics applications by p
 
 ### Key Features
 
-- ** GPU Acceleration**: Native CUDA kernel generation and optimization
-- ** ROS2 Integration**: Automatic ROS2 node generation with QoS configuration
-- ** ML Model Support**: ONNX Runtime integration for machine learning models
-- ** Pipeline Orchestration**: Multi-stage processing pipeline generation
-- ** Image Processing**: OpenCV integration for computer vision tasks
-- ** High Performance**: Optimized for real-time robotics applications
+- **GPU Acceleration**: Native CUDA kernel generation and optimization
+- **ROS2 Integration**: Automatic ROS2 node generation with QoS configuration
+- **ML Model Support**: ONNX Runtime integration for machine learning models
+- **Pipeline Orchestration**: Multi-stage processing pipeline generation
+- **Image Processing**: OpenCV integration for computer vision tasks
+- **High Performance**: Optimized for real-time robotics applications
 
 ### New Features in v0.1.0
 
