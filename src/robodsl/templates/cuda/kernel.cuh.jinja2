@@ -8,15 +8,24 @@
 #define {{ include_guard }}
 
 {% if cuda_enabled %}
+
+
 #include <cuda_runtime.h>
 #include <cstdint>
-#include <vector>
-#include <memory>
+#include <string>
 
-// Forward declarations for CUDA types
-struct cudaStream_t;
+
 
 namespace {{ namespace }} {
+
+{% if struct_name and parameters %}
+// Struct for kernel parameters
+struct {{ struct_name }} {
+{% for param in parameters %}
+    {{ param.type }} {{ param.name }};
+{% endfor %}
+};
+{% endif %}
 
 /**
  * @brief CUDA kernel wrapper class for {{ kernel_name }}
@@ -50,7 +59,8 @@ public:
      * @param input Input data to process
      * @return true if initialization was successful, false otherwise
      */
-    bool initialize(const std::vector<{{ input_type }}>& input);
+    // Initialize the kernel with input data (host pointer and size)
+    bool initialize(const {{ input_type }}* input, size_t input_size);
     
     /**
      * @brief Process the input data using the CUDA kernel
@@ -58,14 +68,15 @@ public:
      * @param parameters Kernel parameters
      * @return std::vector<{{ output_type }}> Processed output data
      */
-    std::vector<{{ output_type }}> process(const {{ param_type }}& parameters);
+    // Process the input data using the CUDA kernel (host pointer and size)
+    bool process(const {{ param_type }}* parameters, size_t param_size, {{ output_type }}* output, size_t output_size);
     
     /**
      * @brief Get the last error message, if any
      * 
      * @return std::string The last error message, or an empty string if no error
      */
-    std::string getLastError() const { return last_error_; }
+    const std::string& getLastError() const { return last_error_; }
     
     /**
      * @brief Check if the kernel was initialized successfully
@@ -77,11 +88,25 @@ public:
 private:
     // Device memory pointers
     {% for member in members %}
-    {{ member.type }} {{ member.name }}{nullptr};  //!< Device memory for {{ member.original_name }}
+    {{ member.type }}* {{ member.name }} = nullptr;  //!< Device memory for {{ member.original_name }}
     {% endfor %}
-    
-    cudaStream_t* stream_{nullptr};  //!< CUDA stream for async operations
-    bool initialized_{false};        //!< Whether the kernel is properly initialized
+
+    // Kernel state and configuration
+    size_t input_size_ = 0;                //!< Number of input elements
+    int device_id_ = 0;                    //!< CUDA device ID
+    int max_threads_per_block_ = 256;      //!< Max threads per block
+    int max_blocks_per_dim_ = 65535;       //!< Max blocks per grid dimension
+
+
+    // Parameter state (for kernels with parameters)
+    bool parameters_copied_ = false;
+    {% if param_type != "void" %}
+    {{ param_type }} last_parameters_{};
+    {{ param_type }}* d_parameters_ = nullptr;
+    {% endif %}
+
+    cudaStream_t* stream_ = nullptr;  //!< CUDA stream for async operations
+    bool initialized_ = false;        //!< Whether the kernel is properly initialized
     std::string last_error_;         //!< Last error message, if any
     
     // CUDA kernel launch configuration
@@ -108,6 +133,14 @@ private:
      */
     void freeDeviceMemory();
 };
+
+// Kernel function declaration (must be a free function, not a member function)
+__global__ void {{ kernel_name }}_kernel(
+    {%- for member in members %}
+    const {{ member.type }}* {{ member.name }}{% if not loop.last or members|length > 0 %},{% endif %}
+    {%- endfor %}
+    int num_elements
+);
 
 } // namespace {{ namespace }}
 

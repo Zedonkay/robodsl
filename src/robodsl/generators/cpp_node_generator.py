@@ -27,7 +27,7 @@ class CppNodeGenerator(BaseGenerator):
         generated_files = []
         
         # Create output directories
-        (self.output_dir / 'include' / 'robodsl').mkdir(parents=True, exist_ok=True)
+        (self.output_dir / 'include').mkdir(parents=True, exist_ok=True)
         (self.output_dir / 'src').mkdir(exist_ok=True)
         
         # Generate files for each node
@@ -43,32 +43,76 @@ class CppNodeGenerator(BaseGenerator):
         """Generate a C++ header file for a ROS2 node."""
         context = self._prepare_node_context(node)
         
+        # Determine subdirectory structure based on node name
+        # For subnodes like "robot.sensors.camera.depth", create "include/robot/sensors/camera/depth_node.hpp"
+        subdir = ""
+        if '.' in node.name:
+            # Extract the directory part (everything before the last dot)
+            parts = node.name.split('.')
+            if len(parts) > 1:
+                subdir = '/'.join(parts[:-1])  # All parts except the last one
+        
         try:
             content = self.render_template('node.hpp.jinja2', context)
-            header_path = self.get_output_path('include', f'{node.name}_node.hpp')
+            # Create flat structure - subnodes are CLI-only for organization
+            if subdir:
+                # Use the base name (last part after dot) for flat structure
+                header_path = self.get_output_path('include', f'{node.name.split(".")[-1]}_node.hpp')
+            else:
+                header_path = self.get_output_path('include', f'{node.name}_node.hpp')
             return self.write_file(header_path, content)
         except Exception as e:
             print(f"Template error for node {node.name}: {e}")
             # Fallback to simple header
             content = f"// Generated header for {node.name}\n"
-            header_path = self.get_output_path('include', f'{node.name}_node.hpp')
+            if subdir:
+                header_path = self.get_output_path('include', f'{node.name.split(".")[-1]}_node.hpp')
+            else:
+                header_path = self.get_output_path('include', f'{node.name}_node.hpp')
             return self.write_file(header_path, content)
     
     def _generate_node_source(self, node: NodeNode) -> Path:
         """Generate a C++ source file for a ROS2 node."""
         context = self._prepare_node_context(node)
         
+        # Determine subdirectory structure based on node name
+        # For subnodes like "robot.sensors.camera.depth", create "src/robot/sensors/camera/depth_node.cpp"
+        subdir = ""
+        if '.' in node.name:
+            # Extract the directory part (everything before the last dot)
+            parts = node.name.split('.')
+            if len(parts) > 1:
+                subdir = '/'.join(parts[:-1])  # All parts except the last one
+        
         try:
             content = self.render_template('node.cpp.jinja2', context)
-            source_path = self.get_output_path('src', f'{node.name}_node.cpp')
+            if subdir:
+                source_path = self.get_output_path('src', subdir, f'{node.name.split(".")[-1]}_node.cpp')
+            else:
+                source_path = self.get_output_path('src', f'{node.name}_node.cpp')
             return self.write_file(source_path, content)
         except Exception as e:
             print(f"Template error for node {node.name}: {e}")
             # Fallback to simple source
             content = f"// Generated source for {node.name}\n"
-            source_path = self.get_output_path('src', f'{node.name}_node.cpp')
+            if subdir:
+                source_path = self.get_output_path('src', subdir, f'{node.name.split(".")[-1]}_node.cpp')
+            else:
+                source_path = self.get_output_path('src', f'{node.name}_node.cpp')
             return self.write_file(source_path, content)
     
+    def _ros_type_to_cpp(self, ros_type: str) -> str:
+        """Convert ROS type from slash notation to C++ namespace notation."""
+        if '/' in ros_type:
+            return '::'.join(ros_type.split('/'))
+        return ros_type
+    
+    def _ros_type_to_include(self, ros_type: str) -> str:
+        """Convert ROS type from slash notation to include path notation."""
+        if '/' in ros_type:
+            return ros_type  # Keep slash notation for includes
+        return ros_type
+
     def _prepare_node_context(self, node: NodeNode) -> Dict[str, Any]:
         """Prepare context for node template rendering.
         - Includes both embedded and referenced (global) CUDA kernels.
@@ -80,13 +124,13 @@ class CppNodeGenerator(BaseGenerator):
         
         # Add message includes for publishers/subscribers
         for pub in node.content.publishers:
-            includes.append(f"#include <{pub.msg_type}.hpp>")
+            includes.append(f"#include <{self._ros_type_to_include(pub.msg_type)}.hpp>")
         for sub in node.content.subscribers:
-            includes.append(f"#include <{sub.msg_type}.hpp>")
+            includes.append(f"#include <{self._ros_type_to_include(sub.msg_type)}.hpp>")
         for srv in node.content.services:
-            includes.append(f"#include <{srv.srv_type}.hpp>")
+            includes.append(f"#include <{self._ros_type_to_include(srv.srv_type)}.hpp>")
         for action in node.content.actions:
-            includes.append(f"#include <{action.action_type}.hpp>")
+            includes.append(f"#include <{self._ros_type_to_include(action.action_type)}.hpp>")
         
         # Prepare CUDA kernel information
         cuda_kernels = []
@@ -116,15 +160,26 @@ class CppNodeGenerator(BaseGenerator):
         cpp_methods = []
         if hasattr(node.content, 'cpp_methods'):
             for method in node.content.cpp_methods:
+                # Helper function to format type names with proper spacing
+                def format_type_name(type_name):
+                    # Ensure proper spacing around const
+                    if type_name.startswith('const'):
+                        # If it's "constType", make it "const Type"
+                        if len(type_name) > 5 and not type_name[5].isspace():
+                            return f"const {type_name[5:]}"
+                        else:
+                            return type_name
+                    return type_name
+                
                 method_info = {
                     'name': method.name,
                     'inputs': [{
-                        'type': f"const {param.param_type}" if getattr(param, 'is_const', False) else param.param_type, 
+                        'type': format_type_name(f"const {param.param_type}" if getattr(param, 'is_const', False) else param.param_type), 
                         'name': param.param_name, 
                         'size_expr': param.size_expr
                     } for param in method.inputs],
                     'outputs': [{
-                        'type': f"const {param.param_type}" if getattr(param, 'is_const', False) else param.param_type, 
+                        'type': format_type_name(f"const {param.param_type}" if getattr(param, 'is_const', False) else param.param_type), 
                         'name': param.param_name, 
                         'size_expr': param.size_expr
                     } for param in method.outputs],
@@ -132,26 +187,102 @@ class CppNodeGenerator(BaseGenerator):
                 }
                 cpp_methods.append(method_info)
         
+        # Prepare raw C++ code blocks (node-level)
+        raw_cpp_code = []
+        if hasattr(node.content, 'raw_cpp_code'):
+            for cpp_block in node.content.raw_cpp_code:
+                raw_cpp_code.append({
+                    'code': cpp_block.code,
+                    'location': cpp_block.location
+                })
+        
+        # Prepare global C++ code blocks
+        global_cpp_code = []
+        ast = getattr(self, 'ast', None)
+        if ast and hasattr(ast, 'raw_cpp_code') and ast.raw_cpp_code:
+            for cpp_block in ast.raw_cpp_code:
+                if cpp_block.location == "global":
+                    global_cpp_code.append({
+                        'code': cpp_block.code,
+                        'location': cpp_block.location
+                    })
+        
+        # Helper function to format parameter values
+        def format_parameter_value(param):
+            if param.value is None:
+                # Handle different types with appropriate defaults
+                if param.type == 'std::string':
+                    return '""'
+                elif param.type == 'int':
+                    return '0'
+                elif param.type == 'float':
+                    return '0.0'
+                elif param.type == 'double':
+                    return '0.0'
+                elif param.type == 'bool':
+                    return 'false'
+                else:
+                    return '0'
+            
+            value = param.value.value
+            if param.type == 'std::string':
+                # Ensure string values are properly quoted
+                if isinstance(value, str):
+                    return f'"{value}"'
+                else:
+                    return f'"{str(value)}"'
+            elif param.type in ['float', 'double']:
+                # Ensure float values have decimal point
+                if isinstance(value, (int, float)):
+                    return f'{float(value)}'
+                else:
+                    return f'{float(value)}'
+            else:
+                # For other types, use the value as-is
+                return str(value)
+        
+        # Helper function to get template parameter type (remove const for template parameters)
+        def get_template_param_type(param_type):
+            # Remove 'const ' prefix for template parameters
+            if param_type.startswith('const '):
+                return param_type[6:]  # Remove 'const '
+            return param_type
+
+        # Helper function to format type names with proper spacing
+        def format_type_name(type_name):
+            # Ensure proper spacing around const
+            if type_name.startswith('const'):
+                # If it's "constType", make it "const Type"
+                if len(type_name) > 5 and not type_name[5].isspace():
+                    return f"const {type_name[5:]}"
+                else:
+                    return type_name
+            return type_name
+
         return {
             'class_name': f"{node.name.capitalize()}Node",
             'base_class': 'rclcpp_lifecycle::LifecycleNode' if is_lifecycle else 'rclcpp::Node',
             'namespace': 'robodsl',
+            'node_name': node.name,
+            'include_path': f"../include/{node.name}_node.hpp",
             'include_guard': f"{node.name.upper()}_NODE_HPP",
             'includes': list(set(includes)),  # Remove duplicates
             'ros2_includes': ros2_includes,
             'is_lifecycle': is_lifecycle,
-            'publishers': [{'name': pub.topic.split('/')[-1], 'msg_type': pub.msg_type} for pub in node.content.publishers],
-            'subscribers': [{'name': sub.topic.split('/')[-1], 'msg_type': sub.msg_type, 'callback_name': f"on_{sub.topic.split('/')[-1]}"} for sub in node.content.subscribers],
-            'services': [{'name': srv.service.split('/')[-1], 'srv_type': srv.srv_type, 'callback_name': f"on_{srv.service.split('/')[-1]}"} for srv in node.content.services],
-            'actions': [{'name': action.name, 'action_type': action.action_type} for action in node.content.actions],
+            'publishers': [{'name': pub.topic.split('/')[-1], 'msg_type': self._ros_type_to_cpp(pub.msg_type), 'topic': pub.topic, 'qos': pub.qos} for pub in node.content.publishers],
+            'subscribers': [{'name': sub.topic.split('/')[-1], 'msg_type': self._ros_type_to_cpp(sub.msg_type), 'topic': sub.topic, 'callback_name': f"on_{sub.topic.split('/')[-1]}", 'qos': sub.qos} for sub in node.content.subscribers],
+            'services': [{'name': srv.service.split('/')[-1], 'srv_type': self._ros_type_to_cpp(srv.srv_type), 'service': srv.service, 'callback_name': f"on_{srv.service.split('/')[-1]}", 'qos': srv.qos} for srv in node.content.services],
+            'actions': [{'name': action.name, 'action_type': self._ros_type_to_cpp(action.action_type), 'topic': action.name} for action in node.content.actions],
             'timers': [{'name': timer.name, 'callback_name': f"on_{timer.name}"} for timer in node.content.timers],
-            'parameters': [{'name': param.name, 'type': 'auto'} for param in node.content.parameters],
+            'parameters': [{'name': param.name, 'type': format_type_name(param.type), 'template_type': get_template_param_type(param.type), 'default_value': format_parameter_value(param)} for param in node.content.parameters],
             'cuda_kernels': cuda_kernels,
             'referenced_kernels': referenced_kernels,
             'cuda_default_input_type': 'float',
             'cuda_default_output_type': 'float',
             'cuda_default_param_type': 'CudaParams',
-            'cpp_methods': cpp_methods
+            'cpp_methods': cpp_methods,
+            'raw_cpp_code': raw_cpp_code,
+            'global_cpp_code': global_cpp_code
         }
     
     def _prepare_kernel_context(self, kernel: KernelNode) -> Dict[str, Any]:
@@ -183,7 +314,13 @@ class CppNodeGenerator(BaseGenerator):
         # Determine input and output types
         input_type = input_params[0]['type'] if input_params else "float"
         output_type = output_params[0]['type'] if output_params else "float"
-        param_type = "KernelParameters"  # Default parameter struct name
+        # If there are parameters, generate a struct name; else use void
+        if kernel_parameters:
+            struct_name = f"{kernel.name.capitalize()}Parameters"
+            param_type = struct_name
+        else:
+            struct_name = None
+            param_type = "void"
         
         # Prepare member variables for the wrapper class
         members = []
@@ -204,6 +341,7 @@ class CppNodeGenerator(BaseGenerator):
             'input_type': input_type,
             'output_type': output_type,
             'param_type': param_type,
+            'struct_name': struct_name,
             'members': members,
             'block_size': kernel.content.block_size[0] if kernel.content.block_size else 256,
             'grid_size': kernel.content.grid_size,

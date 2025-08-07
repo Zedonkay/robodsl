@@ -14,6 +14,7 @@ from ..core.ast import (
     CudaKernelsNode, KernelNode, KernelContentNode, KernelParamNode,
     QoSReliability, QoSDurability, QoSHistory, QoSLiveliness, KernelParameterDirection
 )
+from ..utils.typecheck_bridge import check_ros2_type
 
 
 class SemanticError(Exception):
@@ -84,6 +85,8 @@ class SemanticAnalyzer:
         self.errors.clear()
         self.warnings.clear()
         self.symbol_table = SymbolTable()
+        
+
         
         # Analyze project-level configuration
         self._analyze_project_config(ast)
@@ -187,27 +190,30 @@ class SemanticAnalyzer:
     def _analyze_parameters(self, parameters: List[ParameterNode], node_name: str):
         """Analyze parameter configurations."""
         param_names = set()
-        
         for param in parameters:
             # Check for duplicate parameter names
             if param.name in param_names:
                 self.errors.append(f"Duplicate parameter name: {param.name}")
             param_names.add(param.name)
-            
             # Check parameter name
             if not param.name or param.name.strip() == "":
-                self.errors.append("Parameter name cannot be empty")
+                self.errors.append(f"Parameter name cannot be empty in node {node_name}")
+            # Allow all ROS2 C++ types and custom types for parameters
+            # Only error if the type is empty or clearly invalid (e.g., not a valid identifier or type string)
+            if not param.type or not isinstance(param.type, str) or param.type.strip() == "":
+                self.errors.append(f"Parameter '{param.name}' in node '{node_name}' has an invalid or empty type")
             
-            # Check parameter value
-            if param.value.value is None:
-                self.errors.append(f"Parameter '{param.name}' has no value")
-            
-            # Strong type checking: validate declared type matches value
-            if param.type and param.value.value is not None:
+            # Only validate parameter type if we have a value
+            if param.value is not None and hasattr(param.value, 'value'):
                 self._validate_parameter_type(param.name, param.type, param.value.value)
+            elif param.value is None:
+                self.errors.append(f"Parameter '{param.name}' in node '{node_name}' has no value")
             
             # Add to symbol table with declared type (preferred) or inferred type
-            param_type = param.type if param.type else self._infer_parameter_type(param.value.value)
+            if param.value is not None and hasattr(param.value, 'value'):
+                param_type = param.type if param.type else self._infer_parameter_type(param.value.value)
+            else:
+                param_type = param.type if param.type else "auto"
             self.symbol_table.add_parameter(param.name, param_type)
 
     def _infer_parameter_type(self, value: Any) -> str:
@@ -490,7 +496,7 @@ class SemanticAnalyzer:
             
             # Check method code
             if not method.code or method.code.strip() == "":
-                self.errors.append(f"Node '{node_name}' C++ method '{method.name}' has empty code")
+                self.warnings.append(f"Node '{node_name}' C++ method '{method.name}' has empty code")
             
             # Basic C++ syntax validation
             if method.code:
@@ -546,12 +552,18 @@ class SemanticAnalyzer:
             if len(content.block_size) != 3:
                 self.errors.append(f"CUDA kernel '{kernel.name}' block size must have exactly 3 dimensions")
             for i, size in enumerate(content.block_size):
-                if not isinstance(size, int) or size <= 0:
-                    self.errors.append(f"CUDA kernel '{kernel.name}' block size dimension {i} must be a positive integer")
-                if size == 0:
-                    self.errors.append(f"CUDA kernel '{kernel.name}' block size dimension {i} cannot be zero")
-                if size > 1024:  # CUDA limit
-                    self.errors.append(f"CUDA kernel '{kernel.name}' block size dimension {i} exceeds CUDA limit of 1024")
+                # Allow both integers and expressions (strings)
+                if isinstance(size, int):
+                    if size <= 0:
+                        self.errors.append(f"CUDA kernel '{kernel.name}' block size dimension {i} must be a positive integer")
+                    if size > 1024:  # CUDA limit
+                        self.errors.append(f"CUDA kernel '{kernel.name}' block size dimension {i} exceeds CUDA limit of 1024")
+                elif isinstance(size, str):
+                    # Expression - validate that it's not empty
+                    if not size.strip():
+                        self.errors.append(f"CUDA kernel '{kernel.name}' block size dimension {i} expression cannot be empty")
+                else:
+                    self.errors.append(f"CUDA kernel '{kernel.name}' block size dimension {i} must be an integer or expression")
         
         # Check grid size
         if content.grid_size:
@@ -855,25 +867,39 @@ class SemanticAnalyzer:
     
     def _validate_parameter_type(self, param_name: str, param_type: str, value: Any) -> None:
         """Validate parameter type consistency."""
-        # Check if declared type matches value type
-        if param_type == "int":
+        # Handle const types by extracting the base type
+        base_type = param_type.replace('const ', '').replace('const', '').strip()
+        
+        # Native Python type checks for basic types
+        if base_type in ("int", "int32", "int32_t"):
             if not isinstance(value, int):
-                self.errors.append(f"Parameter '{param_name}' declared as 'int' but value '{value}' is not an integer")
-        elif param_type == "float":
+                self.errors.append(f"Parameter '{param_name}' declared as '{param_type}' but value '{value}' is not an integer")
+        elif base_type in ("float", "double", "float32", "float64"):
             if not isinstance(value, (int, float)):
-                self.errors.append(f"Parameter '{param_name}' declared as 'float' but value '{value}' is not a number")
-        elif param_type == "bool":
+                self.errors.append(f"Parameter '{param_name}' declared as '{param_type}' but value '{value}' is not a number")
+        elif base_type == "bool":
             if not isinstance(value, bool):
                 self.errors.append(f"Parameter '{param_name}' declared as 'bool' but value '{value}' is not a boolean")
-        elif param_type == "string":
+        elif base_type in ("string", "std::string"):
             if not isinstance(value, str):
-                self.errors.append(f"Parameter '{param_name}' declared as 'string' but value '{value}' is not a string")
-        elif param_type == "list":
+                self.errors.append(f"Parameter '{param_name}' declared as '{param_type}' but value '{value}' is not a string")
+        elif base_type == "list":
             if not isinstance(value, list):
                 self.errors.append(f"Parameter '{param_name}' declared as 'list' but value '{value}' is not a list")
-        elif param_type == "dict":
+        elif base_type == "dict":
             if not isinstance(value, dict):
                 self.errors.append(f"Parameter '{param_name}' declared as 'dict' but value '{value}' is not a dictionary")
+        else:
+            # For all other types, use the C++ typechecker with the base type
+            try:
+                ok, err, debug = check_ros2_type(base_type, value)
+                if not ok:
+                    print(f"[TYPECHECK DEBUG] {debug}")
+                    self.errors.append(f"Parameter '{param_name}' typecheck failed: {err}")
+            except Exception as e:
+                # If typechecker fails, just log a warning and continue
+                print(f"[TYPECHECK WARNING] Typechecker failed for '{param_name}' with type '{param_type}': {e}")
+                # Don't add this as an error since the typechecker might not support all types
     
     def _validate_qos_setting(self, setting_name: str, setting_value: Any, context: str) -> None:
         """Validate QoS setting values."""

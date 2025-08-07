@@ -268,17 +268,17 @@ Allow organizations (e.g., CMU Racing) to expose a Linux GPU server on the local
 ### 🧪 Tasks
 
    #### Cloud Support
-   - [x] Create `robodsl cloud deploy`, `start`, `stop`, `connect` CLI
-   - [x] Terraform + Docker setup for AWS/GCP GPU VMs
-   - [x] Install CUDA, ROS2, RoboDSL toolchain on startup
-   - [x] Add VSCode Web + Jupyter + Terminal support
-   - [x] Add GPU availability check + usage monitoring
+   - [ ] Create `robodsl cloud deploy`, `start`, `stop`, `connect` CLI
+   - [ ] Terraform + Docker setup for AWS/GCP GPU VMs
+   - [ ] Install CUDA, ROS2, RoboDSL toolchain on startup
+   - [ ] Add VSCode Web + Jupyter + Terminal support
+   - [ ] Add GPU availability check + usage monitoring
 
    #### Local Server Support
-   - [x] `robodsl host init` to set up server
-   - [x] Launch `code-server` or VSCode Remote
-   - [x] Integrate graphical support via X11/VNC/WebRTC
-   - [x] Add auth + sandboxing for multiple users
+   - [ ] `robodsl host init` to set up server
+   - [ ] Launch `code-server` or VSCode Remote
+   - [ ] Integrate graphical support via X11/VNC/WebRTC
+   - [ ] Add auth + sandboxing for multiple users
 
 
 
@@ -418,10 +418,169 @@ This phase transforms RoboDSL into a **cloud-native robotics IDE** that removes 
 
 ---
 
-### Phase 9: Advanced Features
+### Phase 8: Advanced C++ Features
 **Priority**: 8  
+**Estimated Time**: 7-10 days  
+**Goal**: Support for advanced C++ features commonly used in robotics and CUDA development
+
+#### Tasks
+1. **Templates**
+   - Template structs and classes (`template<typename T> struct Foo {}`)
+   - Templated functions (`template<typename T> T sqr(T x)`)
+   - Partial specialization support
+   - Template aliases (`template<typename T> using V = std::vector<T>;`)
+
+2. **Static Assertions and Constexpr**
+   - `static_assert` support for compile-time validation
+   - `constexpr if` for conditional compilation
+   - Constexpr functions and variables
+
+3. **Global Variables and Device Constants**
+   - `__device__`, `__constant__`, `__shared__` qualifiers
+   - Constexpr arrays and lookup tables (LUTs)
+   - Static inline global functions (math utilities)
+
+4. **Operator Overloads (Non-member)**
+   - Stream operators (`operator<<(std::ostream&, const Foo&)`)
+   - Comparison operators (`operator==(const A&, const A&)`)
+   - Arithmetic operators (`operator+(const Vec&, const Vec&)`)
+
+5. **Constructors/Destructors/Member Initialization**
+   - Explicit constructors
+   - Initializer lists
+   - Default/delete specifiers (`Foo() = delete;`)
+   - Move/copy semantics
+   - Virtual destructors
+
+6. **Bit-level Types**
+   - Bitfields (`uint32_t flags : 4`)
+   - Union and anonymous union support
+   - Struct within structs
+   - Packed types (`__attribute__((packed))`)
+
+7. **Preprocessor Directives**
+   - `#pragma once`, `#include`, `#if defined(JETSON)`
+   - `#error`, `#line`, `#define` macros
+
+8. **Function Attributes**
+   - `__host__`, `__device__`, `__forceinline__`, `__launch_bounds__`
+   - `[[nodiscard]]`, `[[likely]]`, `alignas(16)`, `noexcept`
+
+9. **Concepts and Requires Clauses**
+   - Modern C++20 constraint-based generics
+   - `template<typename T> concept Arithmetic = ...`
+   - `requires` expressions
+
+10. **Friend Declarations**
+    - `friend class Foo;`, `friend std::ostream& operator<<`
+    - Needed for encapsulated serialization
+
+11. **User-defined Literals**
+    - `1.0_mps`, `50_deg`, etc.
+    - Used heavily in robotics DSLs and embedded systems
+
+#### Pythonic Syntax Design
+Create intuitive Python-like syntax for all advanced C++ features:
+
+```robodsl
+// Templates
+template Foo<T>:
+    data: T
+    def get_data() -> T:
+        return data
+
+// Template functions
+template sqr<T>(x: T) -> T:
+    return x * x
+
+// Template aliases
+template Vec<T> = std::vector<T>
+
+// Static assertions
+static_assert sizeof(int) == 4, "int must be 4 bytes"
+
+// Global constants
+global PI: constexpr float = 3.14159
+global device LUT: __constant__ int[256] = [1, 2, 3, ...]
+
+// Operator overloads
+def operator<<(stream: std::ostream&, obj: Foo&) -> std::ostream&:
+    stream << obj.data
+    return stream
+
+// Constructors with initialization
+class Vec3:
+    x: float
+    y: float  
+    z: float
+    
+    def __init__(x: float, y: float, z: float):
+        self.x = x
+        self.y = y
+        self.z = z
+    
+    def __init__(other: Vec3):
+        self.x = other.x
+        self.y = other.y
+        self.z = other.z
+
+// Bitfields
+struct Flags:
+    enabled: uint32_t : 1
+    mode: uint32_t : 3
+    priority: uint32_t : 4
+
+// Function attributes
+@device @forceinline
+def fast_math(x: float) -> float:
+    return x * x
+
+// Concepts
+concept Arithmetic:
+    requires T:
+        T operator+(T, T)
+        T operator*(T, T)
+
+// User-defined literals
+def operator""_mps(value: long double) -> float:
+    return value * 0.44704  // mph to m/s
+
+def operator""_deg(value: long double) -> float:
+    return value * M_PI / 180.0  // degrees to radians
+```
+
+#### Files to Create/Modify
+- Update `src/robodsl/grammar/robodsl.lark` to include advanced C++ grammar
+- `src/robodsl/core/ast.py` - Add AST nodes for advanced features
+- `src/robodsl/generators/advanced_cpp_generator.py` - Advanced C++ code generation
+- `src/robodsl/templates/advanced_cpp/` - Templates for advanced features
+- `src/robodsl/parsers/ast_builder.py` - Update to handle new AST nodes
+- `tests/test_advanced_cpp_features.py` - Comprehensive tests
+
+#### Deliverables
+- Full support for C++20 templates and concepts
+- Advanced CUDA device code features
+- Operator overloading with Pythonic syntax
+- Modern C++ constructors and initialization
+- Bit-level type support
+- Preprocessor directive handling
+- Function attribute support
+- User-defined literals for robotics
+
+#### Success Criteria
+- All advanced C++ features can be expressed in Pythonic syntax
+- Generated code compiles without errors
+- CUDA device code is properly optimized
+- Templates and concepts work correctly
+- Operator overloads function as expected
+- User-defined literals provide intuitive robotics units
+
+---
+
+### Phase 9: Visualization and Documentation
+**Priority**: 9  
 **Estimated Time**: 5-7 days  
-**Goal**: Enhanced functionality
+**Goal**: Enhanced visualization and documentation generation
 
 #### Tasks
 1. **Visualization**
@@ -499,12 +658,14 @@ src/robodsl/
 ```
 src/robodsl/
 ├── generators/
+│   ├── advanced_cpp_generator.py # Advanced C++ features generation
 │   ├── realtime.py           # Real-time code generation
 │   ├── visualization.py      # Diagram generation
 │   ├── training.py           # Training script generation
 │   ├── docker.py             # Docker generation
 │   └── hardware.py           # Hardware abstraction
 └── templates/
+    ├── advanced_cpp/         # Advanced C++ templates
     ├── realtime/             # Real-time templates
     ├── visualization/        # Visualization templates
     ├── training/             # Training templates
@@ -523,6 +684,7 @@ tests/
 ├── test_generator.py         # Generator tests
 ├── test_onnx_integration.py  # ONNX integration tests
 ├── test_pipeline_generator.py # Pipeline tests
+├── test_advanced_cpp_features.py # Advanced C++ features tests
 └── examples/                 # Example-based tests
 ```
 

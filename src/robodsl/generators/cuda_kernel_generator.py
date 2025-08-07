@@ -59,6 +59,12 @@ class CudaKernelGenerator(BaseGenerator):
         """Generate CUDA kernel header (.cuh) file."""
         context = self._prepare_kernel_context(kernel)
         
+        # Debug print
+        print(f"[DEBUG] Kernel {kernel.name}:")
+        print(f"[DEBUG]   kernel_param_defs: {getattr(kernel.content, 'kernel_parameters', [])}")
+        print(f"[DEBUG]   context['parameters']: {context.get('parameters', [])}")
+        print(f"[DEBUG]   context['struct_name']: {context.get('struct_name', None)}")
+        
         try:
             content = self.render_template('kernel.cuh.jinja2', context)
             cuh_path = self.get_output_path('include', f'{kernel.name}_kernel.cuh')
@@ -123,17 +129,29 @@ class CudaKernelGenerator(BaseGenerator):
                 elif param.direction == KernelParameterDirection.OUT:
                     output_params.append(param_info)
         
+        # Extract kernel parameter definitions (for struct generation)
+        kernel_param_defs = []
+        if hasattr(kernel.content, 'kernel_parameters') and kernel.content.kernel_parameters:
+            kernel_param_defs = kernel.content.kernel_parameters
+        
         # Determine input and output types
         input_type = input_params[0]['type'] if input_params else "float"
         output_type = output_params[0]['type'] if output_params else "float"
-        param_type = "KernelParameters"  # Default parameter struct name
+        # If there are kernel parameter definitions, generate a struct name; else use void
+        if kernel_param_defs:
+            # Capitalize each word and remove underscores for struct name
+            struct_name = ''.join([w.capitalize() for w in kernel.name.split('_')]) + 'Parameters'
+            param_type = struct_name
+        else:
+            struct_name = None
+            param_type = "void"
         
         # Prepare member variables for the wrapper class
         members = []
         for param in kernel_parameters:
             members.append({
                 'name': param['device_name'],
-                'type': f"{param['type']}*",
+                'type': param['type'],  # Don't add extra * - the template will handle it
                 'original_name': param['name']
             })
         
@@ -143,11 +161,13 @@ class CudaKernelGenerator(BaseGenerator):
             'include_guard': f"{kernel.name.upper()}_KERNEL_HPP",
             'include_path': f"{kernel.name}_kernel.cuh",
             'kernel_parameters': kernel_parameters,
+            'parameters': kernel_param_defs,  # Always use kernel parameter definitions for struct
             'input_params': input_params,
             'output_params': output_params,
             'input_type': input_type,
             'output_type': output_type,
             'param_type': param_type,
+            'struct_name': struct_name,
             'members': members,
             'block_size': kernel.content.block_size[0] if kernel.content.block_size else 256,
             'grid_size': kernel.content.grid_size,

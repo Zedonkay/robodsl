@@ -1,0 +1,40 @@
+#pragma once
+
+#include <iostream>
+#include <vector>
+#include <type_traits>
+
+// Template definitions
+{% for template in templates %}
+{{ template }}
+{% endfor %}
+
+// Template aliases
+{% for alias in template_aliases %}
+{{ alias }}
+{% endfor %}
+
+// Static assertions
+{% for assertion in static_asserts %}
+{{ assertion }}
+{% endfor %}
+
+// Global constants and variables
+{% for global in global_variables %}
+{{ global }}
+{% endfor %}
+
+// Operator overloads
+{% for op in operator_overloads %}
+{{ op }}
+{% endfor %}
+
+// Concepts
+{% for concept in concepts %}
+{{ concept }}
+{% endfor %}
+
+// User-defined literals
+{% for literal in user_defined_literals %}
+{{ literal }}
+{% endfor %} 

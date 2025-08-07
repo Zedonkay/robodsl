@@ -8,11 +8,13 @@ from unittest.mock import MagicMock, patch
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from robodsl.core.ast import RoboDSLAST, KernelNode, KernelContentNode, KernelParamNode, KernelParameterDirection
+from conftest import skip_if_no_ros2, skip_if_no_cuda
 from robodsl.generators import CudaKernelGenerator
 
 
 class TestCudaGenerator:
     def test_generate_cuda_kernel_files(self, test_output_dir):
+        skip_if_no_cuda()
         """Test CUDA kernel file generation."""
         generator = CudaKernelGenerator(str(test_output_dir))
         
@@ -75,6 +77,7 @@ class TestCudaGenerator:
         assert "test_kernel" in hpp_content
 
     def test_generate_with_multiple_kernels(self, test_output_dir):
+        skip_if_no_ros2()
         """Test generation with multiple kernels."""
         generator = CudaKernelGenerator(str(test_output_dir))
         
@@ -142,6 +145,7 @@ class TestCudaGenerator:
         assert len(filter_kernel_files) > 0
 
     def test_kernel_parameter_direction_enum(self):
+        skip_if_no_ros2()
         """Test that kernel parameter directions are correctly handled."""
         # Test input parameter
         input_param = KernelParamNode(
@@ -162,6 +166,7 @@ class TestCudaGenerator:
         assert output_param.direction == "out"
 
     def test_kernel_content_validation(self):
+        skip_if_no_ros2()
         """Test that kernel content is properly validated."""
         # Test with valid content
         valid_content = KernelContentNode(
@@ -178,6 +183,7 @@ class TestCudaGenerator:
         assert valid_content.grid_size == (1, 1, 1)
 
     def test_generator_without_kernels(self, test_output_dir):
+        skip_if_no_ros2()
         """Test generator behavior when no kernels are present."""
         generator = CudaKernelGenerator(str(test_output_dir))
         
@@ -188,6 +194,7 @@ class TestCudaGenerator:
         assert len(generated_files) == 0
 
     def test_new_kernel_syntax(self, test_output_dir):
+        skip_if_no_ros2()
         """Test the new input: and output: syntax for CUDA kernels."""
         generator = CudaKernelGenerator(str(test_output_dir))
         

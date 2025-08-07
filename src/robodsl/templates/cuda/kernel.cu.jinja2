@@ -19,8 +19,9 @@ namespace {
 // Device kernel implementation
 __global__ void {{ kernel_name }}_kernel(
     {% for param in kernel_parameters %}
-    {{ param.type }} {{ param.name }}{% if not loop.last %},{% endif %}
+    {{ param.type }}* {{ param.name }}{% if not loop.last %},{% endif %}
     {% endfor %}
+    {% if kernel_parameters %}, {% endif %}int num_elements
 ) {
     const int idx = blockIdx.x * blockDim.x + threadIdx.x;
     const int stride = blockDim.x * gridDim.x;
@@ -55,23 +56,21 @@ __global__ void {{ kernel_name }}_kernel(
     max_threads_per_block_ = props.maxThreadsPerBlock;
     max_blocks_per_dim_ = props.maxGridSize[0];
     
-    RCLCPP_DEBUG(rclcpp::get_logger("{{ kernel_name }}Kernel"), 
-                "Initialized CUDA device: %s (Compute %d.%d)", 
-                props.name, props.major, props.minor);
+    // CUDA device initialized successfully
+    // Device: %s (Compute %d.%d)
 }
 
 {{ kernel_name }}Kernel::~{{ kernel_name }}Kernel() {
     try {
         freeDeviceMemory();
     } catch (const std::exception& e) {
-        RCLCPP_ERROR(rclcpp::get_logger("{{ kernel_name }}Kernel"), 
-                    "Error in destructor: %s", e.what());
+        // Error in destructor: %s
     }
 }
 
-bool {{ kernel_name }}Kernel::initialize(const std::vector<{{ input_type }}>& input) {
-    if (input.empty()) {
-        last_error_ = "Input vector is empty";
+bool {{ kernel_name }}Kernel::initialize(const {{ input_type }}* input, size_t input_size) {
+    if (!input || input_size == 0) {
+        last_error_ = "Input pointer is null or size is zero";
         return false;
     }
     
@@ -79,7 +78,7 @@ bool {{ kernel_name }}Kernel::initialize(const std::vector<{{ input_type }}>& in
     freeDeviceMemory();
     
     // Store input size
-    input_size_ = input.size();
+    input_size_ = input_size;
     
     // Allocate device memory
     if (!allocateDeviceMemory()) {
@@ -90,7 +89,7 @@ bool {{ kernel_name }}Kernel::initialize(const std::vector<{{ input_type }}>& in
     {% for param in input_params %}
     cudaError_t status = cudaMemcpyAsync(
         {{ param.device_name }}, 
-        input.data(), 
+        input, 
         input_size_ * sizeof({{ param.type }}), 
         cudaMemcpyHostToDevice,
         stream_ ? *stream_ : 0
@@ -116,28 +115,34 @@ bool {{ kernel_name }}Kernel::initialize(const std::vector<{{ input_type }}>& in
     return true;
 }
 
-std::vector<{{ output_type }}> {{ kernel_name }}Kernel::process(const {{ param_type }}& parameters) {
+bool {{ kernel_name }}Kernel::process(const {{ param_type }}* parameters, size_t param_size, {{ output_type }}* output, size_t output_size) {
     if (!initialized_) {
-        throw std::runtime_error("Kernel not initialized");
+        return false;
+    }
+    
+    if (!output || output_size < input_size_) {
+        last_error_ = "Output buffer is null or too small";
+        return false;
     }
     
     // Copy parameters to device if needed
-    if (!parameters_copied_ || parameters != last_parameters_) {
+    {% if param_type != "void" %}
+    if (parameters && !parameters_copied_) {
         cudaError_t status = cudaMemcpyAsync(
             d_parameters_, 
-            &parameters, 
-            sizeof({{ param_type }}), 
+            parameters, 
+            param_size, 
             cudaMemcpyHostToDevice,
             stream_ ? *stream_ : 0
         );
         
         if (!checkCudaError(status, "Copy parameters to device")) {
-            throw std::runtime_error("Failed to copy parameters to device: " + last_error_);
+            return false;
         }
         
-        last_parameters_ = parameters;
         parameters_copied_ = true;
     }
+    {% endif %}
     
     // Calculate grid and block dimensions
     int block_size = std::min(max_threads_per_block_, kBlockSize);
@@ -149,21 +154,19 @@ std::vector<{{ output_type }}> {{ kernel_name }}Kernel::process(const {{ param_t
         {% for param in kernel_parameters %}
         {{ param.device_name }}{% if not loop.last %},{% endif %}
         {% endfor %}
+        {% if kernel_parameters %}, {% endif %}input_size_
     );
     
     // Check for kernel launch errors
     cudaError_t status = cudaGetLastError();
     if (!checkCudaError(status, "Kernel launch")) {
-        throw std::runtime_error("Kernel launch failed: " + last_error_);
+        return false;
     }
-    
-    // Allocate output vector
-    std::vector<{{ output_type }}> output(input_size_);
     
     // Copy results back to host
     {% for param in output_params %}
     status = cudaMemcpyAsync(
-        output.data(), 
+        output, 
         {{ param.device_name }}, 
         input_size_ * sizeof({{ param.type }}), 
         cudaMemcpyDeviceToHost,
@@ -171,7 +174,7 @@ std::vector<{{ output_type }}> {{ kernel_name }}Kernel::process(const {{ param_t
     );
     
     if (!checkCudaError(status, "Copy {{ param.name }} from device")) {
-        throw std::runtime_error("Failed to copy {{ param.name }} from device: " + last_error_);
+        return false;
     }
     {% endfor %}
     
@@ -183,10 +186,10 @@ std::vector<{{ output_type }}> {{ kernel_name }}Kernel::process(const {{ param_t
     }
     
     if (!checkCudaError(status, "Synchronize after processing")) {
-        throw std::runtime_error("Synchronization failed: " + last_error_);
+        return false;
     }
     
-    return output;
+    return true;
 }
 
 bool {{ kernel_name }}Kernel::allocateDeviceMemory() {
@@ -226,8 +229,6 @@ void {{ kernel_name }}Kernel::freeDeviceMemory() {
 bool {{ kernel_name }}Kernel::checkCudaError(cudaError_t status, const std::string& context) {
     if (status != cudaSuccess) {
         last_error_ = context + ": " + cudaGetErrorString(status);
-        RCLCPP_ERROR(rclcpp::get_logger("{{ kernel_name }}Kernel"), 
-                    "%s", last_error_.c_str());
         return false;
     }
     return true;

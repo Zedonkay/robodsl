@@ -1,12 +1,105 @@
-"""Pytest configuration and fixtures for RoboDSL tests."""
+"""Test configuration and utilities."""
 
-import pytest
-import tempfile
 import os
 import shutil
+import pytest
+import tempfile
 from pathlib import Path
 from robodsl.generators.main_generator import MainGenerator
 from robodsl.parsers.lark_parser import RoboDSLParser
+
+
+def has_ros2():
+    """Check if ROS2 is available in the environment."""
+    # Check for ros2 command
+    if shutil.which('ros2') is not None:
+        return True
+    
+    # Check for AMENT_PREFIX_PATH environment variable
+    if 'AMENT_PREFIX_PATH' in os.environ:
+        return True
+    
+    # Check for common ROS2 installation paths
+    ros2_paths = [
+        '/opt/ros/humble',
+        '/opt/ros/foxy',
+        '/opt/ros/galactic',
+        '/opt/ros/rolling'
+    ]
+    
+    for path in ros2_paths:
+        if os.path.exists(path):
+            return True
+    
+    return False
+
+
+def has_cuda():
+    """Check if CUDA is available in the environment."""
+    return shutil.which('nvcc') is not None
+
+
+def has_tensorrt():
+    """Check if TensorRT is available in the environment."""
+    # Check for TensorRT by looking for common installation paths or environment variables
+    tensorrt_paths = [
+        '/usr/local/tensorrt',
+        '/opt/tensorrt',
+        '/usr/lib/x86_64-linux-gnu/tensorrt',
+        '/usr/lib/aarch64-linux-gnu/tensorrt'
+    ]
+    
+    # Check if any TensorRT path exists
+    for path in tensorrt_paths:
+        if os.path.exists(path):
+            return True
+    
+    # Check environment variables
+    if 'TENSORRT_ROOT' in os.environ or 'TENSORRT_PATH' in os.environ:
+        return True
+    
+    # Check if TensorRT libraries are available
+    try:
+        import ctypes
+        ctypes.CDLL('libnvinfer.so')
+        return True
+    except (OSError, ImportError):
+        pass
+    
+    return False
+
+
+def has_onnx():
+    """Check if ONNX Runtime is available in the environment."""
+    try:
+        import onnxruntime
+        return True
+    except ImportError:
+        return False
+
+
+def skip_if_no_ros2():
+    """Skip test if ROS2 is not available."""
+    if not has_ros2():
+        pytest.skip("Skipping test: ROS2 not available.")
+
+
+def skip_if_no_cuda():
+    """Skip test if CUDA is not available."""
+    if not has_cuda():
+        pytest.skip("Skipping test: CUDA not available.")
+
+
+def skip_if_no_tensorrt():
+    """Skip test if TensorRT is not available."""
+    if not has_tensorrt():
+        pytest.skip("Skipping test: TensorRT not available.")
+
+
+def skip_if_no_onnx():
+    """Skip test if ONNX Runtime is not available."""
+    if not has_onnx():
+        pytest.skip("Skipping test: ONNX Runtime not available.")
 
 
 @pytest.fixture

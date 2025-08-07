@@ -12,12 +12,12 @@ RoboDSL simplifies the development of GPU-accelerated robotics applications by p
 
 ### Key Features
 
-- **GPU Acceleration**: Native CUDA kernel generation and optimization
-- **ROS2 Integration**: Automatic ROS2 node generation with QoS configuration
-- **ML Model Support**: ONNX Runtime integration for machine learning models
-- **Pipeline Orchestration**: Multi-stage processing pipeline generation
-- **Image Processing**: OpenCV integration for computer vision tasks
-- **High Performance**: Optimized for real-time robotics applications
+- **🚀 GPU Acceleration**: Native CUDA kernel generation and optimization
+- **🤖 ROS2 Integration**: Automatic ROS2 node generation with QoS configuration
+- **🧠 ML Model Support**: ONNX Runtime integration for machine learning models
+- **🔄 Pipeline Orchestration**: Multi-stage processing pipeline generation
+- **📊 Image Processing**: OpenCV integration for computer vision tasks
+- **⚡ High Performance**: Optimized for real-time robotics applications
 
 ### New Features in v0.1.0
 
@@ -139,71 +139,19 @@ node image_processor {
 Generate the code:
 
 ```bash
-robodsl generate example.robodsl --output ./generated
+colcon build
 ```
 
-## Documentation
-
-- **[Installation Guide](INSTALL.md)**: Comprehensive installation instructions
-- **[User Guide](docs/user-guide/)**: Getting started and tutorials
-- **[DSL Specification](docs/developer/dsl-specification.html)**: Language reference
-- **[API Documentation](docs/developer/)**: Developer documentation
-- **[Examples](examples/)**: Code examples and templates
-
-## Features
-
-### Core Language Features
-
-- **Node Definitions**: ROS2 node configuration with publishers, subscribers, and parameters
-- **CUDA Kernels**: GPU kernel definitions with block/grid size configuration
-- **ONNX Models**: Machine learning model integration with device and optimization settings
-- **Pipelines**: Multi-stage processing workflows with data flow between stages
-- **QoS Configuration**: ROS2 Quality of Service settings
-- **Lifecycle Management**: ROS2 lifecycle node configuration
-
-### Code Generation
-
-- **C++ Nodes**: ROS2-compatible C++ node generation
-- **CUDA Integration**: GPU kernel compilation and memory management
-- **ONNX Runtime**: Model loading and inference code
-- **CMake Build**: Complete build system generation
-- **Launch Files**: ROS2 launch file generation
-- **Documentation**: Auto-generated API documentation
-
-### Development Tools
-
-- **Semantic Analysis**: Error checking and validation
-- **Template System**: Jinja2-based code generation
-- **Testing Framework**: Comprehensive test suite
-- **IDE Support**: Language server and syntax highlighting
-- **CLI Tools**: Command-line interface for code generation
-
-## System Requirements
-
-- **Python**: 3.8 or higher
-- **OS**: Linux (Ubuntu 20.04+), macOS (10.15+), Windows 10+
-- **GPU**: NVIDIA GPU with CUDA support (for GPU features)
-- **ROS2**: Humble or newer (for ROS2 features)
-
-## Contributing
-
-We welcome contributions! Please see [CONTRIBUTING.md](docs/developer/contributing.md) for details.
-
-### Development Setup
+## Running
 
 ```bash
-# Clone repository
-git clone https://github.com/Zedonkay/robodsl.git
-cd robodsl
+# Source the workspace
+source install/setup.bash
 
-# Install in development mode
-pip install -e ".[dev]"
+# Launch all nodes
+ros2 launch robodsl_package robodsl_package_launch.py
 
-# Install pre-commit hooks
-pre-commit install
-
-# Run tests
-pytest
+# Or launch individual nodes
 ```
 
 ## License

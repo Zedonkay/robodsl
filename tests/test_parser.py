@@ -2,6 +2,7 @@
 
 import pytest
 from robodsl.parsers.lark_parser import parse_robodsl
+from conftest import skip_if_no_ros2, skip_if_no_cuda
 from robodsl.core.ast import RoboDSLAST, NodeNode, PublisherNode, SubscriberNode, ServiceNode, ParameterNode, KernelNode
 from robodsl.parsers.semantic_analyzer import SemanticAnalyzer, SemanticError
 
@@ -21,14 +22,14 @@ def test_parse_empty_config():
 def test_parse_node_with_publisher():
     """Test parsing a node with a publisher."""
     ast = parse_robodsl("""
-    node test_node {
+    node test_node_1 {
         publisher /camera/image_raw: "sensor_msgs/msg/Image"
     }
     """)
     
     assert len(ast.nodes) == 1
     node = ast.nodes[0]
-    assert node.name == "test_node"
+    assert node.name == "test_node_1"
     assert len(node.content.publishers) == 1
     pub = node.content.publishers[0]
     assert pub.topic == "/camera/image_raw"
@@ -37,14 +38,14 @@ def test_parse_node_with_publisher():
 def test_parse_node_with_subscriber():
     """Test parsing a node with a subscriber."""
     ast = parse_robodsl("""
-    node test_node {
+    node test_node_2 {
         subscriber /camera/image_raw: "sensor_msgs/msg/Image"
     }
     """)
     
     assert len(ast.nodes) == 1
     node = ast.nodes[0]
-    assert node.name == "test_node"
+    assert node.name == "test_node_2"
     assert len(node.content.subscribers) == 1
     sub = node.content.subscribers[0]
     assert sub.topic == "/camera/image_raw"
@@ -53,14 +54,14 @@ def test_parse_node_with_subscriber():
 def test_parse_node_with_service():
     """Test parsing a node with a service."""
     ast = parse_robodsl("""
-    node test_node {
+    node test_node_3 {
         service /get_status: "std_srvs/srv/Trigger"
     }
     """)
     
     assert len(ast.nodes) == 1
     node = ast.nodes[0]
-    assert node.name == "test_node"
+    assert node.name == "test_node_3"
     assert len(node.content.services) == 1
     service = node.content.services[0]
     assert service.service == "/get_status"
@@ -69,7 +70,7 @@ def test_parse_node_with_service():
 def test_parse_node_with_parameters():
     """Test parsing a node with parameters."""
     ast = parse_robodsl("""
-    node test_node {
+    node test_node_4 {
         parameter int camera_fps = 30
         parameter string camera_resolution = "640x480"
         parameter bool enable_debug = true
@@ -78,7 +79,7 @@ def test_parse_node_with_parameters():
     
     assert len(ast.nodes) == 1
     node = ast.nodes[0]
-    assert node.name == "test_node"
+    assert node.name == "test_node_4"
     assert len(node.content.parameters) == 3
     
     # Check parameters
@@ -98,7 +99,7 @@ def test_parse_node_with_parameters():
 def test_parse_node_with_qos():
     """Test parsing a node with QoS configuration."""
     ast = parse_robodsl("""
-    node test_node {
+    node test_node_5 {
         publisher /test_topic: "std_msgs/msg/String" {
             qos {
                 reliability: reliable
@@ -195,7 +196,7 @@ def test_parse_include():
     include "common_config.robodsl"
     include <system_header.h>
     
-    node test_node {
+    node test_node_6 {
         publisher /test: "std_msgs/msg/String"
     }
     """)

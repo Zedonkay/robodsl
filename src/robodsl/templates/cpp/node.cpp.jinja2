@@ -3,6 +3,13 @@
 #include "{{ include_path }}"
 #include <memory>
 
+{% if global_cpp_code %}
+// Global C++ code blocks (passed through as-is)
+{% for cpp_block in global_cpp_code %}
+{{ cpp_block.code }}
+{% endfor %}
+{% endif %}
+
 {% if namespace %}
 namespace {{ namespace }} {
 {% endif %}
@@ -838,7 +845,7 @@ std::vector<{{ cuda_default_output_type|default('float') }}>
 std::vector<{{ kernel.output_type|default('float') }}> 
 {{ class_name }}::{{ kernel.name }}(
     const std::vector<{{ kernel.input_type|default('float') }}>& input,
-    const {{ kernel.param_type|default('CudaParams') }}& parameters)
+    const {{ kernel.param_type }}{% if kernel.param_type != 'void' %}&{% endif %} parameters)
 {
     RCLCPP_DEBUG(this->get_logger(), "CUDA kernel {{ kernel.name }} called with %zu elements", input.size());
     
@@ -857,8 +864,33 @@ void {{ class_name }}::{{ method.name }}(
     {% if method.inputs and method.outputs %}, {% endif %}
     {% for output in method.outputs %}{{ output.type }}& {{ output.name }}{% if output.size_expr %}[{{ output.size_expr }}]{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}
 ) {
+{% if method.outputs %}
+    // Method has output parameters, assign to them instead of returning
+    {% for output in method.outputs %}
+    {% if method.code and method.code.strip() %}
+        {% set code_without_return = method.code | replace('return ', '') | replace(';', '') %}
+        {% if code_without_return.strip() %}
+    {{ output.name }} = {{ code_without_return }};
+        {% else %}
+    {{ output.name }} = {};  // Default initialization
+        {% endif %}
+    {% else %}
+    {{ output.name }} = {};  // Default initialization
+    {% endif %}
+    {% endfor %}
+{% else %}
+{% if method.code and method.code.strip() %}
 {{ method.code | indent(4) }}
+{% else %}
+    // Empty method implementation
+{% endif %}
+{% endif %}
 }
+{% endfor %}
+
+// Raw C++ code blocks (passed through as-is)
+{% for cpp_block in raw_cpp_code %}
+{{ cpp_block.code | indent(0) }}
 {% endfor %}
 
 {% if namespace %}

@@ -15,17 +15,19 @@ from .launch_generator import LaunchGenerator
 from .package_generator import PackageGenerator
 from .onnx_integration import OnnxIntegrationGenerator
 from .pipeline_generator import PipelineGenerator
+from .config_generator import ConfigGenerator
+from .advanced_cpp_generator import AdvancedCppGenerator
 from ..core.ast import RoboDSLAST
 
 
 class MainGenerator(BaseGenerator):
     """Main generator that orchestrates all other generators."""
     
-    def __init__(self, output_dir: str = ".", template_dirs: Optional[List[Path]] = None, debug: bool = False):
+    def __init__(self, output_dir: str = "test_output", template_dirs: Optional[List[Path]] = None, debug: bool = False):
         """Initialize the main generator.
         
         Args:
-            output_dir: Base directory for generated files
+            output_dir: Base directory for generated files (defaults to test_output)
             template_dirs: Additional template directories to search
             debug: Whether to enable debug mode
         """
@@ -41,16 +43,33 @@ class MainGenerator(BaseGenerator):
         self.package_generator = PackageGenerator(output_dir, template_dirs)
         self.onnx_generator = OnnxIntegrationGenerator(output_dir)
         self.pipeline_generator = PipelineGenerator(output_dir)
+        self.config_generator = ConfigGenerator(output_dir, template_dirs)
+        self.advanced_cpp_generator = AdvancedCppGenerator(output_dir, template_dirs)
     
-    def generate(self, ast: RoboDSLAST) -> List[Path]:
+    def generate(self, ast: RoboDSLAST, output_dir: Optional[str] = None) -> List[Path]:
         """Generate all files from the AST.
         
         Args:
             ast: The parsed RoboDSL AST
+            output_dir: Optional output directory (overrides the one set in constructor)
             
         Returns:
             List of Path objects for all generated files
         """
+        # Use provided output_dir if specified, otherwise use the one from constructor
+        if output_dir is not None:
+            self.output_dir = Path(output_dir)
+            # Update all sub-generators with the new output directory
+            self.cpp_generator.output_dir = self.output_dir
+            self.cuda_generator.output_dir = self.output_dir
+            self.python_generator.output_dir = self.output_dir
+            self.cmake_generator.output_dir = self.output_dir
+            self.launch_generator.output_dir = self.output_dir
+            self.package_generator.output_dir = self.output_dir
+            self.onnx_generator.output_dir = self.output_dir
+            self.pipeline_generator.output_dir = self.output_dir
+            self.config_generator.output_dir = self.output_dir
+            self.advanced_cpp_generator.output_dir = self.output_dir
         all_generated_files = []
         
         # Generate C++ node files
@@ -88,6 +107,24 @@ class MainGenerator(BaseGenerator):
         package_files = self.package_generator.generate(ast)
         all_generated_files.extend(package_files)
         print(f"Generated {len(package_files)} package files")
+        
+        # Generate config files
+        print("Generating config files...")
+        config_files = self.config_generator.generate(ast)
+        all_generated_files.extend(config_files)
+        print(f"Generated {len(config_files)} config files")
+        
+        # Generate global raw C++ code files
+        print("Generating global raw C++ code files...")
+        raw_cpp_files = self._generate_global_raw_cpp_code(ast)
+        all_generated_files.extend(raw_cpp_files)
+        print(f"Generated {len(raw_cpp_files)} global raw C++ code files")
+        
+        # Generate advanced C++ features
+        print("Generating advanced C++ features...")
+        advanced_cpp_files = self._generate_advanced_cpp_features(ast)
+        all_generated_files.extend(advanced_cpp_files)
+        print(f"Generated {len(advanced_cpp_files)} advanced C++ feature files")
         
         # Generate ONNX integration files
         print("Generating ONNX integration files...")
@@ -133,6 +170,115 @@ class MainGenerator(BaseGenerator):
         
         print(f"Total generated files: {len(all_generated_files)}")
         return all_generated_files
+    
+    def _generate_global_raw_cpp_code(self, ast: RoboDSLAST) -> List[Path]:
+        """Generate global raw C++ code files that get passed through as-is."""
+        generated_files = []
+        
+        if hasattr(ast, 'raw_cpp_code') and ast.raw_cpp_code:
+            # Create src directory if it doesn't exist
+            src_dir = Path(self.output_dir) / 'src'
+            src_dir.mkdir(parents=True, exist_ok=True)
+            
+            for i, cpp_block in enumerate(ast.raw_cpp_code):
+                if cpp_block.location == "global":
+                    # Generate a unique filename for each global C++ code block
+                    filename = f"global_cpp_code_{i}.cpp"
+                    file_path = src_dir / filename
+                    
+                    # Write the raw C++ code directly to the file
+                    file_path.write_text(cpp_block.code)
+                    generated_files.append(file_path)
+                    
+                    if self.debug:
+                        print(f"Generated global C++ code file: {file_path}")
+        
+        return generated_files
+    
+    def _generate_advanced_cpp_features(self, ast: RoboDSLAST) -> List[Path]:
+        """Generate advanced C++ features files."""
+        generated_files = []
+        
+        if hasattr(ast, 'advanced_cpp_features') and ast.advanced_cpp_features:
+            # Create include directory for header files
+            include_dir = Path(self.output_dir) / 'include'
+            include_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Create src directory for implementation files
+            src_dir = Path(self.output_dir) / 'src'
+            src_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Separate features by type
+            templates = []
+            static_asserts = []
+            global_vars = []
+            operator_overloads = []
+            constructors = []
+            bitfields = []
+            preprocessor_directives = []
+            function_attributes = []
+            concepts = []
+            friend_declarations = []
+            user_defined_literals = []
+            
+            for feature in ast.advanced_cpp_features:
+                if hasattr(feature, '__class__'):
+                    class_name = feature.__class__.__name__
+                    if 'Template' in class_name:
+                        templates.append(feature)
+                    elif 'StaticAssert' in class_name:
+                        static_asserts.append(feature)
+                    elif 'Global' in class_name:
+                        global_vars.append(feature)
+                    elif 'Operator' in class_name:
+                        operator_overloads.append(feature)
+                    elif 'Constructor' in class_name or 'Destructor' in class_name:
+                        constructors.append(feature)
+                    elif 'Bitfield' in class_name:
+                        bitfields.append(feature)
+                    elif 'Preprocessor' in class_name:
+                        preprocessor_directives.append(feature)
+                    elif 'FunctionAttribute' in class_name:
+                        function_attributes.append(feature)
+                    elif 'Concept' in class_name:
+                        concepts.append(feature)
+                    elif 'Friend' in class_name:
+                        friend_declarations.append(feature)
+                    elif 'UserDefinedLiteral' in class_name:
+                        user_defined_literals.append(feature)
+            
+            # Generate header file with templates and declarations
+            if templates or static_asserts or global_vars or operator_overloads or concepts or user_defined_literals:
+                header_content = self.advanced_cpp_generator.generate_templates(templates)
+                header_content += "\n\n" + self.advanced_cpp_generator.generate_static_asserts(static_asserts)
+                header_content += "\n\n" + self.advanced_cpp_generator.generate_global_variables(global_vars)
+                header_content += "\n\n" + self.advanced_cpp_generator.generate_operator_overloads(operator_overloads)
+                header_content += "\n\n" + self.advanced_cpp_generator.generate_concepts(concepts)
+                header_content += "\n\n" + self.advanced_cpp_generator.generate_user_defined_literals(user_defined_literals)
+                
+                header_path = include_dir / 'advanced_features.hpp'
+                header_path.write_text(header_content)
+                generated_files.append(header_path)
+            
+            # Generate implementation file with constructors, bitfields, and function attributes
+            if constructors or bitfields or function_attributes or friend_declarations:
+                impl_content = self.advanced_cpp_generator.generate_constructors(constructors)
+                impl_content += "\n\n" + self.advanced_cpp_generator.generate_bitfields(bitfields)
+                impl_content += "\n\n" + self.advanced_cpp_generator.generate_function_attributes(function_attributes)
+                impl_content += "\n\n" + self.advanced_cpp_generator.generate_friend_declarations(friend_declarations)
+                
+                impl_path = src_dir / 'advanced_features.cpp'
+                impl_path.write_text(impl_content)
+                generated_files.append(impl_path)
+            
+            # Generate preprocessor directives file
+            if preprocessor_directives:
+                preprocessor_content = self.advanced_cpp_generator.generate_preprocessor_directives(preprocessor_directives)
+                preprocessor_path = include_dir / 'preprocessor_directives.hpp'
+                preprocessor_path.write_text(preprocessor_content)
+                generated_files.append(preprocessor_path)
+        
+        return generated_files
     
     def _generate_readme(self, ast: RoboDSLAST) -> Path:
         """Generate a README.md file for the package."""

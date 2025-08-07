@@ -12,8 +12,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from robodsl.parsers.lark_parser import parse_robodsl
+from conftest import skip_if_no_ros2
 from robodsl.core.generator import CodeGenerator
-from robodsl.core.ast import RoboDSLAST, NodeNode, NodeContentNode, PublisherNode, SubscriberNode, ServiceNode, ParameterNode, ValueNode
+from robodsl.core.ast import RoboDSLAST, NodeNode, NodeContentNode, PublisherNode, SubscriberNode, ServicePrimitiveNode, ParameterNode, ValueNode
 
 def create_test_ast(ros2_enabled=True):
     """Create a test AST."""
@@ -29,7 +30,7 @@ def create_test_ast(ros2_enabled=True):
             SubscriberNode(topic="/input_topic", msg_type="std_msgs/msg/String", qos=None)
         ],
         services=[
-            ServiceNode(service="/test_service", srv_type="std_srvs/srv/Trigger", qos=None)
+            ServicePrimitiveNode(service="/test_service", srv_type="std_srvs/srv/Trigger", qos=None)
         ],
         parameters=[
             ParameterNode(name="test_param", type="int", value=ValueNode(value=42))
@@ -190,7 +191,7 @@ def test_service_generation():
         publishers=[],
         subscribers=[],
         services=[
-            ServiceNode(service="/test_srv", srv_type="std_srvs/srv/Trigger", qos=None)
+            ServicePrimitiveNode(service="/test_srv", srv_type="std_srvs/srv/Trigger", qos=None)
         ],
         parameters=[]
     )

@@ -27,8 +27,29 @@
 {% endfor %}
 {% endif %}
 
+{% if global_cpp_code %}
+// Global C++ code blocks (passed through as-is)
+{% for cpp_block in global_cpp_code %}
+{{ cpp_block.code }}
+{% endfor %}
+{% endif %}
+
 {% if namespace %}
 namespace {{ namespace }} {
+{% endif %}
+
+{% if cuda_kernels %}
+// CUDA kernel parameter structs
+{% for kernel in cuda_kernels %}
+{% if kernel.struct_name %}
+// Struct for {{ kernel.kernel_name }} kernel parameters
+struct {{ kernel.struct_name }} {
+{% for param in kernel.parameters %}
+    {{ param.type }} {{ param.name }};
+{% endfor %}
+};
+{% endif %}
+{% endfor %}
 {% endif %}
 
 class {{ class_name }} : public {{ base_class }} {
@@ -166,6 +187,11 @@ public:
         {% if method.inputs and method.outputs %}, {% endif %}
         {% for output in method.outputs %}{{ output.type }}& {{ output.name }}{% if output.size_expr %}[{{ output.size_expr }}]{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}
     );
+    {% endfor %}
+
+    // Raw C++ code blocks (passed through as-is)
+    {% for cpp_block in raw_cpp_code %}
+    {{ cpp_block.code }}
     {% endfor %}
 
 private:

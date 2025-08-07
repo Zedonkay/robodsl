@@ -42,9 +42,13 @@ class OnnxIntegrationGenerator:
         """Generate C++ header file for ONNX integration."""
         template = self.env.get_template("header.hpp.jinja2")
         
+        # Prepare template variables
+        optimizations = model.config.optimizations if model.config.optimizations else []
+        
         return template.render(
             node_name=node_name,
-            model=model
+            model=model,
+            optimizations=optimizations
         )
     
     def _generate_implementation(self, model: OnnxModelNode, node_name: str) -> str:
@@ -65,8 +69,12 @@ class OnnxIntegrationGenerator:
     
     def generate_cmake_integration(self, model: OnnxModelNode, node_name: str) -> str:
         """Generate CMake configuration for ONNX integration."""
+        
+        # Check if TensorRT optimization is enabled
+        has_tensorrt = any(opt.optimization == 'tensorrt' for opt in model.config.optimizations)
+        
         template_str = """
-# ONNX Runtime integration for {{ node_name }} (Pure C++/CUDA)
+# ONNX Runtime integration for {{ node_name }} (Pure C++/CUDA{% if has_tensorrt %}/TensorRT{% endif %})
 
 # Find ONNX Runtime
 find_package(ONNXRuntime REQUIRED)
@@ -74,16 +82,32 @@ find_package(ONNXRuntime REQUIRED)
 # Find OpenCV (for image preprocessing)
 find_package(OpenCV REQUIRED)
 
-# Add ONNX Runtime include directories
+{%- if has_tensorrt %}
+# Find TensorRT
+find_package(TensorRT REQUIRED)
+
+# Find CUDA
+find_package(CUDA REQUIRED)
+{%- endif %}
+
+# Add include directories
 target_include_directories({{ node_name }} PRIVATE
     ${ONNXRuntime_INCLUDE_DIRS}
     ${OpenCV_INCLUDE_DIRS}
+    {%- if has_tensorrt %}
+    ${TensorRT_INCLUDE_DIRS}
+    ${CUDA_INCLUDE_DIRS}
+    {%- endif %}
 )
 
-# Link ONNX Runtime libraries
+# Link libraries
 target_link_libraries({{ node_name }} PRIVATE
     ${ONNXRuntime_LIBRARIES}
     ${OpenCV_LIBS}
+    {%- if has_tensorrt %}
+    ${TensorRT_LIBRARIES}
+    ${CUDA_LIBRARIES}
+    {%- endif %}
 )
 
 # Copy ONNX model file to build directory
@@ -93,22 +117,45 @@ configure_file(
     COPYONLY
 )
 
+{%- if has_tensorrt %}
+# Create TensorRT cache directory
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/trt_cache)
+
+# Set TensorRT cache path
+target_compile_definitions({{ node_name }} PRIVATE
+    ONNX_MODEL_PATH="${CMAKE_CURRENT_BINARY_DIR}/{{ model.name }}.onnx"
+    TENSORRT_CACHE_PATH="${CMAKE_CURRENT_BINARY_DIR}/trt_cache"
+)
+{%- else %}
 # Set model path for runtime
 target_compile_definitions({{ node_name }} PRIVATE
     ONNX_MODEL_PATH="${CMAKE_CURRENT_BINARY_DIR}/{{ model.name }}.onnx"
 )
+{%- endif %}
 
 # Ensure C++17 standard for ONNX Runtime
 set_target_properties({{ node_name }} PROPERTIES
     CXX_STANDARD 17
     CXX_STANDARD_REQUIRED ON
 )
+
+{%- if has_tensorrt %}
+# Set CUDA properties
+set_target_properties({{ node_name }} PROPERTIES
+    CUDA_SEPARABLE_COMPILATION ON
+    CUDA_ARCHITECTURES "60;70;75;80;86"
+)
+
+# Enable CUDA compilation
+set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/src/{{ node_name }}_onnx.cpp PROPERTIES LANGUAGE CUDA)
+{%- endif %}
 """
         
         template = Template(template_str)
         return template.render(
             node_name=node_name,
-            model=model
+            model=model,
+            has_tensorrt=has_tensorrt
         )
     
     def generate_node_integration(self, model: OnnxModelNode, node_name: str) -> str:

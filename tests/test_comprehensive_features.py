@@ -2,6 +2,7 @@
 
 import pytest
 from robodsl.parsers.lark_parser import parse_robodsl
+from conftest import skip_if_no_ros2, skip_if_no_cuda, skip_if_no_tensorrt, skip_if_no_onnx
 from robodsl.parsers.semantic_analyzer import SemanticError
 from lark import ParseError
 from robodsl.core.ast import (
@@ -16,6 +17,7 @@ class TestComprehensiveNodeFeatures:
     """Test comprehensive node feature parsing and validation."""
     
     def test_complex_node_with_all_features(self):
+        skip_if_no_ros2()
         """Test a complex node with all supported features."""
         dsl_code = """
         node comprehensive_node {
@@ -141,9 +143,10 @@ class TestAdvancedCppMethodFeatures:
     """Test advanced C++ method features."""
     
     def test_complex_cpp_methods(self):
+        skip_if_no_ros2()
         """Test complex C++ methods with various parameter types."""
         content = """
-        node test_node {
+        node test_node_1 {
             method complex_processing {
                 input: int data_size
                 input: float* input_data (data_size)
@@ -218,6 +221,7 @@ class TestAdvancedCudaKernelFeatures:
     """Test advanced CUDA kernel features."""
     
     def test_complex_cuda_kernels(self):
+        skip_if_no_cuda()
         """Test complex CUDA kernels with various configurations."""
         content = """
         cuda_kernels {
@@ -341,9 +345,10 @@ class TestSemanticValidation:
     """Test comprehensive semantic validation."""
     
     def test_duplicate_parameter_names(self):
+        skip_if_no_ros2()
         """Test semantic validation for duplicate parameter names."""
         dsl_code = """
-        node test_node {
+        node test_node_1 {
             parameter int test_param = 42
             parameter int test_param = 43  // Duplicate name
         }
@@ -356,9 +361,10 @@ class TestSemanticValidation:
         assert "duplicate parameter name" in error_msg.lower()
     
     def test_duplicate_timer_names(self):
+        skip_if_no_ros2()
         """Test detection of duplicate timer names."""
         content = """
-        node test_node {
+        node test_node_1 {
             timer my_timer: 1.0
             timer my_timer: 2.0  // Duplicate name
         }
@@ -370,9 +376,10 @@ class TestSemanticValidation:
         assert "Duplicate timer callback name" in str(exc_info.value)
     
     def test_duplicate_publisher_topics(self):
+        skip_if_no_ros2()
         """Test detection of duplicate publisher topics."""
         content = """
-        node test_node {
+        node test_node_1 {
             publisher /test_topic : "std_msgs/String"
             publisher /test_topic : "std_msgs/Int32"  // Duplicate topic
         }
@@ -384,9 +391,10 @@ class TestSemanticValidation:
         assert "Duplicate publisher topic" in str(exc_info.value)
     
     def test_duplicate_subscriber_topics(self):
+        skip_if_no_ros2()
         """Test detection of duplicate subscriber topics."""
         content = """
-        node test_node {
+        node test_node_1 {
             subscriber /test_topic : "std_msgs/String"
             subscriber /test_topic : "std_msgs/Int32"  // Duplicate topic
         }
@@ -398,9 +406,10 @@ class TestSemanticValidation:
         assert "Duplicate subscriber topic" in str(exc_info.value)
     
     def test_duplicate_service_names(self):
+        skip_if_no_ros2()
         """Test detection of duplicate service names."""
         content = """
-        node test_node {
+        node test_node_1 {
             service /test_service : "std_srvs/Empty"
             service /test_service : "std_srvs/Trigger"  // Duplicate service
         }
@@ -412,9 +421,10 @@ class TestSemanticValidation:
         assert "Duplicate service name" in str(exc_info.value)
     
     def test_duplicate_action_names(self):
+        skip_if_no_ros2()
         """Test detection of duplicate action names."""
         content = """
-        node test_node {
+        node test_node_1 {
             action /test_action : "test_msgs/TestAction"
             action /test_action : "test_msgs/TestAction2"  // Duplicate action
         }
@@ -426,9 +436,10 @@ class TestSemanticValidation:
         assert "Duplicate action name" in str(exc_info.value)
     
     def test_duplicate_client_names(self):
+        skip_if_no_ros2()
         """Test detection of duplicate client names."""
         content = """
-        node test_node {
+        node test_node_1 {
             client /test_client : "std_srvs/Empty"
             client /test_client : "std_srvs/Trigger"  // Duplicate client
         }
@@ -440,9 +451,10 @@ class TestSemanticValidation:
         assert "Duplicate client name" in str(exc_info.value)
     
     def test_duplicate_flag_names(self):
+        skip_if_no_ros2()
         """Test detection of duplicate flag names."""
         content = """
-        node test_node {
+        node test_node_1 {
             flag test_flag: true
             flag test_flag: false  // Duplicate flag
         }
@@ -454,9 +466,10 @@ class TestSemanticValidation:
         assert "Duplicate flag name" in str(exc_info.value)
     
     def test_duplicate_method_names(self):
+        skip_if_no_ros2()
         """Test detection of duplicate method names."""
         content = """
-        node test_node {
+        node test_node_1 {
             method test_method {
                 input: int x
                 code: {
@@ -478,6 +491,7 @@ class TestSemanticValidation:
         assert "duplicate C++ method name" in str(exc_info.value)
     
     def test_duplicate_kernel_names(self):
+        skip_if_no_ros2()
         """Test detection of duplicate kernel names."""
         content = """
         cuda_kernels {
@@ -501,12 +515,13 @@ class TestSemanticValidation:
         with pytest.raises(SemanticError) as exc_info:
             parse_robodsl(content)
         
-        assert "Duplicate kernel name" in str(exc_info.value)
+        assert "Duplicate CUDA kernel name" in str(exc_info.value)
     
     def test_invalid_qos_values(self):
+        skip_if_no_ros2()
         """Test detection of invalid QoS values."""
         content = """
-        node test_node {
+        node test_node_1 {
             publisher /test_topic: "std_msgs/msg/String" {
                 qos {
                     reliability: invalid_value
@@ -524,9 +539,10 @@ class TestSemanticValidation:
         assert "QoS durability" in error_message
     
     def test_invalid_timer_period(self):
+        skip_if_no_ros2()
         """Test detection of invalid timer period."""
         content = """
-        node test_node {
+        node test_node_1 {
             timer my_timer: -1.0  // Invalid negative period
         }
         """
@@ -537,6 +553,7 @@ class TestSemanticValidation:
         assert "Timer my_timer period must be positive" in str(exc_info.value)
     
     def test_invalid_block_size(self):
+        skip_if_no_ros2()
         """Test detection of invalid CUDA block size."""
         content = """
         cuda_kernels {
@@ -554,13 +571,14 @@ class TestSemanticValidation:
         with pytest.raises(SemanticError) as exc_info:
             parse_robodsl(content)
         
-        assert "block size dimension 0 cannot be zero" in str(exc_info.value)
+        assert "block size dimension 0 must be a positive integer" in str(exc_info.value)
 
 
 class TestEdgeCases:
     """Test edge cases and boundary conditions."""
     
     def test_empty_node(self):
+        skip_if_no_ros2()
         """Test parsing of an empty node."""
         content = """
         node empty_node {
@@ -576,6 +594,7 @@ class TestEdgeCases:
         assert len(node.content.subscribers) == 0
     
     def test_node_with_only_comments(self):
+        skip_if_no_ros2()
         """Test parsing of a node with only comments."""
         content = """
         node comment_node {
@@ -592,9 +611,10 @@ class TestEdgeCases:
         assert len(node.content.parameters) == 0
     
     def test_very_large_values(self):
+        skip_if_no_ros2()
         """Test handling of very large numeric values."""
         dsl_code = """
-        node test_node {
+        node test_node_1 {
             parameter int large_int = 999999999999999999
             parameter float large_float = 3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679
             parameter float small_float = 0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001
@@ -617,9 +637,10 @@ class TestEdgeCases:
         assert large_float_param.value.value == 3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679
     
     def test_unicode_strings(self):
+        skip_if_no_ros2()
         """Test handling of unicode strings."""
         dsl_code = """
-        node test_node {
+        node test_node_1 {
             parameter string japanese = "こんにちは世界"
             parameter string chinese = "你好世界"
             parameter string emoji = "🚀🤖💻"
@@ -647,9 +668,10 @@ class TestEdgeCases:
         assert emoji_param.value.value == "🚀🤖💻"
     
     def test_nested_arrays_and_dicts(self):
+        skip_if_no_ros2()
         """Test handling of nested arrays and dictionaries."""
         dsl_code = """
-        node test_node {
+        node test_node_1 {
             parameter list nested_array = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
             parameter dict nested_dict = {
                 level1: {
@@ -686,9 +708,10 @@ class TestEdgeCases:
         assert nested_dict_param.value.value["level1"]["level2"]["array"] == [1, 2, 3]
     
     def test_method_with_no_parameters(self):
+        skip_if_no_ros2()
         """Test parsing of a method with no input/output parameters."""
         content = """
-        node test_node {
+        node test_node_1 {
             method no_params {
                 code: {
                     std::cout << 'Hello, World!' << std::endl;
@@ -706,6 +729,7 @@ class TestEdgeCases:
         assert len(method.outputs) == 0
     
     def test_kernel_with_no_parameters(self):
+        skip_if_no_ros2()
         """Test parsing of a kernel with no parameters."""
         content = """
         cuda_kernels {
@@ -729,6 +753,7 @@ class TestErrorRecovery:
     """Test error recovery and graceful degradation."""
     
     def test_multiple_nodes_with_one_invalid(self):
+        skip_if_no_ros2()
         """Test that valid nodes are parsed even when one node has errors."""
         dsl_code = """
         node valid_node {
@@ -749,6 +774,7 @@ class TestErrorRecovery:
             ast = parse_robodsl(dsl_code)
     
     def test_invalid_syntax_in_comments(self):
+        skip_if_no_ros2()
         """Test that invalid syntax in comments doesn't cause parsing errors."""
         dsl_code = """
         // This comment has invalid syntax: node invalid { parameter x: y }
@@ -772,8 +798,9 @@ class TestPerformance:
     """Test performance with large configurations."""
     
     def test_large_number_of_parameters(self):
+        skip_if_no_ros2()
         """Test parsing with a large number of parameters."""
-        dsl_code = "node test_node {\n"
+        dsl_code = "node test_node_1 {\n"
         for i in range(100):
             dsl_code += f"    parameter int param_{i} = {i}\n"
         dsl_code += "}"
@@ -791,6 +818,7 @@ class TestPerformance:
             assert param.value.value == i
     
     def test_large_number_of_publishers(self):
+        skip_if_no_ros2()
         """Test parsing with a large number of publishers."""
         content = "node large_node {\n"
         for i in range(100):
@@ -804,10 +832,11 @@ class TestPerformance:
         assert len(node.content.publishers) == 100
     
     def test_large_code_blocks(self):
+        skip_if_no_ros2()
         """Test parsing with large code blocks."""
         large_code = "int x = 0;\\n" * 1000
         content = f"""
-        node test_node {{
+        node test_node_1 {{
             method large_method {{
                 input: int size
                 code: {{
@@ -823,6 +852,187 @@ class TestPerformance:
         assert len(node.content.cpp_methods) == 1
         method = node.content.cpp_methods[0]
         assert len(method.code) > 1000  # Should contain the large code block
+
+
+class TestAllDSLFeatures:
+    def test_node_valid(self):
+        skip_if_no_ros2()
+        dsl = """
+        node my_node {
+            parameter int foo = 1
+        }
+        """
+        ast = parse_robodsl(dsl)
+        assert len(ast.nodes) == 1
+        assert ast.nodes[0].name == "my_node"
+
+    def test_node_invalid_missing_brace(self):
+        skip_if_no_ros2()
+        dsl = "node my_node { parameter int foo = 1 "  # missing closing brace
+        with pytest.raises(ParseError):
+            parse_robodsl(dsl)
+
+    def test_parameter_types(self):
+        skip_if_no_ros2()
+        dsl = """
+        node n {
+            parameter int i = 1
+            parameter float f = 2.0
+            parameter string s = "hi"
+            parameter bool b = true
+            parameter list l = [1,2,3]
+            parameter dict d = {x: 1}
+        }
+        """
+        ast = parse_robodsl(dsl)
+        ptypes = [p.type for p in ast.nodes[0].content.parameters]
+        assert set(ptypes) == {"int","float","string","bool","list","dict"}
+
+    def test_parameter_invalid_type(self):
+        skip_if_no_ros2()
+        dsl = "node n { parameter unknown_type foo = 1 }"
+        with pytest.raises(SemanticError):
+            parse_robodsl(dsl)
+
+    def test_publisher_valid(self):
+        skip_if_no_ros2()
+        dsl = "node n { publisher /t: \"std_msgs/msg/String\" }"
+        ast = parse_robodsl(dsl)
+        pubs = ast.nodes[0].content.publishers
+        assert len(pubs) == 1 and pubs[0].topic == "/t"
+
+    def test_publisher_invalid_missing_type(self):
+        skip_if_no_ros2()
+        dsl = "node n { publisher /t: }"
+        with pytest.raises(ParseError):
+            parse_robodsl(dsl)
+
+    def test_subscriber_valid(self):
+        skip_if_no_ros2()
+        dsl = "node n { subscriber /t: \"std_msgs/msg/String\" }"
+        ast = parse_robodsl(dsl)
+        subs = ast.nodes[0].content.subscribers
+        assert len(subs) == 1 and subs[0].topic == "/t"
+
+    def test_service_valid(self):
+        skip_if_no_ros2()
+        dsl = "node n { service /s: \"std_srvs/Empty\" }"
+        ast = parse_robodsl(dsl)
+        svcs = ast.nodes[0].content.services
+        assert len(svcs) == 1 and svcs[0].service == "/s"
+
+    def test_action_valid(self):
+        skip_if_no_ros2()
+        dsl = "node n { action /a: \"nav2_msgs/action/NavigateToPose\" }"
+        ast = parse_robodsl(dsl)
+        acts = ast.nodes[0].content.actions
+        assert len(acts) == 1 and isinstance(acts[0].name, str) and acts[0].name == "/a"
+
+    def test_timer_valid(self):
+        skip_if_no_ros2()
+        dsl = "node n { timer t: 1.0 }"
+        ast = parse_robodsl(dsl)
+        timers = ast.nodes[0].content.timers
+        assert len(timers) == 1 and timers[0].name == "t"
+
+    def test_remap_valid(self):
+        skip_if_no_ros2()
+        dsl = "node n { remap from: /a to: /b }"
+        ast = parse_robodsl(dsl)
+        remaps = ast.nodes[0].content.remaps
+        assert len(remaps) == 1
+
+    def test_namespace_valid(self):
+        skip_if_no_ros2()
+        dsl = "node n { namespace: /ns }"
+        ast = parse_robodsl(dsl)
+        ns = ast.nodes[0].content.namespace
+        assert ns is not None and ns.namespace == "/ns"
+
+    def test_flag_valid(self):
+        skip_if_no_ros2()
+        dsl = "node n { flag f: true }"
+        ast = parse_robodsl(dsl)
+        flags = ast.nodes[0].content.flags
+        assert len(flags) == 1 and flags[0].name == "f"
+
+    def test_method_valid(self):
+        skip_if_no_ros2()
+        dsl = """
+        node n {
+            method m {
+                input: int x
+                output: int y
+                code: { y = x+1; }
+            }
+        }
+        """
+        ast = parse_robodsl(dsl)
+        meths = ast.nodes[0].content.cpp_methods
+        assert len(meths) == 1 and meths[0].name == "m"
+
+    def test_kernel_valid(self):
+        skip_if_no_ros2()
+        dsl = """
+        cuda_kernels {
+            kernel k {
+                input: float* in (N)
+                output: float* out (N)
+                block_size: (256,1,1)
+                code: { out[0] = in[0]; }
+            }
+        }
+        """
+        ast = parse_robodsl(dsl)
+        assert ast.cuda_kernels and len(ast.cuda_kernels.kernels) == 1
+
+    def test_onnx_model_valid(self):
+        skip_if_no_ros2()
+        skip_if_no_onnx()
+        dsl = """
+        onnx_model m {
+            input: \"in\" -> \"float32[1,3,224,224]\"
+            output: \"out\" -> \"float32[1,1000]\"
+            device: cuda
+            optimization: tensorrt
+        }
+        """
+        ast = parse_robodsl(dsl)
+        assert ast.onnx_models and len(ast.onnx_models) == 1
+
+    def test_pipeline_valid(self):
+        skip_if_no_ros2()
+        dsl = """
+        pipeline p {
+            stage s1 { input: \"a\" output: \"b\" }
+        }
+        """
+        ast = parse_robodsl(dsl)
+        assert ast.pipelines and len(ast.pipelines) == 1
+
+    def test_include_valid(self):
+        skip_if_no_ros2()
+        dsl = "include <rclcpp/rclcpp.hpp>\nnode n { parameter int x = 1 }"
+        ast = parse_robodsl(dsl)
+        assert ast.includes and ast.includes[0].path == "rclcpp/rclcpp.hpp"
+
+    def test_comment_ignored(self):
+        skip_if_no_ros2()
+        dsl = """
+        // This is a comment
+        node n { parameter int x = 1 } // trailing comment
+        """
+        ast = parse_robodsl(dsl)
+        assert len(ast.nodes) == 1
+
+    def test_raw_cpp_block(self):
+        skip_if_no_ros2()
+        dsl = """
+        cpp: { int x = 0; }
+        node n { parameter int x = 1 }
+        """
+        ast = parse_robodsl(dsl)
+        assert ast.raw_cpp_code and "int x = 0;" in ast.raw_cpp_code[0].code
 
 
 if __name__ == "__main__":

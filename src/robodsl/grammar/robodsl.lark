@@ -1,19 +1,393 @@
-// RoboDSL Grammar - Phase 1.5+ (Enhanced)
+// C++ block placeholder for extracted code (must be first to avoid conflicts)
+CPP_BLOCK_PLACEHOLDER: "CPP_BLOCK_PLACEHOLDER"
+
+FROM: "from:"
+TO: "to:"
+NAME: /[a-zA-Z_\u4e00-\u9fff][a-zA-Z0-9_\u4e00-\u9fff]*/
+CUDA_KERNELS: "cuda_kernels"
+KERNEL: "kernel"
+NODE: "node"
+PARAMETER: "parameter"
+PUBLISHER: "publisher"
+USE_KERNEL: "use_kernel"
+
+// Parameter-related terminals
+DEFAULT: "default"
+DESCRIPTION: "description"
+READ_ONLY: "read_only"
+RANGE: "range"
+
+// Advanced TensorRT features
+OPTIMIZATION_LEVEL: "optimization_level"
+PRECISION: "precision"
+DYNAMIC_BATCH: "dynamic_batch"
+MAX_WORKSPACE_SIZE: "max_workspace_size"
+TACTIC_SOURCES: "tactic_sources"
+TIMING_CACHE: "timing_cache"
+PROFILING_VERBOSITY: "profiling_verbosity"
+CALIBRATION: "calibration"
+DYNAMIC_RANGE: "dynamic_range"
+MIN_BATCH_SIZE: "min_batch_size"
+MAX_BATCH_SIZE: "max_batch_size"
+OPTIMAL_BATCH_SIZE: "optimal_batch_size"
+DYNAMIC_SHAPES: "dynamic_shapes"
+SHAPE_OPTIMIZATION: "shape_optimization"
+PLUGINS: "plugins"
+PERFORMANCE_TUNING: "performance_tuning"
+MEMORY_OPTIMIZATION: "memory_optimization"
+MULTI_STREAM: "multi_stream"
+PERFORMANCE_MONITORING: "performance_monitoring"
+COMPATIBILITY_MODE: "compatibility_mode"
+MEMORY_MANAGEMENT: "memory_management"
+SERIALIZATION: "serialization"
+PARALLEL_EXECUTION: "parallel_execution"
+ERROR_RECOVERY: "error_recovery"
+
+// Additional TensorRT properties used in tests
+PARALLEL_STREAMS: "parallel_streams"
+ERROR_HANDLING: "error_handling"
+PER_TENSOR_QUANTIZATION: "per_tensor_quantization"
+PER_CHANNEL_QUANTIZATION: "per_channel_quantization"
+CALIBRATION_DATA: "calibration_data"
+CALIBRATION_ALGORITHM: "calibration_algorithm"
+CALIBRATION_BATCH_SIZE: "calibration_batch_size"
+MEMORY_POOL_SIZE: "memory_pool_size"
+MONITORING_METRICS: "monitoring_metrics"
+BACKWARD_COMPATIBILITY: "backward_compatibility"
+PLUGIN_PATHS: "plugin_paths"
+TUNING_ALGORITHM: "tuning_algorithm"
+ENGINE_FILE: "engine_file"
+PROFILING: "profiling"
+PROFILING_OUTPUT: "profiling_output"
+PROFILING_METRICS: "profiling_metrics"
+PROFILING_LAYERS: "profiling_layers"
+PROFILING_KERNELS: "profiling_kernels"
+PROFILING_MEMORY: "profiling_memory"
+PROFILING_TIMELINE: "profiling_timeline"
+DEBUGGING: "debugging"
+
+// Additional advanced features tokens
+CUSTOM_PLUGINS: "custom_plugins"
+TUNING_ITERATIONS: "tuning_iterations"
+MEMORY_POOL_GROWTH: "memory_pool_growth"
+STREAM_COUNT: "stream_count"
+STREAM_PRIORITY: "stream_priority"
+STREAM_SYNCHRONIZATION: "stream_synchronization"
+STREAM_AFFINITY: "stream_affinity"
+STREAM_MEMORY_POOL: "stream_memory_pool"
+TUNING_TIMEOUT: "tuning_timeout"
+TUNING_METRICS: "tuning_metrics"
+TUNING_CONSTRAINTS: "tuning_constraints"
+KERNEL_TUNING: "kernel_tuning"
+LAYER_FUSION: "layer_fusion"
+MEMORY_REUSE: "memory_reuse"
+MEMORY_SCRATCH: "memory_scratch"
+MEMORY_WORKSPACE: "memory_workspace"
+MEMORY_ALIGNMENT: "memory_alignment"
+MEMORY_POOL_MAX_SIZE: "memory_pool_max_size"
+PLUGIN_CONFIG: "plugin_config"
+
+// Monitoring and debugging tokens
+MONITORING_INTERVAL: "monitoring_interval"
+MONITORING_OUTPUT: "monitoring_output"
+MONITORING_TIMELINE: "monitoring_timeline"
+MONITORING_LAYERS: "monitoring_layers"
+MONITORING_KERNELS: "monitoring_kernels"
+MONITORING_MEMORY: "monitoring_memory"
+MONITORING_EVENTS: "monitoring_events"
+DEBUG_OUTPUT: "debug_output"
+DEBUG_LEVEL: "debug_level"
+DEBUG_LAYERS: "debug_layers"
+DEBUG_KERNELS: "debug_kernels"
+DEBUG_MEMORY: "debug_memory"
+DEBUG_TENSORS: "debug_tensors"
+DEBUG_WEIGHTS: "debug_weights"
+DEBUG_ACTIVATIONS: "debug_activations"
+
+// Compatibility tokens
+VERSION_COMPATIBILITY: "version_compatibility"
+API_COMPATIBILITY: "api_compatibility"
+PLUGIN_COMPATIBILITY: "plugin_compatibility"
+FORMAT_COMPATIBILITY: "format_compatibility"
+
+// Parallel execution tokens
+PARALLEL_THREADS: "parallel_threads"
+PARALLEL_SCHEDULING: "parallel_scheduling"
+PARALLEL_SYNCHRONIZATION: "parallel_synchronization"
+PARALLEL_AFFINITY: "parallel_affinity"
+
+// Error handling tokens
+ERROR_LOGGING: "error_logging"
+ERROR_NOTIFICATION: "error_notification"
+ERROR_RETRY: "error_retry"
+ERROR_FALLBACK: "error_fallback"
+ERROR_TIMEOUT: "error_timeout"
+ERROR_MAX_RETRIES: "error_max_retries"
+
+// Memory management tokens
+MEMORY_PINNING: "memory_pinning"
+MEMORY_MAPPING: "memory_mapping"
+MEMORY_COMPRESSION: "memory_compression"
+
+// Serialization tokens
+SERIALIZATION_FORMAT: "serialization_format"
+COMPRESSION: "compression"
+ENCRYPTION: "encryption"
+CHECKSUM: "checksum"
+CALIBRATION_CACHE: "calibration_cache"
+GOAL_CALLBACK: "goal_callback"
+CANCEL_CALLBACK: "cancel_callback"
+GOAL_TIMEOUT: "goal_timeout"
+RESULT_TIMEOUT: "result_timeout"
+ONESHOT: "oneshot"
+AUTOSTART: "autostart"
+LIFECYCLE_STATES: "lifecycle_states"
+LIFECYCLE_TRANSITIONS: "lifecycle_transitions"
+COMPONENT_NAME: "component_name"
+COMPONENT_NAMESPACE: "component_namespace"
+
+// Advanced ROS2 features
+REALTIME: "realtime"
+SECURITY: "security"
+COMPONENT: "component"
+QUEUE_SIZE: "queue_size"
+DURABLE: "durable"
+HISTORY: "history"
+DEPTH: "depth"
+CALLBACK: "callback"
+TIMEOUT: "timeout"
+REALTIME_PRIORITY: "realtime_priority"
+REALTIME_POLICY: "realtime_policy"
+REALTIME_CPU: "realtime_cpu"
+SECURITY_ENFORCE: "security_enforce"
+SECURITY_IDENTITY: "security_identity"
+SECURITY_NAMESPACE: "security_namespace"
+
+NODE_NAME: /[a-zA-Z_\u4e00-\u9fff][a-zA-Z0-9_\u4e00-\u9fff]*/
+IDENT: /[a-zA-Z_][a-zA-Z0-9_]*/
+// Punctuation terminals
+LSQB: "["
+RSQB: "]"
+STAR: "*"
+DOT: "."
+LPAR: "("
+RPAR: ")"
+LBRACE: "{"
+RBRACE: "}"
+COMMA: ","
+COLON: ":"
+AMPERSAND: "&"
+PIPE: "|"
+STRING: /"([^"\\]|\\.)*"/
+SIGNED_NUMBER: /-?[0-9]+(\.[0-9]+)?/
+// TOPIC_PATH removed - using topic_path rule instead
+BOOLEAN: "true" | "false"
+STRUCT: "struct"
+CLASS: "class"
+PUBLIC: "public"
+PRIVATE: "private"
+PROTECTED: "protected"
+CONST: "const"
+
+// Operator terminals (must be defined before any regex terminals)
+PLUS_OP: "+"
+MINUS_OP: "-"
+MULTIPLY_OP: "*"
+MODULO_OP: "%"
 
 %ignore _WS
 %ignore COMMENT   // Officially recognize // as a comment
 %ignore BLOCK_COMMENT
+%ignore PY_COMMENT  // Ignore Python-style # comments
 %ignore _NL
 
-start: include_stmt* (node_def | cuda_kernels_block | onnx_model | pipeline_def)*
+// Concepts (simplified to match test syntax)
+concept_def: "concept" NAME ":" concept_requires
+concept_requires: REQUIRES NAME ":" concept_requirement_list
+concept_requirement_list: concept_requirement+
+concept_requirement: cpp_type "operator" operator_symbol LPAR cpp_type (COMMA cpp_type)* RPAR
+operator_symbol: PLUS_OP | MINUS_OP | MULTIPLY_OP | EQUALS | NOT_EQUALS | LESS_THAN | GREATER_THAN | LESS_EQUAL | GREATER_EQUAL | LEFT_SHIFT | RIGHT_SHIFT | FUNCTION_CALL
+REQUIRES: "requires"
+
+start: include_stmt* (package_def | data_structure | custom_interface | node_def | cpp_node_def | kernel_def | cuda_kernels_block | cuda_kernel_def | onnx_model | pipeline_def | simulation_config | dynamic_config | raw_cpp_code | advanced_cpp_feature (_NL|SEMICOLON)?)*
+
+// Package definitions
+package_def: "package" NAME LBRACE package_content RBRACE
+package_content: (package_name | package_version | package_description | package_dependencies | package_build_config | package_cpp_nodes | package_build_type | package_cross_compilation | package_target_platform | package_toolchain_file | package_management | package_dependency_resolution | package_version_constraints | package_maintainer | package_build_optimization | package_dependency_management | package_custom_targets | package_compiler | package_platform | package_build_variant | package_build_performance | package_parallel_build | package_build_jobs | package_build_cache | package_ccache | package_ninja | package_precompiled_headers | package_unity_build | package_link_time_optimization | package_profile_guided_optimization | package_install_config | package_test_config | package_performance_config | package_build_flags | package_architecture | package_dependency_caching | package_variant_config | package_license | package_url | package_cross_platform | package_machine | package_platform_config | package_architecture_config | package_compiler_version | package_optimization_flags | package_custom_target_config | package_dependency_config | package_optional_dependencies | package_system_dependencies | package_dependency_parallel_download | package_dependency_verification | package_dependency_licenses)*
+package_name: "name" ":" STRING
+package_version: "version" ":" STRING
+package_description: "description" ":" STRING
+package_dependencies: "dependencies" ":" array
+package_build_config: "build_configuration" ":" nested_dict
+package_build_type: "build_type" ":" STRING
+package_cross_compilation: "cross_compilation" ":" BOOLEAN
+package_target_platform: "target_platform" ":" STRING
+package_toolchain_file: "toolchain_file" ":" STRING
+package_management: "package_management" ":" (STRING | BOOLEAN)
+package_dependency_resolution: "dependency_resolution" ":" (STRING | BOOLEAN)
+package_version_constraints: "version_constraints" ":" nested_dict
+package_maintainer: "maintainer" ":" STRING
+package_build_optimization: "build_optimization" ":" BOOLEAN
+package_dependency_management: "dependency_management" ":" (STRING | BOOLEAN)
+package_custom_targets: "custom_targets" ":" array
+package_compiler: "compiler" ":" STRING
+package_platform: "platform" ":" STRING
+package_build_variant: "build_variant" ":" STRING
+package_build_performance: "build_performance" ":" BOOLEAN
+package_parallel_build: "parallel_build" ":" BOOLEAN
+package_build_jobs: "build_jobs" ":" SIGNED_NUMBER
+package_build_cache: "build_cache" ":" BOOLEAN
+package_ccache: "ccache" ":" BOOLEAN
+package_ninja: "ninja" ":" BOOLEAN
+package_precompiled_headers: "precompiled_headers" ":" BOOLEAN
+package_unity_build: "unity_build" ":" BOOLEAN
+package_link_time_optimization: "link_time_optimization" ":" BOOLEAN
+package_profile_guided_optimization: "profile_guided_optimization" ":" BOOLEAN
+package_install_config: "install_configuration" ":" nested_dict
+package_test_config: "test_configuration" ":" nested_dict
+package_performance_config: "performance_configuration" ":" nested_dict
+package_build_flags: "build_flags" ":" nested_dict
+package_architecture: "architecture" ":" STRING
+package_dependency_caching: "dependency_caching" ":" BOOLEAN
+package_variant_config: "variant_configuration" ":" nested_dict
+package_license: "license" ":" STRING
+package_url: "url" ":" STRING
+package_cross_platform: "cross_platform" ":" BOOLEAN
+package_machine: "machine" ":" STRING
+package_platform_config: "platform_configuration" ":" nested_dict
+package_architecture_config: "architecture_configuration" ":" nested_dict
+package_compiler_version: "compiler_version" ":" STRING
+package_optimization_flags: "optimization_flags" ":" nested_dict
+package_custom_target_config: "custom_target_configuration" ":" nested_dict
+package_dependency_config: "dependency_configuration" ":" nested_dict
+package_optional_dependencies: "optional_dependencies" ":" array
+package_system_dependencies: "system_dependencies" ":" array
+package_dependency_parallel_download: "dependency_parallel_download" ":" BOOLEAN
+package_dependency_verification: "dependency_verification" ":" BOOLEAN
+package_dependency_licenses: "dependency_licenses" ":" array
+package_cpp_nodes: cpp_node_def
+cpp_node_def: "cpp_node" NODE_NAME LBRACE node_content RBRACE
 
 // Include statements
 include_stmt: "include" ("<" include_path ">" | STRING)
-include_path: STRING | NAME ("/" NAME)* ("." NAME)?
 
-// Node definitions
-node_def: "node" NAME LBRACE node_content RBRACE
-node_content: (parameter | lifecycle | timer | remap | namespace | ros_primitive | flag | cpp_method | kernel_def | onnx_model_ref | cuda_kernels_block | use_kernel)*
+// Data structure definitions
+data_structure: struct_def SEMICOLON?
+              | class_def SEMICOLON?
+              | enum_def SEMICOLON?
+              | typedef_def SEMICOLON?
+              | using_def SEMICOLON?
+
+// Custom interface definitions (messages, services, actions)
+custom_interface: message_def | service_def | action_def
+
+// Message definitions
+message_def: "message" NAME LBRACE message_content RBRACE
+message_content: message_field*
+message_field: cpp_type (NAME array_spec? default_value? | NAME ":" SIGNED_NUMBER) ";"
+default_value: "=" value
+
+// Service definitions
+service_def: "service" NAME LBRACE service_content RBRACE
+service_content: service_request service_response
+service_request: service_fields
+service_response: "---" service_fields
+service_fields: message_field*
+
+// Action definitions
+action_def: "action" NAME LBRACE action_content RBRACE
+action_content: action_goal action_feedback action_result
+action_goal: action_fields
+action_feedback: "---" action_fields
+action_result: "---" action_fields
+action_fields: message_field*
+
+// Dynamic runtime configuration
+dynamic_config: dynamic_parameters | dynamic_remaps
+dynamic_parameters: "dynamic_parameters" LBRACE dynamic_parameter* RBRACE
+dynamic_parameter: PARAMETER cpp_type NAME "=" value dynamic_param_config?
+dynamic_param_config: LBRACE dynamic_param_setting* RBRACE
+dynamic_param_setting: (NAME ":" value) | description
+description: "description" ":" STRING
+
+dynamic_remaps: "dynamic_remaps" LBRACE dynamic_remap* RBRACE
+dynamic_remap: "remap" ((FROM topic_path TO topic_path) | (FROM topic_path "to" ":" topic_path) | (topic_path ":" topic_path)) remap_condition?
+remap_condition: "when" ":" STRING
+
+// Simulation configuration
+simulation_config: simulation_def | hil_config
+simulation_def: "simulation" simulator_type LBRACE simulation_content RBRACE
+simulator_type: "gazebo" | "isaac_sim" | "gym"
+simulation_content: (simulation_world | simulation_robot | simulation_plugin | simulation_setting)*
+
+simulation_world: "world" LBRACE world_config RBRACE
+world_config: world_setting*
+world_setting: (NAME ":" value) | physics_engine | gravity | step_size | real_time_factor
+physics_engine: "physics_engine" ":" (NAME | STRING)
+gravity: "gravity" ":" LPAR expr COMMA expr COMMA expr RPAR
+step_size: "max_step_size" ":" expr
+real_time_factor: "real_time_factor" ":" expr
+
+simulation_robot: "robot" NAME LBRACE robot_config RBRACE
+robot_config: robot_setting*
+robot_setting: (NAME ":" value) | model_file | robot_namespace | initial_pose | robot_plugins
+model_file: "model_file" ":" (NAME | STRING)
+robot_namespace: "namespace" ":" (NAME | STRING)
+initial_pose: "initial_pose" ":" LPAR expr COMMA expr COMMA expr COMMA expr COMMA expr COMMA expr RPAR
+robot_plugins: "plugins" LBRACE simulation_plugin* RBRACE
+
+simulation_plugin: "plugin" NAME LBRACE simulation_plugin_config RBRACE
+simulation_plugin_config: plugin_setting*
+plugin_setting: NAME ":" value
+
+simulation_setting: (gui | headless | physics_engine)
+gui: "gui" ":" BOOLEAN
+headless: "headless" ":" BOOLEAN
+
+// Hardware-in-the-loop configuration
+hil_config: "hardware_in_loop" LBRACE hil_content RBRACE
+hil_content: (simulation_nodes | hardware_nodes | bridge_config)*
+simulation_nodes: "simulation_nodes" ":" node_list
+hardware_nodes: "hardware_nodes" ":" node_list
+node_list: NAME (COMMA NAME)*
+bridge_config: "bridge_config" ":" STRING
+
+// Unified block content for structs, classes, and templates
+block_content: (struct_member | cpp_method | include_stmt | CPP_BLOCK_PLACEHOLDER)*
+
+// Struct member definitions - unified to handle both regular and bitfield members
+struct_member: cpp_type (NAME array_spec? default_value? | NAME ":" SIGNED_NUMBER) ";"
+             | cpp_type NAME ":" SIGNED_NUMBER ";"
+
+// Struct definitions
+struct_def: STRUCT NAME LBRACE block_content RBRACE
+
+// Class definitions
+class_def: "class" NAME inheritance? LBRACE class_content RBRACE
+class_content: (class_access_section | class_direct_member | class_direct_method | include_stmt | CPP_BLOCK_PLACEHOLDER)*
+class_access_section: access_specifier COLON class_section_content
+class_section_content: (class_section_member | class_section_method)*
+class_section_member: struct_member
+class_section_method: cpp_method
+class_direct_member: struct_member
+class_direct_method: cpp_method
+inheritance: ":" access_specifier? cpp_type (COMMA access_specifier? cpp_type)*
+access_specifier: PUBLIC | PRIVATE | PROTECTED
+
+// Enum definitions
+enum_def: "enum" enum_type? NAME LBRACE enum_content RBRACE
+enum_type: CLASS | STRUCT
+enum_content: enum_value (COMMA enum_value)* COMMA?
+enum_value: NAME ("=" expr)?
+
+// Type definitions
+typedef_def: "typedef" cpp_type NAME ";"
+using_def: "using" NAME "=" cpp_type ";"
+
+// Array specifications
+array_spec: LSQB expr? RSQB
+node_def: NODE NODE_NAME LBRACE node_content RBRACE
+node_content: (parameter | lifecycle | timer | remap | namespace | ros_primitive | flag | cpp_method | kernel_def | onnx_model_ref | cuda_kernels_block | use_kernel | raw_cpp_code | parameter_server | parameter_client | action_client | service_client | realtime_config | security_config | component_config)*
 
 // Pipeline definitions (Phase 4) - Enhanced with CUDA/ONNX integration
 pipeline_def: "pipeline" NAME LBRACE pipeline_content RBRACE
@@ -24,64 +398,249 @@ stage_input: "input" ":" STRING
 stage_output: "output" ":" STRING
 stage_method: "method" ":" STRING
 stage_model: "model" ":" STRING
-stage_topic: "topic" ":" TOPIC_PATH
+stage_topic: "topic" ":" topic_path
 stage_cuda_kernel: "cuda_kernel" ":" STRING
 stage_onnx_model: "onnx_model" ":" STRING
 
-// ONNX Model definitions (Phase 3) - Developer-friendly syntax
+// ONNX Model definitions (Phase 3) - Developer-friendly syntax with advanced TensorRT features
 onnx_model: "onnx_model" NAME LBRACE onnx_model_content RBRACE
 onnx_model_ref: "onnx_model" NAME LBRACE onnx_model_content RBRACE
-onnx_model_content: (config_block | input_def | output_def | device | optimization)*
-config_block: "config" LBRACE (input_def | output_def | device | optimization)* RBRACE
-input_def: "input" ":" (STRING | NAME) "->" (STRING | NAME)
+onnx_model_content: (config_block | input_def | output_def | device | optimization | tensorrt_config_item | COMMENT)*
+
+// Enhanced TensorRT configuration for ONNX models
+tensorrt_config: tensorrt_config_item+
+tensorrt_config_item: optimization_level | precision | dynamic_batch | max_workspace_size | tactic_sources | timing_cache | profiling_verbosity | calibration | dynamic_range | min_batch_size | max_batch_size | optimal_batch_size | dynamic_shapes | shape_optimization | plugins | performance_tuning | memory_optimization | multi_stream | performance_monitoring | compatibility_mode | memory_management | serialization | parallel_execution | error_recovery | parallel_streams | error_handling | per_tensor_quantization | per_channel_quantization | calibration_data | calibration_algorithm | calibration_batch_size | memory_pool_size | monitoring_metrics | backward_compatibility | plugin_paths | tuning_algorithm | engine_file | profiling | debugging | custom_plugins | tuning_iterations | memory_pool_growth | stream_count | stream_priority | stream_synchronization | stream_affinity | stream_memory_pool | tuning_timeout | tuning_metrics | tuning_constraints | kernel_tuning | layer_fusion | memory_reuse | memory_scratch | memory_workspace | memory_alignment | memory_pool_max_size | plugin_config | monitoring_interval | monitoring_output | monitoring_timeline | monitoring_layers | monitoring_kernels | monitoring_memory | monitoring_events | debug_output | debug_level | debug_layers | debug_kernels | debug_memory | debug_tensors | debug_weights | debug_activations | version_compatibility | api_compatibility | plugin_compatibility | format_compatibility | parallel_threads | parallel_scheduling | parallel_synchronization | parallel_affinity | error_logging | error_notification | error_retry | error_fallback | error_timeout | error_max_retries | memory_pinning | memory_mapping | memory_compression | profiling_output | profiling_metrics | profiling_layers | profiling_kernels | profiling_memory | profiling_timeline | serialization_format | compression | encryption | checksum | calibration_cache
+
+optimization_level: OPTIMIZATION_LEVEL ":" SIGNED_NUMBER
+precision: PRECISION ":" (NAME | STRING)
+dynamic_batch: DYNAMIC_BATCH ":" BOOLEAN
+max_workspace_size: MAX_WORKSPACE_SIZE ":" SIGNED_NUMBER
+tactic_sources: TACTIC_SOURCES ":" array
+timing_cache: TIMING_CACHE ":" (BOOLEAN | STRING)
+profiling_verbosity: PROFILING_VERBOSITY ":" (NAME | STRING)
+calibration: CALIBRATION ":" BOOLEAN
+dynamic_range: DYNAMIC_RANGE ":" BOOLEAN
+min_batch_size: MIN_BATCH_SIZE ":" SIGNED_NUMBER
+max_batch_size: MAX_BATCH_SIZE ":" SIGNED_NUMBER
+optimal_batch_size: OPTIMAL_BATCH_SIZE ":" SIGNED_NUMBER
+dynamic_shapes: DYNAMIC_SHAPES ":" BOOLEAN
+shape_optimization: SHAPE_OPTIMIZATION ":" BOOLEAN
+plugins: PLUGINS ":" array
+performance_tuning: PERFORMANCE_TUNING ":" BOOLEAN
+memory_optimization: MEMORY_OPTIMIZATION ":" BOOLEAN
+multi_stream: MULTI_STREAM ":" BOOLEAN
+performance_monitoring: PERFORMANCE_MONITORING ":" BOOLEAN
+compatibility_mode: COMPATIBILITY_MODE ":" BOOLEAN
+memory_management: MEMORY_MANAGEMENT ":" BOOLEAN
+serialization: SERIALIZATION ":" BOOLEAN
+parallel_execution: PARALLEL_EXECUTION ":" BOOLEAN
+error_recovery: ERROR_RECOVERY ":" BOOLEAN
+
+parallel_streams: PARALLEL_STREAMS ":" SIGNED_NUMBER
+error_handling: ERROR_HANDLING ":" (NAME | STRING)
+per_tensor_quantization: PER_TENSOR_QUANTIZATION ":" BOOLEAN
+memory_pool_size: MEMORY_POOL_SIZE ":" SIGNED_NUMBER
+monitoring_metrics: MONITORING_METRICS ":" array
+backward_compatibility: BACKWARD_COMPATIBILITY ":" BOOLEAN
+plugin_paths: PLUGIN_PATHS ":" array
+tuning_algorithm: TUNING_ALGORITHM ":" (NAME | STRING)
+engine_file: ENGINE_FILE ":" (NAME | STRING)
+profiling: PROFILING ":" BOOLEAN
+debugging: DEBUGGING ":" BOOLEAN
+
+per_channel_quantization: PER_CHANNEL_QUANTIZATION ":" BOOLEAN
+calibration_data: CALIBRATION_DATA ":" (NAME | STRING)
+calibration_algorithm: CALIBRATION_ALGORITHM ":" (NAME | STRING)
+calibration_batch_size: CALIBRATION_BATCH_SIZE ":" SIGNED_NUMBER
+
+// Additional TensorRT advanced features
+custom_plugins: CUSTOM_PLUGINS ":" array
+tuning_iterations: TUNING_ITERATIONS ":" SIGNED_NUMBER
+memory_pool_growth: MEMORY_POOL_GROWTH ":" (SIGNED_NUMBER | STRING)
+stream_count: STREAM_COUNT ":" SIGNED_NUMBER
+stream_priority: STREAM_PRIORITY ":" (NAME | STRING)
+stream_synchronization: STREAM_SYNCHRONIZATION ":" BOOLEAN
+stream_affinity: STREAM_AFFINITY ":" BOOLEAN
+stream_memory_pool: STREAM_MEMORY_POOL ":" BOOLEAN
+tuning_timeout: TUNING_TIMEOUT ":" SIGNED_NUMBER
+tuning_metrics: TUNING_METRICS ":" array
+tuning_constraints: TUNING_CONSTRAINTS ":" nested_dict
+kernel_tuning: KERNEL_TUNING ":" BOOLEAN
+layer_fusion: LAYER_FUSION ":" BOOLEAN
+memory_reuse: MEMORY_REUSE ":" BOOLEAN
+memory_scratch: MEMORY_SCRATCH ":" BOOLEAN
+memory_workspace: MEMORY_WORKSPACE ":" BOOLEAN
+memory_alignment: MEMORY_ALIGNMENT ":" SIGNED_NUMBER
+memory_pool_max_size: MEMORY_POOL_MAX_SIZE ":" SIGNED_NUMBER
+plugin_config: PLUGIN_CONFIG ":" nested_dict
+
+// Monitoring and debugging configuration
+monitoring_interval: MONITORING_INTERVAL ":" SIGNED_NUMBER
+monitoring_output: MONITORING_OUTPUT ":" (NAME | STRING)
+monitoring_timeline: MONITORING_TIMELINE ":" BOOLEAN
+monitoring_layers: MONITORING_LAYERS ":" BOOLEAN
+monitoring_kernels: MONITORING_KERNELS ":" BOOLEAN
+monitoring_memory: MONITORING_MEMORY ":" BOOLEAN
+monitoring_events: MONITORING_EVENTS ":" BOOLEAN
+debug_output: DEBUG_OUTPUT ":" (NAME | STRING)
+debug_level: DEBUG_LEVEL ":" (NAME | STRING)
+debug_layers: DEBUG_LAYERS ":" BOOLEAN
+debug_kernels: DEBUG_KERNELS ":" BOOLEAN
+debug_memory: DEBUG_MEMORY ":" BOOLEAN
+debug_tensors: DEBUG_TENSORS ":" BOOLEAN
+debug_weights: DEBUG_WEIGHTS ":" BOOLEAN
+debug_activations: DEBUG_ACTIVATIONS ":" BOOLEAN
+
+// Compatibility configuration
+version_compatibility: VERSION_COMPATIBILITY ":" BOOLEAN
+api_compatibility: API_COMPATIBILITY ":" BOOLEAN
+plugin_compatibility: PLUGIN_COMPATIBILITY ":" BOOLEAN
+format_compatibility: FORMAT_COMPATIBILITY ":" BOOLEAN
+
+// Parallel execution configuration
+parallel_threads: PARALLEL_THREADS ":" SIGNED_NUMBER
+parallel_scheduling: PARALLEL_SCHEDULING ":" (NAME | STRING)
+parallel_synchronization: PARALLEL_SYNCHRONIZATION ":" BOOLEAN
+parallel_affinity: PARALLEL_AFFINITY ":" BOOLEAN
+
+// Error handling configuration
+error_logging: ERROR_LOGGING ":" BOOLEAN
+error_notification: ERROR_NOTIFICATION ":" BOOLEAN
+error_retry: ERROR_RETRY ":" BOOLEAN
+error_fallback: ERROR_FALLBACK ":" BOOLEAN
+error_timeout: ERROR_TIMEOUT ":" SIGNED_NUMBER
+error_max_retries: ERROR_MAX_RETRIES ":" SIGNED_NUMBER
+
+// Memory management configuration
+memory_pinning: MEMORY_PINNING ":" BOOLEAN
+memory_mapping: MEMORY_MAPPING ":" BOOLEAN
+memory_compression: MEMORY_COMPRESSION ":" BOOLEAN
+
+// Profiling configuration
+profiling_output: PROFILING_OUTPUT ":" (NAME | STRING)
+profiling_metrics: PROFILING_METRICS ":" array
+profiling_layers: PROFILING_LAYERS ":" BOOLEAN
+profiling_kernels: PROFILING_KERNELS ":" BOOLEAN
+profiling_memory: PROFILING_MEMORY ":" BOOLEAN
+profiling_timeline: PROFILING_TIMELINE ":" BOOLEAN
+
+// Serialization configuration
+serialization_format: SERIALIZATION_FORMAT ":" (NAME | STRING)
+compression: COMPRESSION ":" BOOLEAN
+encryption: ENCRYPTION ":" BOOLEAN
+checksum: CHECKSUM ":" BOOLEAN
+calibration_cache: CALIBRATION_CACHE ":" (NAME | STRING)
+
+config_block: "config" LBRACE (input_def | output_def | device | optimization | tensorrt_config)* RBRACE
+input_def: "input" ":" (STRING | NAME) "->" (STRING | NAME) COMMENT?
 output_def: "output" ":" (STRING | NAME) "->" (STRING | NAME)
 device: "device" ":" (NAME | STRING)
 optimization: "optimization" ":" (NAME | STRING)
 
 // Parameters
-parameter: "parameter" TYPE NAME "=" value
+parameter: PARAMETER cpp_type NAME "=" value
+         | "parameter" ":" STRING "->" STRING parameter_config?
+parameter_config: LBRACE parameter_setting* RBRACE
+parameter_setting: qos_config | (NAME ":" (value | topic_type | NAME)) | (DEFAULT ":" value) | (DESCRIPTION ":" STRING) | (READ_ONLY ":" BOOLEAN) | (RANGE ":" array)
+
+// Parameter server/client
+parameter_server: "parameter_server" ":" BOOLEAN
+parameter_client: "parameter_client" ":" BOOLEAN
+
+// Real-time configuration
+realtime_config: REALTIME ":" BOOLEAN
+         | REALTIME_PRIORITY ":" SIGNED_NUMBER
+         | REALTIME_POLICY ":" STRING
+         | REALTIME_CPU ":" SIGNED_NUMBER
+
+// Security configuration
+security_config: SECURITY ":" BOOLEAN
+         | SECURITY_ENFORCE ":" BOOLEAN
+         | SECURITY_IDENTITY ":" STRING
+         | SECURITY_NAMESPACE ":" STRING
+
+// Component configuration
+component_config: COMPONENT ":" BOOLEAN
+         | COMPONENT_NAME ":" STRING
+         | COMPONENT_NAMESPACE ":" STRING
 
 // Lifecycle configuration
 lifecycle: "lifecycle" LBRACE lifecycle_config RBRACE
+         | "lifecycle" ":" BOOLEAN
+         | "lifecycle_states" ":" array
+         | "lifecycle_transitions" ":" array
 lifecycle_config: lifecycle_setting*
-lifecycle_setting: NAME ":" BOOLEAN
+lifecycle_setting: NAME ":" BOOLEAN | lifecycle_states | lifecycle_transitions
+lifecycle_states: LIFECYCLE_STATES ":" array
+lifecycle_transitions: LIFECYCLE_TRANSITIONS ":" array
 
 // Timers
 // Allow negative numbers
 // Allow expressions in period
-timer: "timer" NAME ":" expr timer_config?
+timer: "timer" NAME timer_config?
+         | "timer" ":" STRING timer_config?
+         | "timer" NAME ":" expr timer_config?
 timer_config: LBRACE timer_setting* RBRACE
-timer_setting: NAME ":" (BOOLEAN | NAME)
+timer_setting: (NAME ":" (value | NAME)) | callback | oneshot | autostart
 
 // Remaps
-remap: "remap" ("from:" TOPIC_PATH "to:" TOPIC_PATH | TOPIC_PATH ":" TOPIC_PATH)
+remap: "remap" ((FROM topic_path TO topic_path) | (FROM topic_path "to" ":" topic_path) | (topic_path ":" topic_path))
 
 // Namespaces
-namespace: "namespace" (":"? TOPIC_PATH)
+namespace: "namespace" (":"? topic_path)
 
-// ROS primitives
+// ROS primitives with enhanced configuration
 ros_primitive: publisher | subscriber | service | client | action
 publisher: "publisher" topic_path ":" topic_type publisher_config?
+         | "publisher" ":" STRING "->" STRING publisher_config?
 publisher_config: LBRACE publisher_setting* RBRACE
-publisher_setting: qos_config | (NAME ":" (value | topic_type | NAME))
+publisher_setting: qos_config | (NAME ":" (value | topic_type | NAME)) | queue_size | durable | history | depth
+
+queue_size: QUEUE_SIZE ":" SIGNED_NUMBER
+durable: DURABLE ":" BOOLEAN
+history: HISTORY ":" (NAME | STRING)
+depth: DEPTH ":" SIGNED_NUMBER
 
 topic_type: TOPIC_TYPE_STRING | NAME ("/" NAME)+
 
 subscriber: "subscriber" topic_path ":" topic_type subscriber_config?
+         | "subscriber" ":" STRING "->" STRING subscriber_config?
 subscriber_config: LBRACE subscriber_setting* RBRACE
-subscriber_setting: qos_config | (NAME ":" (value | topic_type | NAME))
+subscriber_setting: qos_config | (NAME ":" (value | topic_type | NAME)) | queue_size | durable | history | depth
 
 service: "service" topic_path ":" topic_type service_config?
+         | "service" ":" STRING "->" STRING service_config?
 service_config: LBRACE service_setting* RBRACE
-service_setting: qos_config | (NAME ":" (value | topic_type | NAME))
+service_setting: qos_config | (NAME ":" (value | topic_type | NAME)) | callback | timeout
+
+callback: CALLBACK ":" STRING
+timeout: TIMEOUT ":" (SIGNED_NUMBER | STRING)
+oneshot: ONESHOT ":" BOOLEAN
+autostart: AUTOSTART ":" BOOLEAN
+goal_callback: GOAL_CALLBACK ":" STRING
+cancel_callback: CANCEL_CALLBACK ":" STRING
+goal_timeout: GOAL_TIMEOUT ":" (SIGNED_NUMBER | STRING)
+result_timeout: RESULT_TIMEOUT ":" (SIGNED_NUMBER | STRING)
 
 client: "client" topic_path ":" topic_type client_config?
+         | "client" ":" STRING "->" STRING client_config?
 client_config: LBRACE client_setting* RBRACE
 client_setting: qos_config | (NAME ":" (value | topic_type | NAME))
 
+service_client: "service_client" topic_path ":" topic_type service_client_config?
+         | "service_client" ":" STRING "->" STRING service_client_config?
+service_client_config: LBRACE service_client_setting* RBRACE
+service_client_setting: qos_config | (NAME ":" (value | topic_type | NAME)) | timeout
+
 action: "action" topic_path ":" topic_type action_config?
+         | "action" ":" STRING "->" STRING action_config?
 action_config: LBRACE action_setting* RBRACE
-action_setting: qos_config | (NAME ":" (value | topic_type | NAME))
+action_setting: qos_config | (NAME ":" (value | topic_type | NAME)) | callback | goal_callback | cancel_callback | goal_timeout | result_timeout
+
+action_client: "action_client" topic_path ":" topic_type action_client_config?
+         | "action_client" ":" STRING "->" STRING action_client_config?
+action_client_config: LBRACE action_client_setting* RBRACE
+action_client_setting: qos_config | (NAME ":" (value | topic_type | NAME)) | timeout | goal_timeout | result_timeout
 
 topic_path: "/" NAME ("/" NAME)*
 
@@ -90,6 +649,7 @@ flag: "flag" NAME ":" BOOLEAN
 
 // Enhanced C++ methods (Phase 2)
 cpp_method: "method" NAME LBRACE method_content RBRACE
+         | "def" NAME LPAR function_param_list RPAR return_type? (balanced_braces | CPP_BLOCK_PLACEHOLDER)
 method_content: (input_param | output_param | code_block)*
 input_param: "input" ":" cpp_type NAME input_param_size?
 output_param: "output" ":" cpp_type NAME output_param_size?
@@ -99,31 +659,74 @@ method_param_size_list: method_param_size_item (COMMA method_param_size_item)*
 method_param_size_item: SIGNED_NUMBER | NAME | STRING | dotted_name
 
 // CUDA kernels block - Developer-friendly with comma-separated parameters
-cuda_kernels_block: "cuda_kernels" LBRACE kernel_def* RBRACE
-kernel_def: "kernel" NAME LBRACE kernel_content RBRACE
-kernel_content: (block_size | grid_size | shared_memory | use_thrust | kernel_input_param | kernel_output_param | code_block | cuda_include)*
+cuda_kernels_block: CUDA_KERNELS LBRACE kernel_def* RBRACE
 
-block_size: "block_size" ":" LPAR expr COMMA expr COMMA expr RPAR
-grid_size: "grid_size" ":" LPAR expr COMMA expr COMMA expr RPAR
+// Standalone CUDA kernel definition
+cuda_kernel_def: "cuda_kernel" NAME LBRACE cuda_kernel_content RBRACE
+
+// NOTE: CUDA kernels must be defined at the global scope. They cannot be nested inside a namespace or class.
+kernel_def: KERNEL NAME LBRACE kernel_content RBRACE
+kernel_content: (block_size | grid_size | shared_memory | use_thrust | kernel_input_param | kernel_output_param | kernel_parameters | code_block | cuda_include)*
+
+cuda_kernel_content: (kernel | block_size | grid_size | shared_memory | use_thrust | inputs | outputs | kernel_input_param | kernel_output_param | kernel_parameters | code_block | cuda_include | use_streams | stream_count | synchronize | dynamic_parallelism | multi_gpu | gpu_count | gpu_memory_per_device | gpu_architectures | compute_capabilities | error_handling | performance_monitoring | memory_hierarchy | concurrent_kernel | advanced_synchronization | mixed_precision | memory_pool | context_management | driver_api | runtime_api)*
+
+kernel: "kernel" ":" (PIPE _NL cpp_raw_content* | PIPE CPP_BLOCK_PLACEHOLDER | code_block)
+
+block_size: "block_size" ":" (tuple_expr | expr)
+grid_size: "grid_size" ":" (tuple_expr | expr)
 shared_memory: "shared_memory" ":" expr
 use_thrust: "use_thrust" ":" BOOLEAN
 kernel_input_param: "input" ":" kernel_param_list
 kernel_output_param: "output" ":" kernel_param_list
+kernel_parameters: "parameters" ":" LBRACE kernel_parameter_list RBRACE
+kernel_parameter_list: kernel_parameter_def*
+kernel_parameter_def: cpp_type NAME "=" value
 kernel_param_list: kernel_param (COMMA kernel_param)*
-kernel_param: cpp_type NAME kernel_param_size?
+kernel_param: cpp_type NAME (kernel_param_size | array_spec)?
 cuda_include: "include" ("<" include_path ">" | STRING)
-cpp_type: cpp_type_name
-cpp_type_name: /[a-zA-Z_][a-zA-Z0-9_]*(\:\:[a-zA-Z_][a-zA-Z0-9_]*)*(\<[^<>]*(\<[^<>]*\>[^<>]*)*\>)?(\**)?/
 kernel_param_size: LPAR kernel_param_size_list RPAR
 kernel_param_size_list: kernel_param_size_item (COMMA kernel_param_size_item)*
 kernel_param_size_item: SIGNED_NUMBER | NAME | STRING
 
+// CUDA kernel input/output parameters
+inputs: "inputs" ":" array
+outputs: "outputs" ":" array
+
+// CUDA advanced features
+cuda_advanced_features: (use_streams | cuda_stream_count | synchronize | dynamic_parallelism | multi_gpu | gpu_count | gpu_memory_per_device | gpu_architectures | compute_capabilities | error_handling | performance_monitoring | memory_hierarchy | concurrent_kernel | advanced_synchronization | mixed_precision | memory_pool | context_management | driver_api | runtime_api)*
+
+use_streams: "use_streams" ":" BOOLEAN
+cuda_stream_count: "stream_count" ":" SIGNED_NUMBER
+synchronize: "synchronize" ":" BOOLEAN
+dynamic_parallelism: "dynamic_parallelism" ":" BOOLEAN
+multi_gpu: "multi_gpu" ":" BOOLEAN
+gpu_count: "gpu_count" ":" SIGNED_NUMBER
+gpu_memory_per_device: "gpu_memory_per_device" ":" SIGNED_NUMBER
+gpu_architectures: "gpu_architectures" ":" array
+compute_capabilities: "compute_capabilities" ":" array
+
+
+memory_hierarchy: "memory_hierarchy" ":" BOOLEAN
+concurrent_kernel: "concurrent_kernel" ":" BOOLEAN
+advanced_synchronization: "advanced_synchronization" ":" BOOLEAN
+mixed_precision: "mixed_precision" ":" BOOLEAN
+memory_pool: "memory_pool" ":" BOOLEAN
+context_management: "context_management" ":" BOOLEAN
+driver_api: "driver_api" ":" BOOLEAN
+runtime_api: "runtime_api" ":" BOOLEAN
+
 dotted_name: NAME (DOT NAME | LPAR (dotted_name (COMMA dotted_name)*)? RPAR)+
 
-// Code blocks use C++/CUDA curly braces, not triple quotes or strings
-code_block: "code" ":"? balanced_braces
+// For advanced C++ features, allow free-form code blocks
+code_block: ("code" ":"?)? balanced_braces
 balanced_braces: "{" balanced_content* "}"
 balanced_content: /[^{}]+/ | balanced_braces
+
+// Raw C++ code blocks that get passed through as-is
+// Enhanced to better handle C++ syntax for IntelliSense support
+raw_cpp_code: "cpp" ":"? LBRACE cpp_raw_content* RBRACE
+cpp_raw_content: /[^{}]+/ | cpp_balanced_braces
+cpp_balanced_braces: "{" cpp_raw_content* "}"
 
 // Values
 // Note: SIGNED_NUMBER can be int or float; AST builder will parse as int if no decimal
@@ -136,38 +739,41 @@ value_list: (value (COMMA value)*)?
 
 nested_dict: LBRACE dict_list RBRACE
 dict_list: (dict_item (dict_sep? dict_item)*)?
-dict_item: NAME ":" value
+dict_item: (NAME | STRING) ":" value
 dict_sep: COMMA | _NL
 
 // Expressions for block/grid size and parameter sizes
-expr: signed_atom (binop signed_atom)*
-signed_atom: SIGNED_NUMBER | NAME | dotted_name | LPAR expr RPAR
-binop: "+" | "-" | "*" | "/" | "%" | "^"
+expr: comparison_expr
+comparison_expr: arithmetic_expr (COMPOP arithmetic_expr)*
+arithmetic_expr: term (ADDOP term)*
+term: factor (MULOP factor)*
+factor: signed_atom
+signed_atom: SIGNED_NUMBER | simple_name | LPAR expr RPAR | sizeof_expr | function_call | STRING
+simple_name: IDENT
+sizeof_expr: "sizeof" LPAR (cpp_type | expr) RPAR
+function_call: IDENT LPAR expr (COMMA expr)* RPAR
+ADDOP: PLUS_OP | MINUS_OP
+MULOP: MULTIPLY_OP | DIVIDE_OP | MODULO_OP
+DIVIDE_OP: "/"
+COMPOP: "==" | "!=" | "<" | ">" | "<=" | ">="
 
-// Topics must start with /
-TOPIC_PATH: /\/[a-zA-Z_][a-zA-Z0-9_\/\.]*/
+tuple_expr: LPAR expr COMMA expr COMMA expr RPAR
 
-// Terminals
-STAR: "*"
-DOT: "."
-LPAR: "("
-RPAR: ")"
-LSQB: "["
-RSQB: "]"
-LBRACE: "{"
-RBRACE: "}"
-COMMA: ","
-LESSTAN: "<"
-MORETHAN: ">"
-SIGNED_NUMBER: /-?[0-9]+(\.[0-9]+)?/
-BOOLEAN: "true" | "false"
-NAME: /[a-zA-Z_][a-zA-Z0-9_]*/
-STRING: /"([^"\\]|\\.)*"/
-TYPE: /[a-zA-Z_][a-zA-Z0-9_]*(\[[0-9,]*\])*(\<[^>]*\>)?/
+// Ensure operators are properly recognized in expressions
+EQUALS: "=="
+NOT_EQUALS: "!="
+LESS_THAN: "<"
+GREATER_THAN: ">"
+LESS_EQUAL: "<="
+GREATER_EQUAL: ">="
+LEFT_SHIFT: "<<"
+RIGHT_SHIFT: ">>"
+FUNCTION_CALL: "()"
 
 // Block comments and line comments
 BLOCK_COMMENT: /\/\*[\s\S]*?\*\//
 COMMENT: /\/\/[^\n]*/
+PY_COMMENT: /#[ \t][^\n]*/
 
 // Ignore whitespace and comments
 _NL: /(\r?\n)+\s*/
@@ -175,10 +781,126 @@ _WS: /[ \t]+/
 
 // QoS configuration
 qos_config: "qos" LBRACE qos_setting* RBRACE
-qos_setting: NAME ":" expr
+         | "qos" ":" (NAME | STRING)
+qos_setting: NAME ":" (expr | NAME)
 
 // Add this to the terminals section near STRING:
 TOPIC_TYPE_STRING: /"[a-zA-Z0-9_\/]+"/
 
 // Reference to a global CUDA kernel by name
 use_kernel: "use_kernel" ":" STRING
+
+SEMICOLON: ";"
+
+// Advanced C++ Features (Phase 8)
+advanced_cpp_feature: concept_def | template_def | static_assert | global_var | operator_overload | constructor_def | preprocessor_directive | function_attribute | function_decl_alt | function_decl_def | friend_declaration | user_defined_literal
+
+// Template definitions
+template_def: template_struct | template_class | template_function | template_alias
+template_struct: "template" "<" template_params ">" STRUCT NAME LBRACE block_content RBRACE
+template_class: "template" "<" template_params ">" CLASS NAME inheritance? LBRACE block_content RBRACE
+template_function: "template" "<" template_params ">" cpp_type NAME LPAR function_param_list RPAR balanced_braces
+template_alias: "template" "<" template_params ">" "using" NAME "=" cpp_type ";"
+
+// Template parameters
+template_params: template_param (COMMA template_param)*
+template_param: typename_param | class_param | template_param_with_default
+typename_param: "typename" NAME
+class_param: "class" NAME
+template_param_with_default: ("typename" | "class") NAME "=" cpp_type
+
+// Function declarations for templates
+function_decl: cpp_type NAME LPAR function_param_list RPAR return_type? balanced_braces
+// Alternative function declaration syntax (for attributes)
+function_decl_alt: NAME LPAR function_param_list RPAR return_type? balanced_braces
+// Support for 'def' syntax in function declarations
+function_decl_def: "def" NAME LPAR function_param_list RPAR return_type? balanced_braces
+return_type: "->" cpp_type array_spec?
+function_param_list: (function_param (COMMA function_param)*)?
+function_param: NAME ":" cpp_type array_spec? default_value?
+
+cpp_statement: cpp_keyword | cpp_expression | cpp_semicolon
+cpp_keyword: "return" | "if" | "else" | "for" | "while" | "switch" | "case" | "default" | "break" | "continue"
+cpp_expression: /[^;{}]+/
+cpp_semicolon: ";"
+
+// Static assertions
+static_assert: "static_assert" LPAR expr COMMA STRING RPAR ";"
+
+// Global variables and constants
+global_var: global_constexpr | global_device_const | global_static_inline
+global_constexpr: "global" NAME ":" "constexpr" cpp_type "=" value ";"
+global_device_const: "global" "device" NAME ":" "__constant__" cpp_type array_spec "=" array ";"
+global_static_inline: "global" "static" "inline" function_decl
+
+// Operator overloads (accept both 'operator<<' and 'operator <<')
+operator_overload: "def" operator_name LPAR operator_params RPAR return_type? balanced_braces
+operator_name: "operator" operator_symbol | "operator" STRING
+operator_params: operator_param (COMMA operator_param)*
+operator_param: NAME ":" cpp_type
+
+// Constructor definitions (loosen member_init_item)
+constructor_def: constructor_decl | destructor_decl | member_init
+constructor_decl: "def" "__init__" LPAR constructor_params RPAR (":" member_init_list)? balanced_braces
+constructor_params: constructor_param (COMMA constructor_param)*
+constructor_param: NAME ":" cpp_type default_value?
+constructor_init: ":" member_init_list
+member_init_list: member_init_item (COMMA member_init_item)*
+member_init_item: NAME LPAR (NAME | expr)? RPAR
+member_assign: "self" "." NAME "=" expr ";"
+destructor_decl: "def" "__del__" LPAR RPAR balanced_braces
+destructor_body: code_block
+member_init: "member_init" NAME ":" member_init_list
+
+// Preprocessor directives
+preprocessor_directive: pragma_directive | include_directive | conditional_directive | define_directive | error_directive | line_directive
+pragma_directive: "#pragma" NAME
+include_directive: "#include" ("<" include_path ">" | STRING)
+conditional_directive: "#if" "defined" LPAR NAME RPAR | "#ifdef" NAME | "#ifndef" NAME | "#endif"
+define_directive: "#define" NAME value?
+error_directive: "#error" STRING
+line_directive: "#line" SIGNED_NUMBER STRING?
+
+// Function attributes (allow multiple attributes)
+function_attribute: attribute+ function_decl_alt
+attribute: "@" ATTRIBUTE_NAME
+ATTRIBUTE_NAME: "device" | "host" | "forceinline" | "launch_bounds" | "nodiscard" | "likely" | "unlikely" | "alignas" | "noexcept"
+
+// Friend declarations
+friend_declaration: "friend" friend_target SEMICOLON?
+friend_target: "class" NAME   -> class_friend
+            | NAME             -> function_friend
+
+// User-defined literals: allow operator""_suffix
+user_defined_literal: "def" "operator" STRING LITERAL_SUFFIX LPAR literal_param RPAR return_type balanced_braces
+LITERAL_SUFFIX: /_[a-zA-Z_][a-zA-Z0-9_]*/
+
+literal_param: "value" ":" LONG DOUBLE
+
+// Add C++ keywords as terminals
+RETURN: "return"
+IF: "if"
+ELSE: "else"
+FOR: "for"
+WHILE: "while"
+SWITCH: "switch"
+CASE: "case"
+BREAK: "break"
+CONTINUE: "continue"
+
+
+
+// C++ type keywords
+LONG: "long"
+DOUBLE: "double"
+
+// C++ types (refactored to avoid ambiguity and reduce/reduce conflicts)
+cpp_type: CONST? base_cpp_type pointer_or_ref*
+base_cpp_type: cpp_type_name | LONG DOUBLE | "size_t" | "uint32_t"
+cpp_type_name: NAME ("::" NAME)* (LESS_THAN cpp_type (COMMA cpp_type)* GREATER_THAN)?
+pointer_or_ref: STAR | AMPERSAND
+
+// AMPERSAND for references (already defined in terminals section)
+
+// Include path for preprocessor directives
+include_path: /[a-zA-Z0-9_\/\.]+/

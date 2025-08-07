@@ -5,6 +5,8 @@ import tempfile
 from pathlib import Path
 from click.testing import CliRunner
 from robodsl.cli import main
+from conftest import skip_if_no_ros2
+import pytest
 
 def test_cli_help():
     """Test the CLI help command."""
@@ -45,3 +47,21 @@ def test_cli_init_existing_dir(test_output_dir):
     )
     assert result.exit_code == 1
     assert "already exists" in result.output
+
+def test_cli_valid_command():
+    runner = CliRunner()
+    result = runner.invoke(main, ["--help"])
+    assert result.exit_code == 0
+    assert "Usage" in result.output
+
+def test_cli_invalid_command():
+    runner = CliRunner()
+    result = runner.invoke(main, ["notacommand"])
+    assert result.exit_code != 0
+    assert "No such command" in result.output or "Error" in result.output
+
+def test_cli_missing_args():
+    runner = CliRunner()
+    result = runner.invoke(main, ["add-node"])
+    assert result.exit_code != 0
+    assert "Missing argument" in result.output or "Error" in result.output
