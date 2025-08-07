@@ -2,6 +2,7 @@
 #include <cstring>
 #include <regex>
 #include "json.hpp"
+#include <climits>
 
 namespace {
 // Helper to trim whitespace
