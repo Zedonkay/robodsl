@@ -14,7 +14,7 @@ from ..core.ast import (
     CudaKernelsNode, KernelNode, KernelContentNode, KernelParamNode,
     QoSReliability, QoSDurability, QoSHistory, QoSLiveliness, KernelParameterDirection
 )
-from robodsl.utils.typecheck_bridge import check_ros2_type
+from ..utils.typecheck_bridge import check_ros2_type
 
 
 class SemanticError(Exception):

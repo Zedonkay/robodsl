@@ -23,14 +23,14 @@ from ..core.ast import (
     StageInputNode, StageOutputNode, StageMethodNode, StageModelNode,
     StageTopicNode, StageCudaKernelNode, StageOnnxModelNode,
     PipelineContentNode, ModelConfigNode, InputDefNode, OutputDefNode,
-    DeviceNode, OptimizationNode, SimulationWorldNode, SimulationRobotNode,
+    DeviceNode, OptimizationNode, TensorRTConfigNode, SimulationWorldNode, SimulationRobotNode,
     SimulationPluginNode, KernelParameterDirection, RawCppCodeNode,
     # Advanced C++ Features AST Nodes
     TemplateParamNode, TemplateStructNode, TemplateClassNode, TemplateFunctionNode, TemplateAliasNode,
     StaticAssertNode, GlobalConstexprNode, GlobalDeviceConstNode, GlobalStaticInlineNode,
     OperatorOverloadNode, ConstructorNode, DestructorNode, BitfieldNode, BitfieldMemberNode,
     PreprocessorDirectiveNode, FunctionAttributeNode, ConceptNode, ConceptRequiresNode,
-    FriendDeclarationNode, UserDefinedLiteralNode
+    FriendDeclarationNode, UserDefinedLiteralNode, PackageNode
 )
 
 
@@ -57,15 +57,24 @@ class ASTBuilder:
         
         try:
             for child in tree.children:
+                if self.debug:
+                    print(f"Processing child: {child.data if isinstance(child, Tree) else type(child)}")
                 if isinstance(child, Tree):
-                    if child.data == "cuda_kernel_def":
+                    if child.data == "package_def":
+                        self._process_package_def(child)
+                    elif child.data == "cuda_kernel_def":
                         self._process_cuda_kernel_def(child)
+                    elif child.data == "kernel_def":
+                        # Handle standalone kernel definitions
+                        self._process_standalone_kernel_def(child)
                     elif child.data == "data_structure":
                         self._process_data_structure(child)
                     elif child.data == "custom_interface":
                         self._process_custom_interface(child)
                     elif child.data == "node_def":
                         self._process_node_def(child)
+                    elif child.data == "cpp_node_def":
+                        self._process_cpp_node_def(child)
                     elif child.data == "cuda_kernels_block":
                         self._process_cuda_kernels_block(child)
                     elif child.data == "onnx_model":
@@ -145,6 +154,8 @@ class ASTBuilder:
     
     def _extract_token_value(self, token_or_tree: Union[Token, Tree]) -> str:
         """Extract string value from token or tree."""
+        if self.debug:
+            print(f"_extract_token_value: {type(token_or_tree)} = {token_or_tree}")
         if isinstance(token_or_tree, Token):
             return token_or_tree.value
         elif isinstance(token_or_tree, Tree):
@@ -500,48 +511,27 @@ class ASTBuilder:
             return CppMethodNode(name="")
     
     def _extract_code_from_block(self, code_block_node: Tree) -> str:
-        """Extract code from a code block node, handling nested balanced braces."""
+        """Extract code from a code block node."""
         if self.debug:
-            print("[DEBUG] _extract_code_from_block called")
+            print(f"[DEBUG] _extract_code_from_block called")
+            print(f"[DEBUG] code_block_node: {code_block_node}")
+            print(f"[DEBUG] code_block_node type: {type(code_block_node)}")
         
-        def collect_code(node):
-            code_parts = []
-            if self.debug:
-                print(f"[DEBUG] collect_code visiting node: {node}, type: {type(node)}")
-            if isinstance(node, Tree):
-                if node.data == "balanced_braces":
-                    code_parts.append("{")
-                    for child in node.children:
-                        code_parts.append(collect_code(child))
-                    code_parts.append("}")
-                elif node.data == "balanced_content":
-                    for child in node.children:
-                        code_parts.append(collect_code(child))
-                else:
-                    for child in node.children:
-                        code_parts.append(collect_code(child))
-            elif isinstance(node, Token):
-                code_parts.append(node.value)
-            return ''.join(code_parts)
-
         try:
-            if self.debug:
-                print(f"[DEBUG] code_block_node: {code_block_node}")
-                print(f"[DEBUG] code_block_node type: {type(code_block_node)}")
-                print(f"[DEBUG] code_block_node children: {code_block_node.children}")
-            
-            # Process all children of the code_block_node, not just the first one
-            code_parts = []
-            for child in code_block_node.children:
-                if isinstance(child, Tree) and child.data in ("balanced_braces", "balanced_content"):
-                    code_parts.append(collect_code(child))
-                else:
-                    code_parts.append(collect_code(child))
-            
-            code_str = ''.join(code_parts)
-            if self.debug:
-                print(f"[DEBUG] Extracted code: '{code_str}'")
-            return code_str
+            if hasattr(code_block_node, 'children'):
+                # It's a Tree, extract from children
+                def collect_code(node):
+                    if hasattr(node, 'value'):
+                        return str(node.value)
+                    elif hasattr(node, 'children'):
+                        return ''.join(collect_code(child) for child in node.children)
+                    else:
+                        return str(node)
+                
+                return collect_code(code_block_node)
+            else:
+                # It's a Token, return its value
+                return str(code_block_node.value)
         except Exception as e:
             if self.debug:
                 print(f"Error extracting code from block: {e}")
@@ -812,6 +802,8 @@ class ASTBuilder:
         try:
             if self.debug:
                 print(f"Processing node_content with {len(node.children)} children")
+                print(f"node_content type: {type(node)}")
+                print(f"node_content: {node}")
             for child in node.children:
                 if isinstance(child, Tree):
                     if self.debug:
@@ -821,7 +813,12 @@ class ASTBuilder:
                     if child.data == "parameter":
                         content.parameters.append(self._process_parameter(child))
                     elif child.data == "lifecycle":
-                        content.lifecycle = self._process_lifecycle(child)
+                        lifecycle_node = self._process_lifecycle(child)
+                        if content.lifecycle is None:
+                            content.lifecycle = lifecycle_node
+                        else:
+                            # Merge lifecycle settings
+                            content.lifecycle.settings.extend(lifecycle_node.settings)
                     elif child.data == "timer":
                         content.timers.append(self._process_timer(child))
                     elif child.data == "remap":
@@ -862,6 +859,26 @@ class ASTBuilder:
                         content.used_kernels.append(self._process_use_kernel(child))
                     elif child.data == "raw_cpp_code":
                         content.raw_cpp_code.append(self._process_raw_cpp_code(child))
+                    elif child.data == "parameter_server":
+                        content.parameter_server = str(child.children[0]) == "true"
+                    elif child.data == "parameter_client":
+                        content.parameter_client = str(child.children[0]) == "true"
+                    elif child.data == "service_client":
+                        content.clients.append(self._process_service_client(child))
+                    elif child.data == "action_client":
+                        content.clients.append(self._process_action_client(child))
+                    elif child.data == "realtime_config":
+                        # Handle realtime configuration
+                        # For now, just set a flag to indicate realtime is enabled
+                        content.realtime_enabled = True
+                    elif child.data == "security_config":
+                        # Handle security configuration
+                        # For now, just set a flag to indicate security is enabled
+                        content.security_enabled = True
+                    elif child.data == "component_config":
+                        # Handle component configuration
+                        # For now, just set a flag to indicate component is enabled
+                        content.component_enabled = True
                     else:
                         if self.debug:
                             print(f"    No handler for {child.data}")
@@ -875,16 +892,35 @@ class ASTBuilder:
         """Process parameter."""
         try:
             if len(node.children) < 4:
-                if self.debug:
-                    print(f"Parameter node has insufficient children: {len(node.children)}")
-                    print(f"Parameter node children: {[str(c) for c in node.children]}")
-                return ParameterNode(type="", name="", value=None)
-            
-            # Use _extract_cpp_type_string to convert cpp_type tree to string
-            param_type = self._extract_cpp_type_string(node.children[1])
-            name = str(node.children[2])  # NAME is at index 2
-            value = self._process_value(node.children[3])  # value is at index 3
-            return ParameterNode(type=param_type, name=name, value=value)
+                # New parameter syntax: parameter: "name" -> "type" { ... }
+                if len(node.children) == 3:
+                    name = str(node.children[0]).strip('"')
+                    param_type = str(node.children[1]).strip('"')
+                    config = node.children[2]
+                    
+                    # Extract default value from config if present
+                    default_value = None
+                    if isinstance(config, Tree) and config.data == "parameter_config":
+                        for child in config.children:
+                            if isinstance(child, Tree) and child.data == "parameter_setting":
+                                if len(child.children) >= 2:
+                                    setting_name = str(child.children[0])
+                                    if setting_name == "default":
+                                        default_value = self._process_value(child.children[1])
+                    
+                    return ParameterNode(type=param_type, name=name, value=default_value)
+                else:
+                    if self.debug:
+                        print(f"Parameter node has insufficient children: {len(node.children)}")
+                        print(f"Parameter node children: {[str(c) for c in node.children]}")
+                    return ParameterNode(type="", name="", value=None)
+            else:
+                # Old parameter syntax: parameter: cpp_type NAME = value
+                # Use _extract_cpp_type_string to convert cpp_type tree to string
+                param_type = self._extract_cpp_type_string(node.children[1])
+                name = str(node.children[2])  # NAME is at index 2
+                value = self._process_value(node.children[3])  # value is at index 3
+                return ParameterNode(type=param_type, name=name, value=value)
         except Exception as e:
             if self.debug:
                 print(f"Error processing parameter: {e}")
@@ -894,15 +930,31 @@ class ASTBuilder:
     def _process_lifecycle(self, node: Tree) -> LifecycleNode:
         """Process lifecycle configuration."""
         settings = []
-        for child in node.children:
-            if isinstance(child, Tree):
-                if child.data == "lifecycle_setting":
-                    settings.append(self._process_lifecycle_setting(child))
-                elif child.data == "lifecycle_config":
-                    # Handle lifecycle_config block
-                    for config_child in child.children:
-                        if isinstance(config_child, Tree) and config_child.data == "lifecycle_setting":
-                            settings.append(self._process_lifecycle_setting(config_child))
+        
+        # Handle different lifecycle syntax forms
+        if len(node.children) == 1 and hasattr(node.children[0], 'type') and node.children[0].type == 'BOOLEAN':
+            # Simple form: lifecycle: true
+            value = str(node.children[0]) == "true"
+            if value:
+                settings.append(LifecycleSettingNode(name="enabled", value=True))
+        elif len(node.children) == 2 and str(node.children[0]) == "lifecycle_states":
+            # lifecycle_states: ["unconfigured", "inactive", "active", "finalized"]
+            settings.append(LifecycleSettingNode(name="states", value=True))
+        elif len(node.children) == 2 and str(node.children[0]) == "lifecycle_transitions":
+            # lifecycle_transitions: ["configure", "activate", "deactivate", "cleanup", "shutdown"]
+            settings.append(LifecycleSettingNode(name="transitions", value=True))
+        else:
+            # Complex form with braces
+            for child in node.children:
+                if isinstance(child, Tree):
+                    if child.data == "lifecycle_setting":
+                        settings.append(self._process_lifecycle_setting(child))
+                    elif child.data == "lifecycle_config":
+                        # Handle lifecycle_config block
+                        for config_child in child.children:
+                            if isinstance(config_child, Tree) and config_child.data == "lifecycle_setting":
+                                settings.append(self._process_lifecycle_setting(config_child))
+        
         return LifecycleNode(settings=settings)
 
     def _process_lifecycle_setting(self, node: Tree) -> LifecycleSettingNode:
@@ -935,19 +987,27 @@ class ASTBuilder:
         settings = {}
         for child in node.children:
             if isinstance(child, Tree) and child.data == "timer_setting":
-                name = str(child.children[0])
-                value_node = child.children[1]
-                if hasattr(value_node, 'type'):
-                    if value_node.type == 'BOOLEAN':
-                        value = value_node.value == 'true'
-                    elif value_node.type == 'NAME':
-                        # Handle boolean names like 'true', 'false'
+                # Handle timer_setting nodes - they contain oneshot/autostart nodes
+                for setting_child in child.children:
+                    if isinstance(setting_child, Tree) and setting_child.data in ["oneshot", "autostart"]:
+                        if len(setting_child.children) >= 2:
+                            name = setting_child.data
+                            value_node = setting_child.children[1]
+                            if hasattr(value_node, 'type') and value_node.type == 'BOOLEAN':
+                                value = value_node.value == 'true'
+                            else:
+                                value = str(value_node) == 'true'
+                            settings[name] = value
+            elif isinstance(child, Tree) and child.data in ["oneshot", "autostart"]:
+                # Handle direct oneshot/autostart nodes
+                if len(child.children) >= 2:
+                    name = child.data
+                    value_node = child.children[1]
+                    if hasattr(value_node, 'type') and value_node.type == 'BOOLEAN':
                         value = value_node.value == 'true'
                     else:
-                        value = str(value_node)
-                else:
-                    value = str(value_node)
-                settings[name] = value
+                        value = str(value_node) == 'true'
+                    settings[name] = value
         return settings
 
     def _process_remap(self, node: Tree) -> RemapNode:
@@ -1113,6 +1173,16 @@ class ASTBuilder:
             qos = config.get("qos") if config else None
         return ClientNode(service=service, srv_type=srv_type, qos=qos)
 
+    def _process_service_client(self, node: Tree) -> ClientNode:
+        """Process service client."""
+        # service_client has the same structure as client
+        return self._process_client(node)
+
+    def _process_action_client(self, node: Tree) -> ClientNode:
+        """Process action client."""
+        # action_client has the same structure as client
+        return self._process_client(node)
+
     def _process_client_config(self, node: Tree):
         """Process client configuration."""
         settings = {}
@@ -1255,6 +1325,89 @@ class ASTBuilder:
             if self.debug:
                 print(f"Error processing kernel content: {e}")
             self.errors.append(f"Kernel content error: {e}")
+        return content
+
+    def _process_cuda_kernel_content(self, node: Tree) -> KernelContentNode:
+        """Process cuda_kernel content with additional CUDA-specific features."""
+        content = KernelContentNode()
+        try:
+            for child in node.children:
+                if isinstance(child, Tree):
+                    if self.debug:
+                        print(f"[DEBUG] Processing cuda_kernel content child: {child.data}")
+                    if child.data == "kernel":
+                        # Handle kernel code block
+                        if len(child.children) > 0:
+                            extracted_code = self._extract_code_from_block(child.children[0])
+                            content.code = extracted_code
+                    elif child.data == "block_size":
+                        # The tuple_expr is at index 0
+                        if len(child.children) > 0:
+                            if self.debug:
+                                print(f"[DEBUG] Processing block_size, children: {child.children}")
+                                print(f"[DEBUG] block_size child[0]: {child.children[0]}")
+                            content.block_size = self._parse_tuple_expression(child.children[0])
+                    elif child.data == "grid_size":
+                        # The tuple_expr is at index 0
+                        if len(child.children) > 0:
+                            if self.debug:
+                                print(f"[DEBUG] Processing grid_size, children: {child.children}")
+                                print(f"[DEBUG] grid_size child[0]: {child.children[0]}")
+                            content.grid_size = self._parse_tuple_expression(child.children[0])
+                    elif child.data == "shared_memory":
+                        # The expr is at index 0
+                        expr_child = child.children[0] if len(child.children) > 0 else None
+                        if expr_child is not None:
+                            if self.debug:
+                                print(f"Processing shared_memory expr: {expr_child}")
+                            content.shared_memory = self._parse_expression(expr_child)
+                    elif child.data == "use_thrust":
+                        # The BOOLEAN is at index 0
+                        if len(child.children) > 0:
+                            value = str(child.children[0])
+                            content.use_thrust = value == "true"
+                    elif child.data == "inputs":
+                        # Handle inputs array
+                        if len(child.children) > 0:
+                            content.inputs = self._process_array(child.children[0])
+                    elif child.data == "outputs":
+                        # Handle outputs array
+                        if len(child.children) > 0:
+                            content.outputs = self._process_array(child.children[0])
+                    elif child.data == "kernel_parameters":
+                        # Handle kernel parameters
+                        if self.debug:
+                            print(f"[DEBUG] Found kernel_parameters node with {len(child.children)} children")
+                            for i, grandchild in enumerate(child.children):
+                                print(f"[DEBUG] kernel_parameters child {i}: {type(grandchild)} = {grandchild}")
+                                if isinstance(grandchild, Tree):
+                                    print(f"[DEBUG] kernel_parameters child {i} data: {grandchild.data}")
+                                    print(f"[DEBUG] kernel_parameters child {i} children: {[type(c) for c in grandchild.children]}")
+                        if len(child.children) > 1:
+                            # The kernel_parameter_list is at index 1 (index 0 is '{', index 2 is '}')
+                            content.kernel_parameters = self._process_kernel_parameter_list(child.children[1])
+                            if self.debug:
+                                print(f"[DEBUG] Processed kernel parameters: {content.kernel_parameters}")
+                    elif child.data == "cuda_include":
+                        # Handle CUDA include statements
+                        include_path = self._parse_include_path(child.children[0])
+                        content.cuda_includes.append(include_path)
+                    elif child.data == "code_block":
+                        if len(child.children) > 0:
+                            extracted_code = self._extract_code_from_block(child.children[0])
+                            content.code = extracted_code
+                    elif child.data in ["use_streams", "stream_count", "synchronize", "dynamic_parallelism", "multi_gpu", "gpu_count", "gpu_memory_per_device", "gpu_architectures", "compute_capabilities", "error_handling", "performance_monitoring", "memory_hierarchy", "concurrent_kernel", "advanced_synchronization", "mixed_precision", "memory_pool", "context_management", "driver_api", "runtime_api"]:
+                        # Handle individual CUDA advanced features
+                        if self.debug:
+                            print(f"[DEBUG] Processing CUDA advanced feature: {child.data}")
+                        # Store advanced features in content for later processing
+                        if not hasattr(content, 'cuda_advanced_features'):
+                            content.cuda_advanced_features = {}
+                        content.cuda_advanced_features[child.data] = self._process_value(child.children[0]).value
+        except Exception as e:
+            if self.debug:
+                print(f"Error processing cuda_kernel content: {e}")
+            self.errors.append(f"CUDA kernel content error: {e}")
         return content
 
     def _process_kernel_param_list(self, node: Tree, direction) -> List[KernelParamNode]:
@@ -1582,6 +1735,8 @@ class ASTBuilder:
     def _process_onnx_model_content(self, node: Tree) -> ModelConfigNode:
         """Process ONNX model content."""
         config = ModelConfigNode()
+        tensorrt_config = None
+        
         for child in node.children:
             if isinstance(child, Tree):
                 if child.data == "input_def":
@@ -1592,6 +1747,10 @@ class ASTBuilder:
                     config.device = DeviceNode(device=str(child.children[0]))
                 elif child.data == "optimization":
                     config.optimizations.append(OptimizationNode(optimization=str(child.children[0])))
+                elif child.data == "tensorrt_config_item":
+                    if tensorrt_config is None:
+                        tensorrt_config = TensorRTConfigNode()
+                    self._process_tensorrt_config_item(child, tensorrt_config)
                 elif child.data == "config_block":
                     # Handle config block that contains input_def, output_def, etc.
                     for config_child in child.children:
@@ -1604,6 +1763,15 @@ class ASTBuilder:
                                 config.device = DeviceNode(device=str(config_child.children[0]))
                             elif config_child.data == "optimization":
                                 config.optimizations.append(OptimizationNode(optimization=str(config_child.children[0])))
+                            elif config_child.data == "tensorrt_config_item":
+                                if tensorrt_config is None:
+                                    tensorrt_config = TensorRTConfigNode()
+                                self._process_tensorrt_config_item(config_child, tensorrt_config)
+        
+        # Set TensorRT config if found
+        if tensorrt_config:
+            config.tensorrt_config = tensorrt_config
+            
         return config
 
     def _process_input_def(self, node: Tree) -> InputDefNode:
@@ -1617,6 +1785,91 @@ class ASTBuilder:
         name = str(node.children[0]).strip('"')
         type_name = str(node.children[1]).strip('"')
         return OutputDefNode(name=name, type=type_name)
+
+    def _process_tensorrt_config_item(self, node: Tree, config: TensorRTConfigNode):
+        """Process individual TensorRT configuration item."""
+        if node.data == "optimization_level":
+            config.optimization_level = int(str(node.children[0]))
+        elif node.data == "precision":
+            config.precision = str(node.children[0]).strip('"')
+        elif node.data == "dynamic_batch":
+            config.dynamic_batch = str(node.children[0]).lower() == "true"
+        elif node.data == "max_workspace_size":
+            config.max_workspace_size = int(str(node.children[0]))
+        elif node.data == "tactic_sources":
+            tactic_sources = self._process_array(node.children[0])
+            config.tactic_sources = [str(v.value) for v in tactic_sources]
+        elif node.data == "timing_cache":
+            config.timing_cache = str(node.children[0]).lower() == "true"
+        elif node.data == "profiling_verbosity":
+            config.profiling_verbosity = str(node.children[0]).strip('"')
+        elif node.data == "calibration":
+            config.calibration = str(node.children[0]).lower() == "true"
+        elif node.data == "dynamic_range":
+            config.dynamic_range = str(node.children[0]).lower() == "true"
+        elif node.data == "min_batch_size":
+            config.min_batch_size = int(str(node.children[0]))
+        elif node.data == "max_batch_size":
+            config.max_batch_size = int(str(node.children[0]))
+        elif node.data == "optimal_batch_size":
+            config.optimal_batch_size = int(str(node.children[0]))
+        elif node.data == "dynamic_shapes":
+            config.dynamic_shapes = str(node.children[0]).lower() == "true"
+        elif node.data == "shape_optimization":
+            config.shape_optimization = str(node.children[0]).lower() == "true"
+        elif node.data == "plugins":
+            plugins = self._process_array(node.children[0])
+            config.plugins = [str(v.value) for v in plugins]
+        elif node.data == "performance_tuning":
+            config.performance_tuning = str(node.children[0]).lower() == "true"
+        elif node.data == "memory_optimization":
+            config.memory_optimization = str(node.children[0]).lower() == "true"
+        elif node.data == "multi_stream":
+            config.multi_stream = str(node.children[0]).lower() == "true"
+        elif node.data == "performance_monitoring":
+            config.performance_monitoring = str(node.children[0]).lower() == "true"
+        elif node.data == "compatibility_mode":
+            config.compatibility_mode = str(node.children[0]).lower() == "true"
+        elif node.data == "memory_management":
+            config.memory_management = str(node.children[0]).lower() == "true"
+        elif node.data == "serialization":
+            config.serialization = str(node.children[0]).lower() == "true"
+        elif node.data == "parallel_execution":
+            config.parallel_execution = str(node.children[0]).lower() == "true"
+        elif node.data == "error_recovery":
+            config.error_recovery = str(node.children[0]).lower() == "true"
+        elif node.data == "parallel_streams":
+            config.parallel_streams = int(str(node.children[0]))
+        elif node.data == "error_handling":
+            config.error_handling = str(node.children[0]).strip('"')
+        elif node.data == "per_tensor_quantization":
+            config.per_tensor_quantization = str(node.children[0]).lower() == "true"
+        elif node.data == "memory_pool_size":
+            config.memory_pool_size = int(str(node.children[0]))
+        elif node.data == "monitoring_metrics":
+            metrics = self._process_array(node.children[0])
+            config.monitoring_metrics = [str(v.value) for v in metrics]
+        elif node.data == "backward_compatibility":
+            config.backward_compatibility = str(node.children[0]).lower() == "true"
+        elif node.data == "plugin_paths":
+            paths = self._process_array(node.children[0])
+            config.plugin_paths = [str(v.value) for v in paths]
+        elif node.data == "tuning_algorithm":
+            config.tuning_algorithm = str(node.children[0]).strip('"')
+        elif node.data == "engine_file":
+            config.engine_file = str(node.children[0]).strip('"')
+        elif node.data == "profiling":
+            config.profiling = str(node.children[0]).lower() == "true"
+        elif node.data == "debugging":
+            config.debugging = str(node.children[0]).lower() == "true"
+        elif node.data == "per_channel_quantization":
+            config.per_channel_quantization = str(node.children[0]).lower() == "true"
+        elif node.data == "calibration_data":
+            config.calibration_data = str(node.children[0]).strip('"')
+        elif node.data == "calibration_algorithm":
+            config.calibration_algorithm = str(node.children[0]).strip('"')
+        elif node.data == "calibration_batch_size":
+            config.calibration_batch_size = int(str(node.children[0]))
 
     def _process_simulation_config(self, node: Tree):
         """Process simulation configuration."""
@@ -2938,11 +3191,16 @@ class ASTBuilder:
         """Process array values."""
         values = []
         if isinstance(node, Tree) and node.data == "array":
-            for child in node.children:
-                if isinstance(child, Tree) and child.data == "value_list":
-                    for value_child in child.children:
-                        if isinstance(value_child, Tree):
-                            values.append(self._process_value(value_child))
+            # Array structure: LSQB value_list RSQB
+            # value_list is: (value (COMMA value)*)?
+            if len(node.children) >= 2:  # Should have LSQB, value_list, RSQB
+                value_list_node = node.children[1]  # value_list is at index 1
+                if isinstance(value_list_node, Tree) and value_list_node.data == "value_list":
+                    for child in value_list_node.children:
+                        if isinstance(child, Tree) and child.data == "value":
+                            value = self._process_value(child)
+                            values.append(value)
+                        # Skip COMMA tokens
         return values
 
     def _topic_path_to_str(self, node):
@@ -2963,7 +3221,7 @@ class ASTBuilder:
             print(f"cuda_kernel_def children: {[type(c) for c in node.children]}")
             print(f"cuda_kernel_def children values: {[str(c) for c in node.children]}")
         
-        # The structure is: NAME LBRACE kernel_content RBRACE
+        # The structure is: NAME LBRACE cuda_kernel_content RBRACE
         # So children[0] should be the NAME token
         if len(node.children) >= 1:
             name_token = node.children[0]
@@ -2979,9 +3237,9 @@ class ASTBuilder:
         if self.debug:
             print(f"Extracted kernel name: '{name}'")
         
-        # kernel_content is at children[2]
+        # cuda_kernel_content is at children[2]
         if len(node.children) >= 3:
-            content = self._process_kernel_content(node.children[2])
+            content = self._process_cuda_kernel_content(node.children[2])
         else:
             content = KernelContentNode()
             if self.debug:
@@ -2993,5 +3251,468 @@ class ASTBuilder:
             self.ast.cuda_kernels = CudaKernelsNode(kernels=[])
         self.ast.cuda_kernels.kernels.append(kernel)
         return kernel
+
+    def _process_standalone_kernel_def(self, node):
+        """Process standalone kernel definition and add to ast.cuda_kernels."""
+        from ..core.ast import KernelNode, KernelContentNode, CudaKernelsNode
+        
+        if self.debug:
+            print(f"kernel_def children: {[type(c) for c in node.children]}")
+            print(f"kernel_def children values: {[str(c) for c in node.children]}")
+        
+        # The structure is: KERNEL NAME LBRACE kernel_content RBRACE
+        # So children[1] should be the NAME token (children[0] is KERNEL)
+        if len(node.children) >= 2:
+            name_token = node.children[1]
+            if hasattr(name_token, 'value'):
+                name = name_token.value
+            else:
+                name = str(name_token)
+        else:
+            name = "unknown_kernel"
+            if self.debug:
+                print(f"Warning: kernel_def has unexpected structure: {len(node.children)} children")
+        
+        if self.debug:
+            print(f"Extracted kernel name: '{name}'")
+        
+        # kernel_content is at children[3]
+        if len(node.children) >= 4:
+            content = self._process_kernel_content(node.children[3])
+        else:
+            content = KernelContentNode()
+            if self.debug:
+                print(f"Warning: No kernel content found")
+        
+        kernel = KernelNode(name=name, content=content)
+        # Add to ast.cuda_kernels
+        if not hasattr(self.ast, 'cuda_kernels') or self.ast.cuda_kernels is None:
+            self.ast.cuda_kernels = CudaKernelsNode(kernels=[])
+        self.ast.cuda_kernels.kernels.append(kernel)
+        return kernel
+
+    def _process_package_def(self, node: Tree):
+        """Process package definition."""
+        from ..core.ast import PackageNode
+        
+        if self.debug:
+            print(f"Processing package_def: {node.children}")
+        
+        # Extract package name (first child should be NAME token)
+        package_name = self._extract_token_value(node.children[0])
+        
+        # Initialize package fields
+        version = None
+        description = None
+        dependencies = []
+        build_configuration = {}
+        cpp_nodes = []
+        
+        # Initialize all the new package fields
+        build_type = None
+        cross_compilation = None
+        target_platform = None
+        toolchain_file = None
+        package_management = None
+        dependency_resolution = None
+        version_constraints = {}
+        maintainer = None
+        build_optimization = None
+        dependency_management = None
+        custom_targets = []
+        compiler = None
+        platform = None
+        build_variant = None
+        build_performance = None
+        parallel_build = None
+        build_jobs = None
+        build_cache = None
+        ccache = None
+        ninja = None
+        precompiled_headers = None
+        unity_build = None
+        link_time_optimization = None
+        profile_guided_optimization = None
+        install_configuration = {}
+        test_configuration = {}
+        performance_configuration = {}
+        build_flags = {}
+        architecture = None
+        dependency_caching = None
+        variant_configuration = {}
+        license = None
+        url = None
+        cross_platform = None
+        machine = None
+        platform_configuration = {}
+        architecture_configuration = {}
+        compiler_version = None
+        optimization_flags = {}
+        custom_target_configuration = {}
+        dependency_configuration = {}
+        optional_dependencies = []
+        system_dependencies = []
+        dependency_parallel_download = None
+        dependency_verification = None
+        dependency_licenses = []
+        
+        # Process package content (children[2] should be package_content)
+        if len(node.children) >= 3:
+            content_node = node.children[2]
+            if isinstance(content_node, Tree) and content_node.data == "package_content":
+                for child in content_node.children:
+                    if isinstance(child, Tree):
+                        if self.debug:
+                            print(f"Processing package child: {child.data}")
+                        if child.data == "package_name":
+                            # package_name: "name" ":" STRING
+                            if len(child.children) >= 2:
+                                package_name = self._extract_token_value(child.children[1]).strip('"')
+                        elif child.data == "package_version":
+                            # package_version: "version" ":" STRING
+                            if len(child.children) >= 2:
+                                version = self._extract_token_value(child.children[1]).strip('"')
+                        elif child.data == "package_description":
+                            # package_description: "description" ":" STRING
+                            if len(child.children) >= 2:
+                                description = self._extract_token_value(child.children[1]).strip('"')
+                        elif child.data == "package_dependencies":
+                            # package_dependencies: "dependencies" ":" array
+                            if len(child.children) >= 1:
+                                deps_node = child.children[0]  # Array node is at index 0
+                                if isinstance(deps_node, Tree) and deps_node.data == "array":
+                                    deps = self._process_array(deps_node)
+                                    dependencies = [dep.value for dep in deps]
+                        elif child.data == "package_build_config":
+                            # package_build_config: "build_configuration" ":" nested_dict
+                            if len(child.children) >= 2:
+                                config_node = child.children[1]
+                                if isinstance(config_node, Tree) and config_node.data == "nested_dict":
+                                    build_configuration = self._process_nested_dict(config_node)
+                        elif child.data == "package_cpp_nodes":
+                            # package_cpp_nodes: cpp_node_def
+                            cpp_node = self._process_cpp_node_def(child)
+                            if cpp_node:
+                                cpp_nodes.append(cpp_node)
+                        # Handle all the new package fields
+                        elif child.data == "package_build_type":
+                            if len(child.children) >= 2:
+                                build_type = self._extract_token_value(child.children[1]).strip('"')
+                        elif child.data == "package_cross_compilation":
+                            if len(child.children) >= 2:
+                                cross_compilation = self._extract_token_value(child.children[1]) == "true"
+                        elif child.data == "package_target_platform":
+                            if len(child.children) >= 2:
+                                target_platform = self._extract_token_value(child.children[1]).strip('"')
+                        elif child.data == "package_toolchain_file":
+                            if len(child.children) >= 2:
+                                toolchain_file = self._extract_token_value(child.children[1]).strip('"')
+                        elif child.data == "package_management":
+                            if len(child.children) >= 2:
+                                value = self._extract_token_value(child.children[1])
+                                if value == "true":
+                                    package_management = True
+                                elif value == "false":
+                                    package_management = False
+                                else:
+                                    package_management = value.strip('"')
+                        elif child.data == "package_dependency_resolution":
+                            if len(child.children) >= 2:
+                                value = self._extract_token_value(child.children[1])
+                                if value == "true":
+                                    dependency_resolution = True
+                                elif value == "false":
+                                    dependency_resolution = False
+                                else:
+                                    dependency_resolution = value.strip('"')
+                        elif child.data == "package_version_constraints":
+                            if len(child.children) >= 2:
+                                constraints_node = child.children[1]
+                                if isinstance(constraints_node, Tree) and constraints_node.data == "nested_dict":
+                                    version_constraints = self._process_nested_dict(constraints_node)
+                        elif child.data == "package_maintainer":
+                            if len(child.children) >= 2:
+                                maintainer = self._extract_token_value(child.children[1]).strip('"')
+                        elif child.data == "package_build_optimization":
+                            if len(child.children) >= 2:
+                                build_optimization = self._extract_token_value(child.children[1]) == "true"
+                        elif child.data == "package_dependency_management":
+                            if len(child.children) >= 2:
+                                value = self._extract_token_value(child.children[1])
+                                if value == "true":
+                                    dependency_management = True
+                                elif value == "false":
+                                    dependency_management = False
+                                else:
+                                    dependency_management = value.strip('"')
+                        elif child.data == "package_custom_targets":
+                            if len(child.children) >= 1:
+                                targets_node = child.children[0]  # Array node is at index 0
+                                if isinstance(targets_node, Tree) and targets_node.data == "array":
+                                    targets = self._process_array(targets_node)
+                                    custom_targets = [target.value for target in targets]
+                        elif child.data == "package_compiler":
+                            if len(child.children) >= 2:
+                                compiler = self._extract_token_value(child.children[1]).strip('"')
+                        elif child.data == "package_platform":
+                            if len(child.children) >= 2:
+                                platform = self._extract_token_value(child.children[1]).strip('"')
+                        elif child.data == "package_build_variant":
+                            if len(child.children) >= 2:
+                                build_variant = self._extract_token_value(child.children[1]).strip('"')
+                        elif child.data == "package_build_performance":
+                            if len(child.children) >= 2:
+                                build_performance = self._extract_token_value(child.children[1]) == "true"
+                        elif child.data == "package_parallel_build":
+                            if len(child.children) >= 2:
+                                parallel_build = self._extract_token_value(child.children[1]) == "true"
+                        elif child.data == "package_build_jobs":
+                            if len(child.children) >= 2:
+                                build_jobs = int(self._extract_token_value(child.children[1]))
+                        elif child.data == "package_build_cache":
+                            if len(child.children) >= 2:
+                                build_cache = self._extract_token_value(child.children[1]) == "true"
+                        elif child.data == "package_ccache":
+                            if len(child.children) >= 2:
+                                ccache = self._extract_token_value(child.children[1]) == "true"
+                        elif child.data == "package_ninja":
+                            if len(child.children) >= 2:
+                                ninja = self._extract_token_value(child.children[1]) == "true"
+                        elif child.data == "package_precompiled_headers":
+                            if len(child.children) >= 2:
+                                precompiled_headers = self._extract_token_value(child.children[1]) == "true"
+                        elif child.data == "package_unity_build":
+                            if len(child.children) >= 2:
+                                unity_build = self._extract_token_value(child.children[1]) == "true"
+                        elif child.data == "package_link_time_optimization":
+                            if len(child.children) >= 2:
+                                link_time_optimization = self._extract_token_value(child.children[1]) == "true"
+                        elif child.data == "package_profile_guided_optimization":
+                            if len(child.children) >= 2:
+                                profile_guided_optimization = self._extract_token_value(child.children[1]) == "true"
+                        elif child.data == "package_install_config":
+                            if len(child.children) >= 2:
+                                config_node = child.children[1]
+                                if isinstance(config_node, Tree) and config_node.data == "nested_dict":
+                                    install_configuration = self._process_nested_dict(config_node)
+                        elif child.data == "package_test_config":
+                            if len(child.children) >= 2:
+                                config_node = child.children[1]
+                                if isinstance(config_node, Tree) and config_node.data == "nested_dict":
+                                    test_configuration = self._process_nested_dict(config_node)
+                        elif child.data == "package_performance_config":
+                            if len(child.children) >= 2:
+                                config_node = child.children[1]
+                                if isinstance(config_node, Tree) and config_node.data == "nested_dict":
+                                    performance_configuration = self._process_nested_dict(config_node)
+                        elif child.data == "package_build_flags":
+                            if len(child.children) >= 2:
+                                flags_node = child.children[1]
+                                if isinstance(flags_node, Tree) and flags_node.data == "nested_dict":
+                                    build_flags = self._process_nested_dict(flags_node)
+                        elif child.data == "package_architecture":
+                            if len(child.children) >= 2:
+                                architecture = self._extract_token_value(child.children[1]).strip('"')
+                        elif child.data == "package_dependency_caching":
+                            if len(child.children) >= 2:
+                                dependency_caching = self._extract_token_value(child.children[1]) == "true"
+                        elif child.data == "package_variant_config":
+                            if len(child.children) >= 2:
+                                config_node = child.children[1]
+                                if isinstance(config_node, Tree) and config_node.data == "nested_dict":
+                                    variant_configuration = self._process_nested_dict(config_node)
+                        elif child.data == "package_license":
+                            if len(child.children) >= 2:
+                                license = self._extract_token_value(child.children[1]).strip('"')
+                        elif child.data == "package_url":
+                            if len(child.children) >= 2:
+                                url = self._extract_token_value(child.children[1]).strip('"')
+                        elif child.data == "package_cross_platform":
+                            if len(child.children) >= 2:
+                                cross_platform = self._extract_token_value(child.children[1]) == "true"
+                        elif child.data == "package_machine":
+                            if len(child.children) >= 2:
+                                machine = self._extract_token_value(child.children[1]).strip('"')
+                        elif child.data == "package_platform_config":
+                            if len(child.children) >= 2:
+                                config_node = child.children[1]
+                                if isinstance(config_node, Tree) and config_node.data == "nested_dict":
+                                    platform_configuration = self._process_nested_dict(config_node)
+                        elif child.data == "package_architecture_config":
+                            if len(child.children) >= 2:
+                                config_node = child.children[1]
+                                if isinstance(config_node, Tree) and config_node.data == "nested_dict":
+                                    architecture_configuration = self._process_nested_dict(config_node)
+                        elif child.data == "package_compiler_version":
+                            if len(child.children) >= 2:
+                                compiler_version = self._extract_token_value(child.children[1]).strip('"')
+                        elif child.data == "package_optimization_flags":
+                            if len(child.children) >= 2:
+                                flags_node = child.children[1]
+                                if isinstance(flags_node, Tree) and flags_node.data == "nested_dict":
+                                    optimization_flags = self._process_nested_dict(flags_node)
+                        elif child.data == "package_custom_target_config":
+                            if len(child.children) >= 2:
+                                config_node = child.children[1]
+                                if isinstance(config_node, Tree) and config_node.data == "nested_dict":
+                                    custom_target_configuration = self._process_nested_dict(config_node)
+                        elif child.data == "package_dependency_config":
+                            if len(child.children) >= 2:
+                                config_node = child.children[1]
+                                if isinstance(config_node, Tree) and config_node.data == "nested_dict":
+                                    dependency_configuration = self._process_nested_dict(config_node)
+                        elif child.data == "package_optional_dependencies":
+                            if len(child.children) >= 1:
+                                deps_node = child.children[0]  # Array node is at index 0
+                                if isinstance(deps_node, Tree) and deps_node.data == "array":
+                                    deps = self._process_array(deps_node)
+                                    optional_dependencies = [dep.value for dep in deps]
+                        elif child.data == "package_system_dependencies":
+                            if len(child.children) >= 1:
+                                deps_node = child.children[0]  # Array node is at index 0
+                                if isinstance(deps_node, Tree) and deps_node.data == "array":
+                                    deps = self._process_array(deps_node)
+                                    system_dependencies = [dep.value for dep in deps]
+                        elif child.data == "package_dependency_parallel_download":
+                            if len(child.children) >= 2:
+                                dependency_parallel_download = self._extract_token_value(child.children[1]) == "true"
+                        elif child.data == "package_dependency_verification":
+                            if len(child.children) >= 2:
+                                dependency_verification = self._extract_token_value(child.children[1]) == "true"
+                        elif child.data == "package_dependency_licenses":
+                            if len(child.children) >= 1:
+                                licenses_node = child.children[0]  # Array node is at index 0
+                                if isinstance(licenses_node, Tree) and licenses_node.data == "array":
+                                    licenses = self._process_array(licenses_node)
+                                    dependency_licenses = [license.value for license in licenses]
+        
+        # Create package node
+        package = PackageNode(
+            name=package_name,
+            version=version,
+            description=description,
+            dependencies=dependencies,
+            build_configuration=build_configuration,
+            cpp_nodes=cpp_nodes,
+            build_type=build_type,
+            cross_compilation=cross_compilation,
+            target_platform=target_platform,
+            toolchain_file=toolchain_file,
+            package_management=package_management,
+            dependency_resolution=dependency_resolution,
+            version_constraints=version_constraints,
+            maintainer=maintainer,
+            build_optimization=build_optimization,
+            dependency_management=dependency_management,
+            custom_targets=custom_targets,
+            compiler=compiler,
+            platform=platform,
+            build_variant=build_variant,
+            build_performance=build_performance,
+            parallel_build=parallel_build,
+            build_jobs=build_jobs,
+            build_cache=build_cache,
+            ccache=ccache,
+            ninja=ninja,
+            precompiled_headers=precompiled_headers,
+            unity_build=unity_build,
+            link_time_optimization=link_time_optimization,
+            profile_guided_optimization=profile_guided_optimization,
+            install_configuration=install_configuration,
+            test_configuration=test_configuration,
+            performance_configuration=performance_configuration,
+            build_flags=build_flags,
+            architecture=architecture,
+            dependency_caching=dependency_caching,
+            variant_configuration=variant_configuration,
+            license=license,
+            url=url,
+            cross_platform=cross_platform,
+            machine=machine,
+            platform_configuration=platform_configuration,
+            architecture_configuration=architecture_configuration,
+            compiler_version=compiler_version,
+            optimization_flags=optimization_flags,
+            custom_target_configuration=custom_target_configuration,
+            dependency_configuration=dependency_configuration,
+            optional_dependencies=optional_dependencies,
+            system_dependencies=system_dependencies,
+            dependency_parallel_download=dependency_parallel_download,
+            dependency_verification=dependency_verification,
+            dependency_licenses=dependency_licenses
+        )
+        
+        # Add to AST
+        self.ast.packages.append(package)
+        
+        return package
+
+    def _process_cpp_node_def(self, node: Tree):
+        """Process cpp_node definition."""
+        from ..core.ast import NodeNode, NodeContentNode
+        
+        if self.debug:
+            print(f"Processing cpp_node_def: {node.children}")
+        
+        try:
+            # Handle the case where cpp_node_def is nested within package_cpp_nodes
+            if len(node.children) == 1 and isinstance(node.children[0], Tree) and node.children[0].data == "cpp_node_def":
+                # This is the case when called from package_cpp_nodes
+                actual_node = node.children[0]
+            else:
+                # This is the case when called directly
+                actual_node = node
+            
+            if self.debug:
+                print(f"actual_node children: {[type(c) for c in actual_node.children]}")
+                print(f"actual_node children values: {[str(c) for c in actual_node.children]}")
+            
+            # Extract node name (first child should be NODE_NAME token)
+            node_name = self._extract_token_value(actual_node.children[0])
+            
+            # Validate node name - subnodes (with dots) are not allowed in robodsl code
+            if '.' in node_name:
+                error_msg = (
+                    f"Invalid node name '{node_name}': Subnodes with dots (.) are not allowed in RoboDSL code. "
+                    f"Subnodes are a CLI-only feature for organizing files. "
+                    f"Use a simple node name without dots, or create subnodes using the CLI command: "
+                    f"'robodsl create-node {node_name}'"
+                )
+                self.errors.append(error_msg)
+                raise ValueError(error_msg)
+            
+            # Set context to indicate we're processing inside a node
+            self.in_node_context = True
+            if self.debug:
+                print(f"node_content child type: {type(actual_node.children[2])}")
+                print(f"node_content child: {actual_node.children[2]}")
+            content = self._process_node_content(actual_node.children[2])  # content is at index 2, LBRACE is at index 1
+            # Reset context
+            self.in_node_context = False
+            node_node = NodeNode(name=node_name, content=content)
+            self.ast.nodes.append(node_node)
+            return node_node
+        except Exception as e:
+            # Reset context on error
+            self.in_node_context = False
+            if self.debug:
+                print(f"Error processing cpp_node definition: {e}")
+            if str(e) not in self.errors:  # Avoid duplicate error messages
+                self.errors.append(f"cpp_node definition error: {e}")
+            return None
+
+    def _process_nested_dict(self, node: Tree) -> dict:
+        """Process nested dictionary."""
+        result = {}
+        if isinstance(node, Tree) and node.data == "nested_dict":
+            for child in node.children:
+                if isinstance(child, Tree) and child.data == "dict_list":
+                    for dict_item in child.children:
+                        if isinstance(dict_item, Tree) and dict_item.data == "dict_item":
+                            if len(dict_item.children) >= 2:
+                                key = self._extract_token_value(dict_item.children[0])
+                                value = self._process_value(dict_item.children[1])
+                                result[key] = value.value
+        return result
 
     # In the main parse logic, after processing a cuda_kernel_def, call this method.

@@ -248,6 +248,17 @@ class CppNodeGenerator(BaseGenerator):
                 return param_type[6:]  # Remove 'const '
             return param_type
 
+        # Helper function to format type names with proper spacing
+        def format_type_name(type_name):
+            # Ensure proper spacing around const
+            if type_name.startswith('const'):
+                # If it's "constType", make it "const Type"
+                if len(type_name) > 5 and not type_name[5].isspace():
+                    return f"const {type_name[5:]}"
+                else:
+                    return type_name
+            return type_name
+
         return {
             'class_name': f"{node.name.capitalize()}Node",
             'base_class': 'rclcpp_lifecycle::LifecycleNode' if is_lifecycle else 'rclcpp::Node',
@@ -263,7 +274,7 @@ class CppNodeGenerator(BaseGenerator):
             'services': [{'name': srv.service.split('/')[-1], 'srv_type': self._ros_type_to_cpp(srv.srv_type), 'service': srv.service, 'callback_name': f"on_{srv.service.split('/')[-1]}", 'qos': srv.qos} for srv in node.content.services],
             'actions': [{'name': action.name, 'action_type': self._ros_type_to_cpp(action.action_type), 'topic': action.name} for action in node.content.actions],
             'timers': [{'name': timer.name, 'callback_name': f"on_{timer.name}"} for timer in node.content.timers],
-            'parameters': [{'name': param.name, 'type': param.type, 'template_type': get_template_param_type(param.type), 'default_value': format_parameter_value(param)} for param in node.content.parameters],
+            'parameters': [{'name': param.name, 'type': format_type_name(param.type), 'template_type': get_template_param_type(param.type), 'default_value': format_parameter_value(param)} for param in node.content.parameters],
             'cuda_kernels': cuda_kernels,
             'referenced_kernels': referenced_kernels,
             'cuda_default_input_type': 'float',

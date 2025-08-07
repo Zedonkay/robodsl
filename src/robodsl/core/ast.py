@@ -239,6 +239,11 @@ class NodeContentNode(ASTNode):
     onnx_models: List['OnnxModelNode'] = field(default_factory=list)  # ONNX models within nodes
     used_kernels: List[str] = field(default_factory=list)  # Referenced global CUDA kernels
     raw_cpp_code: List['RawCppCodeNode'] = field(default_factory=list)  # Raw C++ code within nodes
+    parameter_server: Optional[bool] = None
+    parameter_client: Optional[bool] = None
+    realtime_enabled: Optional[bool] = None
+    security_enabled: Optional[bool] = None
+    component_enabled: Optional[bool] = None
 
 
 @dataclass
@@ -246,6 +251,102 @@ class NodeNode(ASTNode):
     """Node definition node."""
     name: str
     content: NodeContentNode
+    
+    # Convenience properties to access content attributes directly
+    @property
+    def publishers(self):
+        return self.content.publishers
+    
+    @property
+    def subscribers(self):
+        return self.content.subscribers
+    
+    @property
+    def services(self):
+        return self.content.services
+    
+    @property
+    def service_clients(self):
+        return self.content.clients
+    
+    @property
+    def action_clients(self):
+        return self.content.clients
+    
+    @property
+    def actions(self):
+        return self.content.actions
+    
+    @property
+    def lifecycle(self):
+        if self.content.lifecycle is None:
+            return False
+        # Check if any lifecycle setting is True
+        for setting in self.content.lifecycle.settings:
+            if setting.value:
+                return True
+        return False
+    
+    @property
+    def parameters(self):
+        return self.content.parameters
+    
+    @property
+    def timers(self):
+        return self.content.timers
+    
+    @property
+    def remaps(self):
+        return self.content.remaps
+    
+    @property
+    def namespace(self):
+        return self.content.namespace
+    
+    @property
+    def flags(self):
+        return self.content.flags
+    
+    @property
+    def cpp_methods(self):
+        return self.content.cpp_methods
+    
+    @property
+    def cuda_kernels(self):
+        return self.content.cuda_kernels
+    
+    @property
+    def onnx_models(self):
+        return self.content.onnx_models
+    
+    @property
+    def used_kernels(self):
+        return self.content.used_kernels
+    
+    @property
+    def raw_cpp_code(self):
+        return self.content.raw_cpp_code
+    
+    @property
+    def parameter_server(self):
+        return self.content.parameter_server
+    
+    @property
+    def parameter_client(self):
+        return self.content.parameter_client
+    
+    # Additional properties for advanced features
+    @property
+    def realtime(self):
+        return self.content.realtime_enabled
+    
+    @property
+    def security(self):
+        return self.content.security_enabled
+    
+    @property
+    def component(self):
+        return self.content.component_enabled
 
 
 @dataclass
@@ -270,6 +371,8 @@ class KernelContentNode(ASTNode):
     code: str = ""
     cuda_includes: List[str] = field(default_factory=list)
     defines: Dict[str, str] = field(default_factory=dict)
+    inputs: List[ValueNode] = field(default_factory=list)  # Input parameter names
+    outputs: List[ValueNode] = field(default_factory=list)  # Output parameter names
 
 
 @dataclass
@@ -283,6 +386,12 @@ class KernelNode(ASTNode):
 class CudaKernelsNode(ASTNode):
     """CUDA kernels block node."""
     kernels: List[KernelNode]
+    
+    def __len__(self):
+        return len(self.kernels)
+    
+    def __getitem__(self, index):
+        return self.kernels[index]
 
 
 # Data Structure AST Nodes
@@ -403,12 +512,58 @@ class OptimizationNode(ASTNode):
 
 
 @dataclass
+class TensorRTConfigNode(ASTNode):
+    """TensorRT configuration node for advanced features."""
+    optimization_level: Optional[int] = None
+    precision: Optional[str] = None
+    dynamic_batch: Optional[bool] = None
+    max_workspace_size: Optional[int] = None
+    tactic_sources: Optional[List[str]] = None
+    timing_cache: Optional[bool] = None
+    profiling_verbosity: Optional[str] = None
+    calibration: Optional[bool] = None
+    dynamic_range: Optional[bool] = None
+    min_batch_size: Optional[int] = None
+    max_batch_size: Optional[int] = None
+    optimal_batch_size: Optional[int] = None
+    dynamic_shapes: Optional[bool] = None
+    shape_optimization: Optional[bool] = None
+    plugins: Optional[List[str]] = None
+    performance_tuning: Optional[bool] = None
+    memory_optimization: Optional[bool] = None
+    multi_stream: Optional[bool] = None
+    performance_monitoring: Optional[bool] = None
+    compatibility_mode: Optional[bool] = None
+    memory_management: Optional[bool] = None
+    serialization: Optional[bool] = None
+    parallel_execution: Optional[bool] = None
+    error_recovery: Optional[bool] = None
+    # Additional properties
+    parallel_streams: Optional[int] = None
+    error_handling: Optional[str] = None
+    per_tensor_quantization: Optional[bool] = None
+    per_channel_quantization: Optional[bool] = None
+    calibration_data: Optional[str] = None
+    calibration_algorithm: Optional[str] = None
+    calibration_batch_size: Optional[int] = None
+    memory_pool_size: Optional[int] = None
+    monitoring_metrics: Optional[List[str]] = None
+    backward_compatibility: Optional[bool] = None
+    plugin_paths: Optional[List[str]] = None
+    tuning_algorithm: Optional[str] = None
+    engine_file: Optional[str] = None
+    profiling: Optional[bool] = None
+    debugging: Optional[bool] = None
+
+
+@dataclass
 class ModelConfigNode(ASTNode):
     """ONNX model configuration node."""
     inputs: List[InputDefNode] = field(default_factory=list)
     outputs: List[OutputDefNode] = field(default_factory=list)
     device: Optional[DeviceNode] = None
     optimizations: List[OptimizationNode] = field(default_factory=list)
+    tensorrt_config: Optional[TensorRTConfigNode] = None
 
 
 @dataclass
@@ -818,9 +973,69 @@ class UserDefinedLiteralNode(ASTNode):
 
 
 @dataclass
+class PackageNode(ASTNode):
+    """Package definition node."""
+    name: str
+    version: Optional[str] = None
+    description: Optional[str] = None
+    dependencies: List[str] = field(default_factory=list)
+    build_configuration: Dict[str, Any] = field(default_factory=dict)
+    cpp_nodes: List[NodeNode] = field(default_factory=list)
+    
+    # Additional package configuration fields
+    build_type: Optional[str] = None
+    cross_compilation: Optional[bool] = None
+    target_platform: Optional[str] = None
+    toolchain_file: Optional[str] = None
+    package_management: Optional[str] = None
+    dependency_resolution: Optional[str] = None
+    version_constraints: Dict[str, Any] = field(default_factory=dict)
+    maintainer: Optional[str] = None
+    build_optimization: Optional[bool] = None
+    dependency_management: Optional[str] = None
+    custom_targets: List[str] = field(default_factory=list)
+    compiler: Optional[str] = None
+    platform: Optional[str] = None
+    build_variant: Optional[str] = None
+    build_performance: Optional[bool] = None
+    parallel_build: Optional[bool] = None
+    build_jobs: Optional[int] = None
+    build_cache: Optional[bool] = None
+    ccache: Optional[bool] = None
+    ninja: Optional[bool] = None
+    precompiled_headers: Optional[bool] = None
+    unity_build: Optional[bool] = None
+    link_time_optimization: Optional[bool] = None
+    profile_guided_optimization: Optional[bool] = None
+    install_configuration: Dict[str, Any] = field(default_factory=dict)
+    test_configuration: Dict[str, Any] = field(default_factory=dict)
+    performance_configuration: Dict[str, Any] = field(default_factory=dict)
+    build_flags: Dict[str, Any] = field(default_factory=dict)
+    architecture: Optional[str] = None
+    dependency_caching: Optional[bool] = None
+    variant_configuration: Dict[str, Any] = field(default_factory=dict)
+    license: Optional[str] = None
+    url: Optional[str] = None
+    cross_platform: Optional[bool] = None
+    machine: Optional[str] = None
+    platform_configuration: Dict[str, Any] = field(default_factory=dict)
+    architecture_configuration: Dict[str, Any] = field(default_factory=dict)
+    compiler_version: Optional[str] = None
+    optimization_flags: Dict[str, Any] = field(default_factory=dict)
+    custom_target_configuration: Dict[str, Any] = field(default_factory=dict)
+    dependency_configuration: Dict[str, Any] = field(default_factory=dict)
+    optional_dependencies: List[str] = field(default_factory=list)
+    system_dependencies: List[str] = field(default_factory=list)
+    dependency_parallel_download: Optional[bool] = None
+    dependency_verification: Optional[bool] = None
+    dependency_licenses: List[str] = field(default_factory=list)
+
+
+@dataclass
 class RoboDSLAST(ASTNode):
     """Root AST node."""
     includes: List[IncludeNode] = field(default_factory=list)
+    packages: List[PackageNode] = field(default_factory=list)  # Package definitions
     data_structures: List[Union[StructNode, ClassNode, EnumNode, TypedefNode, UsingNode]] = field(default_factory=list)
     nodes: List[NodeNode] = field(default_factory=list)
     cuda_kernels: Optional[CudaKernelsNode] = None  # Standalone kernels outside nodes 

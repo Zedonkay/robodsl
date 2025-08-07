@@ -21,14 +21,17 @@ constexpr int BLOCK_SIZE_X = {{ block_x }};
 constexpr int BLOCK_SIZE_Y = {{ block_y }};
 constexpr int BLOCK_SIZE_Z = {{ block_z }};
 
+
 // Kernel function for {{ kernel.name }}
+// NOTE: Per CUDA requirements and RoboDSL grammar, kernel functions must be free functions (not class or namespace members)
 __global__ void {{ kernel.name }}_kernel(
     {%- for input_def in kernel.inputs %}
-    const {{ input_def.type }}* {{ input_def.name }}{% if not loop.last or kernel.outputs %},{% endif %}
+    const {{ input_def.type }}* {{ input_def.name }}{% if not loop.last or kernel.outputs or true %},{% endif %}
     {%- endfor %}
     {%- for output_def in kernel.outputs %}
     {{ output_def.type }}* {{ output_def.name }}{% if not loop.last %},{% endif %}
     {%- endfor %}
+    int num_elements
 ) {
     // User's kernel code
     {{ kernel.code | indent(4) }}
@@ -67,6 +70,7 @@ void {{ class_name }}::process(
             {%- for i in range(kernel.outputs|length) %}
             d_output_{{ i }}{% if not loop.last %}, {% endif %}
             {%- endfor %}
+            num_elements
         );
         CUDA_CHECK(cudaGetLastError());
         CUDA_CHECK(cudaDeviceSynchronize());

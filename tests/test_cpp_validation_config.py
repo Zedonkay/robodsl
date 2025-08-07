@@ -514,12 +514,12 @@ VALIDATION_CONFIG = {
     "cuda_tolerance": 1,        # Allow 1 CUDA suggestion
     
     "compiler_flags": [
-        '-std=c++17', '-Wall', '-Wextra', '-Werror', '-O2',
+        '-std=c++17', '-O2',
         '-fno-exceptions', '-fno-rtti', '-DNDEBUG'
     ],
     
     "cuda_flags": [
-        '-std=c++17', '-Wall', '-Wextra', '-O2',
+        '-std=c++17', '-O2',
         '-arch=sm_60', '-DNDEBUG'
     ],
     

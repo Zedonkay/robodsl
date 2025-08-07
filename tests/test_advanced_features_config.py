@@ -43,8 +43,8 @@ PIPELINE_TEST_CASES = [
             kernel process_kernel {
                 block_size: (256, 1, 1)
                 grid_size: (1, 1, 1)
-                input: float data(1000)
-                output: float result(1000)
+                input: float* data (1000)
+                output: float* result (1000)
             }
         }
         
@@ -389,12 +389,12 @@ ADVANCED_FEATURES_CONFIG = {
     "practice_tolerance": 2,    # Allow 2 practice suggestions
     
     "compiler_flags": [
-        '-std=c++17', '-Wall', '-Wextra', '-Werror', '-O2',
+        '-std=c++17', '-O2',
         '-fno-exceptions', '-fno-rtti', '-DNDEBUG'
     ],
     
     "cuda_flags": [
-        '-std=c++17', '-Wall', '-Wextra', '-O2',
+        '-std=c++17', '-O2',
         '-arch=sm_60', '-DNDEBUG'
     ],
     

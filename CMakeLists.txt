@@ -7,8 +7,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Compiler flags
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-Wall -Wextra -Wpedantic)
-  add_compile_options(-fPIC)
+  set(CPP_WARNING_FLAGS "-Wall;-Wextra;-Wpedantic")
+  set(CPP_POSITION_INDEPENDENT_CODE "-fPIC")
 endif()
 
 # Build configurations
@@ -36,6 +36,16 @@ add_library(${PROJECT_NAME}_lib STATIC
 
 target_include_directories(${PROJECT_NAME}_lib PUBLIC include)
 ament_target_dependencies(${PROJECT_NAME}_lib rclcpp)
+
+# Only add warning flags for C++ (not CUDA)
+if(CPP_WARNING_FLAGS)
+  target_compile_options(${PROJECT_NAME}_lib PRIVATE $<$<COMPILE_LANGUAGE:CXX>:${CPP_WARNING_FLAGS}>)
+endif()
+
+# Always add -fPIC for C++
+if(CPP_POSITION_INDEPENDENT_CODE)
+  target_compile_options(${PROJECT_NAME}_lib PRIVATE $<$<COMPILE_LANGUAGE:CXX>:${CPP_POSITION_INDEPENDENT_CODE}>)
+endif()
 
 
 # Create executables

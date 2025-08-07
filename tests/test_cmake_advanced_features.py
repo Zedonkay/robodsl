@@ -184,6 +184,8 @@ class TestCMakeAdvancedFeatures:
         skip_if_no_ros2()
         
         available_packages = cmake_config["available_packages"]
+        # Convert Python list to DSL array format
+        dsl_packages = "[" + ", ".join(f'"{pkg}"' for pkg in available_packages) + "]"
         
         dsl_code = f'''
         package advanced_package {{
@@ -191,7 +193,7 @@ class TestCMakeAdvancedFeatures:
             version: "1.0.0"
             description: "Advanced package with comprehensive dependencies"
             
-            dependencies: {available_packages}
+            dependencies: {dsl_packages}
             
             cpp_node advanced_node {{
                 publisher: "topic" -> "std_msgs/String" {{
@@ -280,7 +282,7 @@ class TestCMakeAdvancedFeatures:
             dependency_caching: true
             dependency_parallel_download: true
             dependency_verification: true
-            dependency_licenses: true
+            dependency_licenses: ["MIT", "Apache-2.0", "GPL-3.0"]
             
             dependency_configuration: {
                 "rclcpp": {
@@ -387,9 +389,9 @@ class TestCMakeAdvancedFeatures:
                 compiler: "{compiler}"
                 compiler_version: "{version}"
                 
-                compiler_flags: {{
-                    "CMAKE_CXX_FLAGS": "-std=c++17 -Wall -Wextra -Wpedantic",
-                    "CMAKE_C_FLAGS": "-std=c11 -Wall -Wextra -Wpedantic",
+                build_flags: {{
+                    "CMAKE_CXX_FLAGS": "-std=c++17",
+                    "CMAKE_C_FLAGS": "-std=c11",
                     "CMAKE_CXX_FLAGS_DEBUG": "-g -O0 -DDEBUG",
                     "CMAKE_CXX_FLAGS_RELEASE": "-O3 -DNDEBUG -march=native",
                     "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g -DNDEBUG",
@@ -497,7 +499,9 @@ class TestCMakeAdvancedFeatures:
                 
                 build_variant: "{variant_name}"
                 build_type: "{build_type}"
-                build_flags: "{flags}"
+                build_flags: {{
+                    "CMAKE_CXX_FLAGS": "{flags}"
+                }}
                 
                 variant_configuration: {{
                     "debug": {{
@@ -619,13 +623,21 @@ class TestCMakeAdvancedFeatures:
         
         # Generate CMakeLists.txt
         cmake_content = cmake_generator.generate_cmake_lists(package_config)
+        # Convert Path to string if needed
+        if hasattr(cmake_content, 'read_text'):
+            cmake_content = cmake_content.read_text()
         assert "find_package(rclcpp REQUIRED)" in cmake_content
         assert "find_package(std_msgs REQUIRED)" in cmake_content
         assert "CMAKE_BUILD_TYPE" in cmake_content
         
         # Generate package.xml
-        package_xml = cmake_generator.generate_package_xml(package_config)
-        assert "<name>test_package</name>" in package_xml
+        package_xml_path = cmake_generator.generate_package_xml(package_config)
+        # Convert Path to string if needed
+        if hasattr(package_xml_path, 'read_text'):
+            package_xml = package_xml_path.read_text()
+        else:
+            package_xml = package_xml_path
+        assert "<name>test_package</name>" in package_xml  # The generator uses the actual package name
         assert "<depend>rclcpp</depend>" in package_xml
         assert "<depend>std_msgs</depend>" in package_xml
     

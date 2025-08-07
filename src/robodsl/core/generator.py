@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from .ast import RoboDSLAST
-from robodsl.generators import MainGenerator
+from ..generators import MainGenerator
 
 
 def generate_code(ast: RoboDSLAST, output_dir: str = ".", template_dirs: Optional[List[Path]] = None) -> List[Path]:
@@ -37,7 +37,7 @@ def generate_cpp_nodes(ast: RoboDSLAST, output_dir: str = ".", template_dirs: Op
     Returns:
         List of Path objects for generated C++ files
     """
-    from robodsl.generators import CppNodeGenerator
+    from ..generators import CppNodeGenerator
     generator = CppNodeGenerator(output_dir, template_dirs)
     return generator.generate(ast)
 
@@ -53,7 +53,7 @@ def generate_cuda_kernels(ast: RoboDSLAST, output_dir: str = ".", template_dirs:
     Returns:
         List of Path objects for generated CUDA files
     """
-    from robodsl.generators import CudaKernelGenerator
+    from ..generators import CudaKernelGenerator
     generator = CudaKernelGenerator(output_dir, template_dirs)
     return generator.generate(ast)
 
@@ -69,7 +69,7 @@ def generate_python_nodes(ast: RoboDSLAST, output_dir: str = ".", template_dirs:
     Returns:
         List of Path objects for generated Python files
     """
-    from robodsl.generators import PythonNodeGenerator
+    from ..generators import PythonNodeGenerator
     generator = PythonNodeGenerator(output_dir, template_dirs)
     return generator.generate(ast)
 
@@ -85,7 +85,7 @@ def generate_cmake_files(ast: RoboDSLAST, output_dir: str = ".", template_dirs: 
     Returns:
         List of Path objects for generated CMake files
     """
-    from robodsl.generators import CMakeGenerator
+    from ..generators import CMakeGenerator
     generator = CMakeGenerator(output_dir, template_dirs)
     return generator.generate(ast)
 
@@ -101,7 +101,7 @@ def generate_launch_files(ast: RoboDSLAST, output_dir: str = ".", template_dirs:
     Returns:
         List of Path objects for generated launch files
     """
-    from robodsl.generators import LaunchGenerator
+    from ..generators import LaunchGenerator
     generator = LaunchGenerator(output_dir, template_dirs)
     return generator.generate(ast)
 
@@ -117,7 +117,7 @@ def generate_package_files(ast: RoboDSLAST, output_dir: str = ".", template_dirs
     Returns:
         List of Path objects for generated package files
     """
-    from robodsl.generators import PackageGenerator
+    from ..generators import PackageGenerator
     generator = PackageGenerator(output_dir, template_dirs)
     return generator.generate(ast)
 

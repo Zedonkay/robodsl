@@ -11,7 +11,27 @@ from robodsl.parsers.lark_parser import RoboDSLParser
 
 def has_ros2():
     """Check if ROS2 is available in the environment."""
-    return shutil.which('ros2') is not None or 'AMENT_PREFIX_PATH' in os.environ
+    # Check for ros2 command
+    if shutil.which('ros2') is not None:
+        return True
+    
+    # Check for AMENT_PREFIX_PATH environment variable
+    if 'AMENT_PREFIX_PATH' in os.environ:
+        return True
+    
+    # Check for common ROS2 installation paths
+    ros2_paths = [
+        '/opt/ros/humble',
+        '/opt/ros/foxy',
+        '/opt/ros/galactic',
+        '/opt/ros/rolling'
+    ]
+    
+    for path in ros2_paths:
+        if os.path.exists(path):
+            return True
+    
+    return False
 
 
 def has_cuda():

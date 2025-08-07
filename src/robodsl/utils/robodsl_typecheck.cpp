@@ -2,6 +2,7 @@
 #include <cstring>
 #include <regex>
 #include "json.hpp"
+#include <climits>
 
 namespace {
 // Helper to trim whitespace
@@ -31,6 +32,11 @@ std::pair<std::string, std::string> canonical_and_alias(const std::string& t) {
     if (type == "unsigned char") return {"uchar", type};
     if (type == "bool") return {"bool", type};
     if (type == "string" || type == "std::string") return {"string", type};
+    // Array type aliases
+    if (type == "double_array") return {"std::vector<double>", type};
+    if (type == "int_array") return {"std::vector<int>", type};
+    if (type == "string_array") return {"std::vector<string>", type};
+    if (type == "bool_array") return {"std::vector<bool>", type};
     return {type, type};
 }
 
@@ -306,7 +312,7 @@ bool check_type_dispatch(const std::string& type_str, const nlohmann::json& j, c
     }
     // Only set fallback error for primitive types, not containers/messages
     // If the type string contains '<' or '/' (container or message), do not set error_buf, just return false
-    if (type_str.find('<') != std::string::npos || type_str.find('/') != std::string::npos) {
+    if (canon.find('<') != std::string::npos || canon.find('/') != std::string::npos) {
         return false;
     }
     if (debug_buf && debug_buf_size > 0) {
@@ -404,10 +410,12 @@ extern "C" bool check_ros2_type(const char* type, const char* value_json, char* 
         if (error_buf[0] != '\0') {
             return false;
         }
+        // Get canonical form for container parsing
+        auto [canon, alias] = canonical_and_alias(type_str);
         std::string base;
         std::vector<std::string> args;
-        fprintf(stderr, "[DEBUG] parse_template input: '%s'\n", type_str.c_str());
-        bool parsed = parse_template(type_str, base, args);
+        fprintf(stderr, "[DEBUG] parse_template input: '%s'\n", canon.c_str());
+        bool parsed = parse_template(canon, base, args);
         fprintf(stderr, "[DEBUG] parse_template output: parsed=%d, base='%s', args.size()=%zu\n", parsed, base.c_str(), args.size());
         if (parsed) {
             if (base == "std::vector" && args.size() == 1) {
