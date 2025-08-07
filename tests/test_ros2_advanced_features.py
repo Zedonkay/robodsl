@@ -284,9 +284,9 @@ class TestROS2AdvancedFeatures:
         assert len(ast.nodes) == 1
         node = ast.nodes[0]
         assert node.name == "parameter_node"
-        assert len(node.parameters) == 5
-        assert node.parameter_server is True
-        assert node.parameter_client is True
+        assert len(node.content.parameters) == 5
+        assert node.content.parameter_server is True
+        assert node.content.parameter_client is True
     
     def test_multi_node_systems(self, ros2_config):
         """Test multi-node system configurations."""
@@ -566,14 +566,14 @@ class TestROS2AdvancedFeatures:
         skip_if_no_ros2()
         
         parameter_types = [
-            ("string_param", "string", "hello_world"),
+            ("string_param", "string", '"hello_world"'),
             ("int_param", "int", 42),
             ("double_param", "double", 3.14159),
-            ("bool_param", "bool", True),
-            ("int_array_param", "int_array", [1, 2, 3, 4, 5]),
-            ("double_array_param", "double_array", [1.0, 2.0, 3.0]),
-            ("string_array_param", "string_array", ["a", "b", "c"]),
-            ("bool_array_param", "bool_array", [True, False, True])
+            ("bool_param", "bool", "true"),
+            ("int_array_param", "int_array", "[1, 2, 3, 4, 5]"),
+            ("double_array_param", "double_array", "[1.0, 2.0, 3.0]"),
+            ("string_array_param", "string_array", '["a", "b", "c"]'),
+            ("bool_array_param", "bool_array", '[true, false, true]')
         ]
         
         for param_name, param_type, default_value in parameter_types:

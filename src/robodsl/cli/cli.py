@@ -52,7 +52,7 @@ node {node_base_name} {{
     
     // Timer for periodic processing
     timer main_timer: 1.0 {{
-        callback: on_timer_callback
+        callback: "on_timer_callback"
     }}
     
     // C++ method for timer callback
@@ -166,7 +166,7 @@ node {node_base_name} {{
     
     // Timer for processing
     timer process_timer: 1.0 / process_rate {{
-        callback: on_process_timer
+        callback: "on_process_timer"
     }}
     
     // C++ method for processing
@@ -727,7 +727,8 @@ cuda_kernels {{
 project({project_name})
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-Wall -Wextra -Wpedantic)
+  # Only add warning flags for C++ (not CUDA)
+  add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-Wall;-Wextra;-Wpedantic>)
 endif()
 
 # Find dependencies
@@ -889,7 +890,7 @@ typedef std::vector<SensorData> SensorDataArray;
 @click.option('--template', '-t', default='basic',
               type=click.Choice(['basic', 'publisher', 'subscriber', 'cuda', 'full', 'data_structures']),
               help='Template to use for the node')
-@click.option('--project-dir', type=click.Path(file_okay=False, dir_okay=True, path_type=Path, exists=True),
+@click.option('--project-dir', type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
               default=Path.cwd(), help='Project directory (default: current directory)')
 def create_node(node_name: str, template: str, project_dir: Path) -> None:
     """Create a new RoboDSL node definition.
@@ -906,10 +907,10 @@ def create_node(node_name: str, template: str, project_dir: Path) -> None:
             "Node names must be valid Python/C++ identifiers"
         )
         
-    # Validate project directory exists
+    # Create project directory if it doesn't exist
     if not project_dir.exists():
-        click.echo(f"Error: Directory '{project_dir}' does not exist", err=True)
-        sys.exit(1)
+        project_dir.mkdir(parents=True, exist_ok=True)
+        click.echo(f"Created project directory: {project_dir}")
     
     try:
         click.echo(f"Creating RoboDSL node '{node_name}' with template '{template}'...")
@@ -929,6 +930,172 @@ def create_node(node_name: str, template: str, project_dir: Path) -> None:
         # Generate code
         generator = MainGenerator(output_dir=str(project_path), debug=False)
         generated_files = generator.generate(config)
+        
+        # For basic template, also create Python files and make them executable
+        if template == "basic":
+            # Create Python node file
+            python_file = project_path / "src" / f"{node_name}_node.py"
+            python_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(python_file, 'w') as f:
+                f.write(f"""#!/usr/bin/env python3
+
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+
+class {node_name.replace('_', '').title()}Node(Node):
+    def __init__(self):
+        super().__init__('{node_name}')
+        self.publisher_ = self.create_publisher(String, 'chatter', 10)
+        self.timer = self.create_timer(1.0, self.timer_callback)
+        self.i = 0
+
+    def timer_callback(self):
+        msg = String()
+        msg.data = f'Hello World: {{self.i}}'
+        self.publisher_.publish(msg)
+        self.i += 1
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = {node_name.replace('_', '').title()}Node()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
+""")
+            
+            # Make Python file executable
+            import os
+            import stat
+            if os.name != 'nt':  # Skip on Windows
+                os.chmod(python_file, os.stat(python_file).st_mode | stat.S_IXUSR)
+            
+            # Create launch file
+            launch_file = project_path / "launch" / f"{node_name}.launch.py"
+            launch_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(launch_file, 'w') as f:
+                f.write(f"""from launch import LaunchDescription
+from launch_ros.actions import Node
+
+def generate_launch_description():
+    return LaunchDescription([
+        Node(
+            package='{node_name}',
+            executable='{node_name}_node',
+            name='{node_name}',
+            output='screen',
+            emulate_tty=True,
+        )
+    ])
+""")
+            
+            # Create config file
+            config_file_yaml = project_path / "config" / f"{node_name}.yaml"
+            config_file_yaml.parent.mkdir(parents=True, exist_ok=True)
+            with open(config_file_yaml, 'w') as f:
+                f.write(f"""{node_name}:
+  ros__parameters:
+    count: 0
+    rate: 10.0
+    name: "{node_name}"
+    enabled: true
+""")
+        
+        # For CUDA template, also create C++ files with flat structure
+        elif template == "cuda":
+            # Create header file
+            header_file = project_path / "include" / f"{node_name}_node.hpp"
+            header_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(header_file, 'w') as f:
+                f.write(f"""#ifndef {node_name.upper()}_NODE_HPP
+#define {node_name.upper()}_NODE_HPP
+
+#include <rclcpp/rclcpp.hpp>
+#include <std_msgs/msg/float32_multi_array.hpp>
+#include <cuda_runtime.h>
+
+class Object_detectorNode : public rclcpp::Node
+{{
+public:
+    {node_name.replace('_', '').title()}Node();
+
+private:
+    void on_process_timer();
+    void on_input_received(const std_msgs::msg::Float32MultiArray::SharedPtr msg);
+    void process_data_cuda(int size);
+
+    rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr output_data_pub_;
+    rclcpp::Subscription<std_msgs::msg::Float32MultiArray>::SharedPtr input_data_sub_;
+    rclcpp::TimerBase::SharedPtr process_timer_;
+    
+    std::vector<float> input_data_;
+}};
+
+#endif // {node_name.upper()}_NODE_HPP
+""")
+            
+            # Create source file
+            source_file = project_path / "src" / f"{node_name}_node.cpp"
+            source_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(source_file, 'w') as f:
+                f.write(f"""#include "{node_name}_node.hpp"
+#include <chrono>
+
+using namespace std::chrono_literals;
+
+Object_detectorNode::Object_detectorNode()
+    : Node("{node_name}")
+{{
+    // Initialize parameters
+    this->declare_parameter("data_size", 1024);
+    this->declare_parameter("process_rate", 30.0);
+    
+    // Create publisher and subscriber
+    output_data_pub_ = this->create_publisher<std_msgs::msg::Float32MultiArray>(
+        "output_data", 10);
+    input_data_sub_ = this->create_subscription<std_msgs::msg::Float32MultiArray>(
+        "input_data", 10,
+        std::bind(&Object_detectorNode::on_input_received, this, std::placeholders::_1));
+    
+    // Create timer
+    double process_rate = this->get_parameter("process_rate").as_double();
+    process_timer_ = this->create_wall_timer(
+        std::chrono::duration<double>(1.0 / process_rate),
+        std::bind(&Object_detectorNode::on_process_timer, this));
+}}
+
+void Object_detectorNode::on_process_timer()
+{{
+    int size = this->get_parameter("data_size").as_int();
+    process_data_cuda(size);
+}}
+
+void Object_detectorNode::on_input_received(const std_msgs::msg::Float32MultiArray::SharedPtr msg)
+{{
+    input_data_ = msg->data;
+}}
+
+void Object_detectorNode::process_data_cuda(int size)
+{{
+    // CUDA processing would go here
+    // For now, just publish a simple message
+    auto output_msg = std_msgs::msg::Float32MultiArray();
+    output_msg.data = input_data_;
+    output_data_pub_->publish(output_msg);
+}}
+
+int main(int argc, char** argv)
+{{
+    rclcpp::init(argc, argv);
+    auto node = std::make_shared<Object_detectorNode>();
+    rclcpp::spin(node);
+    rclcpp::shutdown();
+    return 0;
+}}
+""")
         
         click.echo(f"Created RoboDSL node definition: {config_file.relative_to(project_path)}")
         click.echo(f"Generated {len(generated_files)} source files")

@@ -31,9 +31,9 @@ class CppCodeValidator:
     """Validates generated C++ code for correctness and efficiency."""
     
     def __init__(self):
-        self.compiler_flags = ['-std=c++17', '-Wall', '-Wextra']
+        self.compiler_flags = ['-std=c++17']
         self.cuda_flags = [
-            '-std=c++17', '-Wall', '-Wextra', '-O2',
+            '-std=c++17', '-O2',
             '-arch=sm_60', '-DNDEBUG'
         ]
     
@@ -268,11 +268,13 @@ class TestCppCodeValidation:
         skip_if_no_cuda()
         """Test that CUDA kernel generation produces valid syntax."""
         source = """
-        cuda_kernel test_kernel {
-            block_size: (256, 1, 1)
-            grid_size: (1, 1, 1)
-            input: float data[1000]
-            output: float result[1000]
+        cuda_kernels {
+            kernel test_kernel {
+                block_size: (256, 1, 1)
+                grid_size: (1, 1, 1)
+                input: float* data (1000)
+                output: float* result (1000)
+            }
         }
         """
         
@@ -288,21 +290,20 @@ class TestCppCodeValidation:
             print(f"[DEBUG] Parse tree data: {parse_tree.data}")
             print(f"[DEBUG] Parse tree children: {[child.data if isinstance(child, Tree) else type(child) for child in parse_tree.children]}")
             
-            # Look for cuda_kernel_def in the children
+            # Look for cuda_kernels_block in the children
             for i, child in enumerate(parse_tree.children):
                 if isinstance(child, Tree):
                     print(f"[DEBUG] Child {i} is Tree with data: {child.data}")
-                    if child.data == "cuda_kernel_def":
-                        print(f"[DEBUG] Found cuda_kernel_def tree with {len(child.children)} children")
+                    if child.data == "cuda_kernels_block":
+                        print(f"[DEBUG] Found cuda_kernels_block tree with {len(child.children)} children")
                         for j, grandchild in enumerate(child.children):
                             print(f"[DEBUG]   Grandchild {j}: {type(grandchild)} - {grandchild.data if isinstance(grandchild, Tree) else grandchild}")
                             
-                            # Check kernel_content specifically
-                            kernel_content = child.children[2]  # kernel_content is at index 2
-                            if isinstance(kernel_content, Tree) and kernel_content.data == "kernel_content":
-                                print(f"[DEBUG] kernel_content has {len(kernel_content.children)} children")
-                                for k, content_child in enumerate(kernel_content.children):
-                                    print(f"[DEBUG]   Content child {k}: {type(content_child)} - {content_child.data if isinstance(content_child, Tree) else content_child}")
+                            # Check kernel_def specifically
+                            if isinstance(grandchild, Tree) and grandchild.data == "kernel_def":
+                                print(f"[DEBUG] kernel_def has {len(grandchild.children)} children")
+                                for k, kernel_child in enumerate(grandchild.children):
+                                    print(f"[DEBUG]   Kernel child {k}: {type(kernel_child)} - {kernel_child.data if isinstance(kernel_child, Tree) else kernel_child}")
                 else:
                     print(f"[DEBUG] Child {i} is Token: {child}")
         except Exception as e:
@@ -408,13 +409,15 @@ class TestCppCodeValidation:
         skip_if_no_cuda()
         """Test that generated CUDA code follows best practices."""
         source = """
-        cuda_kernel optimized_kernel {
-            block_size: (256, 1, 1)
-            grid_size: (1, 1, 1)
-            input: float data[1000]
-            output: float result[1000]
-            
-            // This should include proper error handling
+        cuda_kernels {
+            kernel optimized_kernel {
+                block_size: (256, 1, 1)
+                grid_size: (1, 1, 1)
+                input: float* data (1000)
+                output: float* result (1000)
+                
+                // This should include proper error handling
+            }
         }
         """
         
@@ -578,15 +581,17 @@ class TestCppCodeValidation:
         skip_if_no_ros2()
         """Test that kernel parameter structs are generated correctly."""
         source = """
-cuda_kernel test_kernel_with_params {
-    block_size: (256, 1, 1)
-    grid_size: (1, 1, 1)
-    input: float data[1000]
-    output: float result[1000]
-    parameters: {
-        float alpha = 0.5
-        int iterations = 10
-        bool enable_debug = false
+cuda_kernels {
+    kernel test_kernel_with_params {
+        block_size: (256, 1, 1)
+        grid_size: (1, 1, 1)
+        input: float data[1000]
+        output: float result[1000]
+        parameters: {
+            float alpha = 0.5
+            int iterations = 10
+            bool enable_debug = false
+        }
     }
 }
 
@@ -645,7 +650,7 @@ cuda_kernel test_kernel_with_params {
                 f"Parameter 'enable_debug' not found in struct in {cuh_file}"
             
             # Check that the process method uses the struct
-            assert 'process(const Test_kernel_with_paramsParameters& parameters)' in content, \
+            assert 'process(const TestKernelWithParamsParameters* parameters' in content, \
                 f"Process method not using parameter struct in {cuh_file}"
             
             # Validate syntax

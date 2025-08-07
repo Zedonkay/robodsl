@@ -38,6 +38,82 @@ class CMakeGenerator(BaseGenerator):
         
         return generated_files
     
+    def generate_cmake_lists(self, package_config: Dict[str, Any]) -> str:
+        """Generate CMakeLists.txt content for a package configuration.
+        
+        Args:
+            package_config: Package configuration dictionary
+            
+        Returns:
+            Generated CMakeLists.txt content as string
+        """
+        # Create a mock AST with the package configuration
+        from ..core.ast import RoboDSLAST, PackageNode
+        
+        # Create a package node from the config
+        package = PackageNode(
+            name=package_config.get('name', 'test_package'),
+            version=package_config.get('version', '0.1.0'),
+            description=package_config.get('description', 'Test package'),
+            dependencies=package_config.get('dependencies', []),
+            build_configuration=package_config
+        )
+        
+        # Create AST with the package
+        ast = RoboDSLAST(packages=[package])
+        
+        # Generate CMakeLists.txt using the existing method
+        cmake_content = self._generate_cmake_lists(ast)
+        
+        # Convert to string if it's a Path object
+        if hasattr(cmake_content, 'read_text'):
+            cmake_content = cmake_content.read_text()
+        
+        # Add build type if specified
+        if 'build_type' in package_config:
+            build_type = package_config['build_type']
+            # Insert CMAKE_BUILD_TYPE after cmake_minimum_required
+            lines = cmake_content.split('\n')
+            for i, line in enumerate(lines):
+                if 'cmake_minimum_required' in line:
+                    lines.insert(i + 1, f'set(CMAKE_BUILD_TYPE {build_type})')
+                    break
+            cmake_content = '\n'.join(lines)
+        
+        return cmake_content
+    
+    def generate_package_xml(self, package_config: Dict[str, Any]) -> str:
+        """Generate package.xml content for a package configuration.
+        
+        Args:
+            package_config: Package configuration dictionary
+            
+        Returns:
+            Generated package.xml content as string
+        """
+        # Create a mock AST with the package configuration
+        from ..core.ast import RoboDSLAST, PackageNode
+        
+        # Create a package node from the config
+        package = PackageNode(
+            name=package_config.get('name', 'test_package'),
+            version=package_config.get('version', '0.1.0'),
+            description=package_config.get('description', 'Test package'),
+            dependencies=package_config.get('dependencies', []),
+            build_configuration=package_config
+        )
+        
+        # Create AST with the package
+        ast = RoboDSLAST(packages=[package])
+        
+        # Generate package.xml using the existing method
+        package_xml_path = self._generate_package_xml(ast)
+        
+        # Convert to string if it's a Path object
+        if hasattr(package_xml_path, 'read_text'):
+            return package_xml_path.read_text()
+        return str(package_xml_path)
+    
     def _generate_cmake_lists(self, ast: RoboDSLAST) -> Path:
         """Generate the main CMakeLists.txt file."""
         context = self._prepare_cmake_context(ast)
@@ -122,6 +198,13 @@ set(CMAKE_INSTALL_PREFIX "/opt/ros/humble")
         for node in ast.nodes:
             if node.content.cuda_kernels:
                 has_cuda_kernels = True
+        
+        # Check package configuration for CUDA dependencies
+        for package in ast.packages:
+            if hasattr(package, 'build_configuration') and package.build_configuration:
+                if 'cuda_dependencies' in package.build_configuration:
+                    has_cuda_kernels = True
+                    cuda_dependencies.update(package.build_configuration['cuda_dependencies'])
         
         # Add ROS2 dependencies
         dependencies.update([
@@ -209,7 +292,9 @@ set(CMAKE_INSTALL_PREFIX "/opt/ros/humble")
             test_sources.append(f'tests/test_{node.name}_node.cpp')
         
         # Determine package name from AST or use default
-        package_name = getattr(ast, 'package_name', 'robodsl_package')
+        package_name = 'robodsl_package'
+        if ast.packages:
+            package_name = ast.packages[0].name
         
         # Determine build configurations
         build_configs = ['Release', 'Debug', 'RelWithDebInfo', 'MinSizeRel']
@@ -271,7 +356,8 @@ set(CMAKE_INSTALL_PREFIX "/opt/ros/humble")
 project({package_name})
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-Wall -Wextra -Wpedantic)
+  # Only add warning flags for C++ (not CUDA)
+  add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-Wall;-Wextra;-Wpedantic>)
 endif()
 
 # Find dependencies

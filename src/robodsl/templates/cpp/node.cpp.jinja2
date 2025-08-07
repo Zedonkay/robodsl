@@ -19,7 +19,7 @@ namespace {{ namespace }} {
 {
     // Initialize parameters
     {% for param in parameters %}
-    this->declare_parameter<{{ param.template_type }}>("{{ param.name }}", {{ param.default_value }});
+    this->declare_parameter<{{ param.type }}>("{{ param.name }}", {{ param.default_value }});
     {% endfor %}
 
     // Create publishers

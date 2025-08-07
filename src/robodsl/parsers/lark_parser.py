@@ -47,9 +47,21 @@ class RoboDSLParser:
         
         # First, handle code: { ... } and cpp: { ... } blocks with proper brace balancing
         processed_content = self._extract_balanced_blocks(processed_content, cpp_blocks, ['code:', 'cpp:'])
+        if self.debug:
+            print(f"DEBUG: After _extract_balanced_blocks: {repr(processed_content)}")
+            print(f"DEBUG: C++ blocks after balanced: {cpp_blocks}")
+        
+        # Handle kernel: | blocks (YAML-style block scalars)
+        processed_content = self._extract_kernel_blocks(processed_content, cpp_blocks)
+        if self.debug:
+            print(f"DEBUG: After _extract_kernel_blocks: {repr(processed_content)}")
+            print(f"DEBUG: C++ blocks after kernel: {cpp_blocks}")
         
         # Extract method bodies with C++ code (most common case)
         processed_content = self._extract_method_bodies(processed_content, cpp_blocks)
+        if self.debug:
+            print(f"DEBUG: After _extract_method_bodies: {repr(processed_content)}")
+            print(f"DEBUG: C++ blocks after method bodies: {cpp_blocks}")
         
         # More specific pattern to match C++ code blocks within specific contexts
         # Look for code blocks within kernel definitions, method definitions, etc.
@@ -160,7 +172,94 @@ class RoboDSLParser:
                     )
         
         return processed_content
-    
+
+    def _extract_kernel_blocks(self, content: str, cpp_blocks: List[str]) -> str:
+        """Extract kernel: | blocks (YAML-style block scalars) and replace with placeholders.
+        
+        Args:
+            content: The content to process
+            cpp_blocks: List to store extracted blocks
+            
+        Returns:
+            Processed content with placeholders
+        """
+        if content is None:
+            return ""
+            
+        processed_content = content
+        
+        # Pattern to match kernel: | followed by indented code (multi-line)
+        pattern1 = r'(kernel:\s*\|)(\s*\n(\s+)[^\n]*(\n\3[^\n]*)*)'
+        matches1 = list(re.finditer(pattern1, processed_content, re.MULTILINE))
+        
+        # Pattern to match kernel: | followed by code on the same line
+        pattern2 = r'(kernel:\s*\|)(\s*[^{}]*(?:\{[^{}]*\}[^{}]*)*)'
+        matches2 = list(re.finditer(pattern2, processed_content))
+        
+        # Process multi-line matches in reverse order to maintain positions
+        for match in reversed(matches1):
+            prefix = match.group(1)  # "kernel: |"
+            code_block = match.group(2)  # The entire indented code block
+            
+            # Extract the actual code content (remove the leading whitespace from each line)
+            lines = code_block.split('\n')
+            code_lines = []
+            for line in lines:
+                if line.strip():  # Skip empty lines
+                    # Remove the common indentation
+                    code_lines.append(line)
+            
+            # Join the code lines
+            code_content = '\n'.join(code_lines)
+            
+            # Store the code block
+            cpp_blocks.append(code_content)
+            
+            # Replace with placeholder
+            placeholder = "CPP_BLOCK_PLACEHOLDER"
+            processed_content = (
+                processed_content[:match.start()] +
+                prefix + " " + placeholder +
+                processed_content[match.end():]
+            )
+        
+        # Process single-line matches in reverse order to maintain positions
+        for match in reversed(matches2):
+            prefix = match.group(1)  # "kernel: |"
+            code_block = match.group(2)  # The code on the same line
+            
+            # Find the end of the function body by balancing braces
+            start_pos = match.end()
+            brace_count = 0
+            end_pos = start_pos
+            
+            for i, char in enumerate(processed_content[start_pos:], start_pos):
+                if char == '{':
+                    brace_count += 1
+                elif char == '}':
+                    brace_count -= 1
+                    if brace_count == 0:
+                        end_pos = i + 1
+                        break
+            
+            # Extract the complete function body
+            complete_code = processed_content[match.start():end_pos]
+            # Remove the "kernel: |" prefix to get just the code
+            code_content = complete_code[len(prefix):].strip()
+            
+            # Store the code block
+            cpp_blocks.append(code_content)
+            
+            # Replace with placeholder
+            placeholder = "CPP_BLOCK_PLACEHOLDER"
+            processed_content = (
+                processed_content[:match.start()] +
+                prefix + " " + placeholder +
+                processed_content[end_pos:]
+            )
+        
+        return processed_content
+
     def _extract_method_bodies(self, content: str, cpp_blocks: List[str]) -> str:
         """Extract method bodies that contain C++ code and replace with placeholders.
         Args:
@@ -251,6 +350,21 @@ class RoboDSLParser:
                                                         block_index += 1
                                                 except (ValueError, IndexError):
                                                     pass
+                        elif child.data == 'kernel':
+                            # Handle kernel blocks specifically
+                            for kernel_child in child.children:
+                                if hasattr(kernel_child, 'data') and kernel_child.data == 'cpp_raw_content':
+                                    for content_child in kernel_child.children:
+                                        if hasattr(content_child, 'value'):
+                                            placeholder = content_child.value
+                                            if placeholder == 'CPP_BLOCK_PLACEHOLDER':
+                                                try:
+                                                    if block_index < len(cpp_blocks):
+                                                        # Replace the placeholder with the actual C++ code
+                                                        content_child.value = cpp_blocks[block_index]
+                                                        block_index += 1
+                                                except (ValueError, IndexError):
+                                                    pass
                     restore_blocks_recursive(child)
         
         restore_blocks_recursive(tree)
@@ -278,7 +392,7 @@ class RoboDSLParser:
             has_advanced_cpp = any(keyword in content for keyword in advanced_cpp_keywords)
 
             # Check for explicit C++ code blocks
-            has_cpp_blocks = 'cpp:' in content or 'code:' in content
+            has_cpp_blocks = 'cpp:' in content or 'code:' in content or 'kernel: |' in content
 
             # Check for C++ code in method bodies (return statements, etc.)
             # Only detect as C++ blocks if they contain complex C++ syntax

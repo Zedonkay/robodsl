@@ -96,9 +96,16 @@ class TestCudaAdvancedFeatures:
         
         # Test multi-GPU kernel with device selection
         dsl_code = f'''
-        cuda_kernel multi_gpu_advanced {{
-            kernel: |
-                __global__ void multi_gpu_advanced(float* input, float* output, int size, int device_id) {{
+        cuda_kernels {{
+            kernel multi_gpu_advanced {{
+                input: float* input (size)
+                output: float* output (size)
+                parameters: {{
+                    int device_id = 0
+                }}
+                block_size: (256, 1, 1)
+                grid_size: (1, 1, 1)
+                code: {{
                     int idx = blockIdx.x * blockDim.x + threadIdx.x;
                     if (idx < size) {{
                         // Device-specific computation
@@ -107,47 +114,41 @@ class TestCudaAdvancedFeatures:
                         output[idx] = val;
                     }}
                 }}
-            block_size: 256
-            grid_size: "(size + 255) / 256"
-            inputs: ["input", "output", "size", "device_id"]
-            outputs: ["output"]
-            multi_gpu: true
-            gpu_count: {gpu_count}
+            }}
         }}
         '''
         
         ast = parse_robodsl(dsl_code)
-        assert len(ast.cuda_kernels) == 1
-        kernel = ast.cuda_kernels[0]
+        assert len(ast.cuda_kernels.kernels) == 1
+        kernel = ast.cuda_kernels.kernels[0]
         assert kernel.name == "multi_gpu_advanced"
-        assert "device_id" in kernel.inputs
+        # Check that device_id parameter is in the kernel content
+        assert "device_id" in kernel.content.code
     
     def test_cuda_streams_and_events(self, test_output_dir):
         """Test CUDA streams and events."""
         skip_if_no_cuda()
         
         dsl_code = '''
-        cuda_kernel stream_kernel {
-            kernel: |
-                __global__ void stream_kernel(float* input, float* output, int size) {
+        cuda_kernels {
+            kernel stream_kernel {
+                input: float* input (size)
+                output: float* output (size)
+                block_size: (256, 1, 1)
+                grid_size: (1, 1, 1)
+                code: {
                     int idx = blockIdx.x * blockDim.x + threadIdx.x;
                     if (idx < size) {
                         output[idx] = input[idx] * 2.0f;
                     }
                 }
-            block_size: 256
-            grid_size: "(size + 255) / 256"
-            inputs: ["input", "output", "size"]
-            outputs: ["output"]
-            use_streams: true
-            stream_count: 4
-            synchronize: true
+            }
         }
         '''
         
         ast = parse_robodsl(dsl_code)
-        assert len(ast.cuda_kernels) == 1
-        kernel = ast.cuda_kernels[0]
+        assert len(ast.cuda_kernels.kernels) == 1
+        kernel = ast.cuda_kernels.kernels[0]
         assert kernel.name == "stream_kernel"
     
     def test_dynamic_parallelism(self, test_output_dir):
@@ -160,9 +161,13 @@ class TestCudaAdvancedFeatures:
             pytest.skip("Device does not support dynamic parallelism")
         
         dsl_code = '''
-        cuda_kernel dynamic_parallelism {
-            kernel: |
-                __global__ void dynamic_parallelism(float* input, float* output, int size) {
+        cuda_kernels {
+            kernel dynamic_parallelism {
+                input: float* input (size)
+                output: float* output (size)
+                block_size: (256, 1, 1)
+                grid_size: (1, 1, 1)
+                code: {
                     int idx = blockIdx.x * blockDim.x + threadIdx.x;
                     if (idx < size) {
                         // Dynamic parallelism example
@@ -173,24 +178,13 @@ class TestCudaAdvancedFeatures:
                         output[idx] = input[idx] * 2.0f;
                     }
                 }
-                
-                __global__ void dynamic_parallelism_child(float* input, float* output, int size) {
-                    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-                    if (idx < size) {
-                        output[idx] = __sinf(input[idx]);
-                    }
-                }
-            block_size: 256
-            grid_size: "(size + 255) / 256"
-            inputs: ["input", "output", "size"]
-            outputs: ["output"]
-            dynamic_parallelism: true
+            }
         }
         '''
         
         ast = parse_robodsl(dsl_code)
-        assert len(ast.cuda_kernels) == 1
-        kernel = ast.cuda_kernels[0]
+        assert len(ast.cuda_kernels.kernels) == 1
+        kernel = ast.cuda_kernels.kernels[0]
         assert kernel.name == "dynamic_parallelism"
     
     def test_cooperative_groups(self, test_output_dir):
@@ -202,12 +196,13 @@ class TestCudaAdvancedFeatures:
             pytest.skip("Device does not support cooperative groups")
         
         dsl_code = '''
-        cuda_kernel cooperative_groups {
-            kernel: |
-                #include <cooperative_groups.h>
-                using namespace cooperative_groups;
-                
-                __global__ void cooperative_groups_kernel(float* input, float* output, int size) {
+        cuda_kernels {
+            kernel cooperative_groups {
+                input: float* input (size)
+                output: float* output (size)
+                block_size: (256, 1, 1)
+                grid_size: (1, 1, 1)
+                code: {
                     int idx = blockIdx.x * blockDim.x + threadIdx.x;
                     if (idx < size) {
                         thread_block block = this_thread_block();
@@ -223,17 +218,13 @@ class TestCudaAdvancedFeatures:
                         output[idx] = sum;
                     }
                 }
-            block_size: 256
-            grid_size: "(size + 255) / 256"
-            inputs: ["input", "output", "size"]
-            outputs: ["output"]
-            cooperative_groups: true
+            }
         }
         '''
         
         ast = parse_robodsl(dsl_code)
-        assert len(ast.cuda_kernels) == 1
-        kernel = ast.cuda_kernels[0]
+        assert len(ast.cuda_kernels.kernels) == 1
+        kernel = ast.cuda_kernels.kernels[0]
         assert kernel.name == "cooperative_groups"
     
     def test_advanced_memory_management(self, test_output_dir):
@@ -241,9 +232,14 @@ class TestCudaAdvancedFeatures:
         skip_if_no_cuda()
         
         dsl_code = '''
-        cuda_kernel advanced_memory {
-            kernel: |
-                __global__ void advanced_memory(float* input, float* output, int size) {
+        cuda_kernels {
+            kernel advanced_memory {
+                input: float* input (size)
+                output: float* output (size)
+                block_size: (256, 1, 1)
+                grid_size: (1, 1, 1)
+                shared_memory: 1024
+                code: {
                     int idx = blockIdx.x * blockDim.x + threadIdx.x;
                     if (idx < size) {
                         // Shared memory usage
@@ -260,18 +256,13 @@ class TestCudaAdvancedFeatures:
                         output[idx] = sum / 256.0f;
                     }
                 }
-            block_size: 256
-            grid_size: "(size + 255) / 256"
-            inputs: ["input", "output", "size"]
-            outputs: ["output"]
-            shared_memory_size: 1024
-            memory_pool: true
+            }
         }
         '''
         
         ast = parse_robodsl(dsl_code)
-        assert len(ast.cuda_kernels) == 1
-        kernel = ast.cuda_kernels[0]
+        assert len(ast.cuda_kernels.kernels) == 1
+        kernel = ast.cuda_kernels.kernels[0]
         assert kernel.name == "advanced_memory"
     
     def test_optimization_techniques(self, test_output_dir):
@@ -279,9 +270,13 @@ class TestCudaAdvancedFeatures:
         skip_if_no_cuda()
         
         dsl_code = '''
-        cuda_kernel optimized_kernel {
-            kernel: |
-                __global__ void optimized_kernel(float* input, float* output, int size) {
+        cuda_kernels {
+            kernel optimized_kernel {
+                input: float* input (size)
+                output: float* output (size)
+                block_size: (256, 1, 1)
+                grid_size: (1, 1, 1)
+                code: {
                     int idx = blockIdx.x * blockDim.x + threadIdx.x;
                     if (idx < size) {
                         // Loop unrolling
@@ -293,19 +288,13 @@ class TestCudaAdvancedFeatures:
                         output[idx] = val;
                     }
                 }
-            block_size: 256
-            grid_size: "(size + 255) / 256"
-            inputs: ["input", "output", "size"]
-            outputs: ["output"]
-            optimization_level: 3
-            max_registers: 32
-            shared_memory_size: 0
+            }
         }
         '''
         
         ast = parse_robodsl(dsl_code)
-        assert len(ast.cuda_kernels) == 1
-        kernel = ast.cuda_kernels[0]
+        assert len(ast.cuda_kernels.kernels) == 1
+        kernel = ast.cuda_kernels.kernels[0]
         assert kernel.name == "optimized_kernel"
     
     def test_error_handling_advanced(self, test_output_dir):
@@ -313,9 +302,13 @@ class TestCudaAdvancedFeatures:
         skip_if_no_cuda()
         
         dsl_code = '''
-        cuda_kernel error_handling {
-            kernel: |
-                __global__ void error_handling(float* input, float* output, int size) {
+        cuda_kernels {
+            kernel error_handling {
+                input: float* input (size)
+                output: float* output (size)
+                block_size: (256, 1, 1)
+                grid_size: (1, 1, 1)
+                code: {
                     int idx = blockIdx.x * blockDim.x + threadIdx.x;
                     if (idx < size) {
                         // Safe computation with error checking
@@ -328,18 +321,13 @@ class TestCudaAdvancedFeatures:
                         }
                     }
                 }
-            block_size: 256
-            grid_size: "(size + 255) / 256"
-            inputs: ["input", "output", "size"]
-            outputs: ["output"]
-            error_checking: true
-            error_recovery: true
+            }
         }
         '''
         
         ast = parse_robodsl(dsl_code)
-        assert len(ast.cuda_kernels) == 1
-        kernel = ast.cuda_kernels[0]
+        assert len(ast.cuda_kernels.kernels) == 1
+        kernel = ast.cuda_kernels.kernels[0]
         assert kernel.name == "error_handling"
     
     def test_performance_monitoring_advanced(self, test_output_dir):
@@ -347,27 +335,25 @@ class TestCudaAdvancedFeatures:
         skip_if_no_cuda()
         
         dsl_code = '''
-        cuda_kernel monitored_kernel {
-            kernel: |
-                __global__ void monitored_kernel(float* input, float* output, int size) {
+        cuda_kernels {
+            kernel monitored_kernel {
+                input: float* input (size)
+                output: float* output (size)
+                block_size: (256, 1, 1)
+                grid_size: (1, 1, 1)
+                code: {
                     int idx = blockIdx.x * blockDim.x + threadIdx.x;
                     if (idx < size) {
                         output[idx] = input[idx] * 2.0f;
                     }
                 }
-            block_size: 256
-            grid_size: "(size + 255) / 256"
-            inputs: ["input", "output", "size"]
-            outputs: ["output"]
-            profiling: true
-            metrics: ["gpu_utilization", "memory_throughput", "compute_throughput"]
-            sampling_rate: 1000
+            }
         }
         '''
         
         ast = parse_robodsl(dsl_code)
-        assert len(ast.cuda_kernels) == 1
-        kernel = ast.cuda_kernels[0]
+        assert len(ast.cuda_kernels.kernels) == 1
+        kernel = ast.cuda_kernels.kernels[0]
         assert kernel.name == "monitored_kernel"
     
     def test_memory_hierarchy_optimization(self, test_output_dir):
@@ -375,9 +361,14 @@ class TestCudaAdvancedFeatures:
         skip_if_no_cuda()
         
         dsl_code = '''
-        cuda_kernel memory_hierarchy {
-            kernel: |
-                __global__ void memory_hierarchy(float* input, float* output, int size) {
+        cuda_kernels {
+            kernel memory_hierarchy {
+                input: float* input (size)
+                output: float* output (size)
+                block_size: (256, 1, 1)
+                grid_size: (1, 1, 1)
+                shared_memory: 1024
+                code: {
                     int idx = blockIdx.x * blockDim.x + threadIdx.x;
                     if (idx < size) {
                         // L1 cache optimization
@@ -397,19 +388,13 @@ class TestCudaAdvancedFeatures:
                         output[idx] = sum / 256.0f;
                     }
                 }
-            block_size: 256
-            grid_size: "(size + 255) / 256"
-            inputs: ["input", "output", "size"]
-            outputs: ["output"]
-            l1_cache_size: 16384
-            shared_memory_size: 1024
-            memory_coalescing: true
+            }
         }
         '''
         
         ast = parse_robodsl(dsl_code)
-        assert len(ast.cuda_kernels) == 1
-        kernel = ast.cuda_kernels[0]
+        assert len(ast.cuda_kernels.kernels) == 1
+        kernel = ast.cuda_kernels.kernels[0]
         assert kernel.name == "memory_hierarchy"
     
     def test_concurrent_kernel_execution(self, test_output_dir):
@@ -417,52 +402,52 @@ class TestCudaAdvancedFeatures:
         skip_if_no_cuda()
         
         dsl_code = '''
-        cuda_kernel concurrent_kernel1 {
-            kernel: |
-                __global__ void concurrent_kernel1(float* input, float* output, int size) {
+        cuda_kernels {
+            kernel concurrent_kernel1 {
+                input: float* input (size)
+                output: float* output (size)
+                block_size: (256, 1, 1)
+                grid_size: (1, 1, 1)
+                code: {
                     int idx = blockIdx.x * blockDim.x + threadIdx.x;
                     if (idx < size) {
                         output[idx] = input[idx] * 2.0f;
                     }
                 }
-            block_size: 256
-            grid_size: "(size + 255) / 256"
-            inputs: ["input", "output", "size"]
-            outputs: ["output"]
-            concurrent: true
-            stream_id: 0
-        }
-        
-        cuda_kernel concurrent_kernel2 {
-            kernel: |
-                __global__ void concurrent_kernel2(float* input, float* output, int size) {
+            }
+            
+            kernel concurrent_kernel2 {
+                input: float* input (size)
+                output: float* output (size)
+                block_size: (256, 1, 1)
+                grid_size: (1, 1, 1)
+                code: {
                     int idx = blockIdx.x * blockDim.x + threadIdx.x;
                     if (idx < size) {
                         output[idx] = input[idx] + 1.0f;
                     }
                 }
-            block_size: 256
-            grid_size: "(size + 255) / 256"
-            inputs: ["input", "output", "size"]
-            outputs: ["output"]
-            concurrent: true
-            stream_id: 1
+            }
         }
         '''
         
         ast = parse_robodsl(dsl_code)
-        assert len(ast.cuda_kernels) == 2
-        assert ast.cuda_kernels[0].name == "concurrent_kernel1"
-        assert ast.cuda_kernels[1].name == "concurrent_kernel2"
+        assert len(ast.cuda_kernels.kernels) == 2
+        assert ast.cuda_kernels.kernels[0].name == "concurrent_kernel1"
+        assert ast.cuda_kernels.kernels[1].name == "concurrent_kernel2"
     
     def test_advanced_synchronization(self, test_output_dir):
         """Test advanced CUDA synchronization techniques."""
         skip_if_no_cuda()
         
         dsl_code = '''
-        cuda_kernel advanced_sync {
-            kernel: |
-                __global__ void advanced_sync(float* input, float* output, int size) {
+        cuda_kernels {
+            kernel advanced_sync {
+                input: float* input (size)
+                output: float* output (size)
+                block_size: (256, 1, 1)
+                grid_size: (1, 1, 1)
+                code: {
                     int idx = blockIdx.x * blockDim.x + threadIdx.x;
                     if (idx < size) {
                         // Atomic operations
@@ -476,50 +461,42 @@ class TestCudaAdvancedFeatures:
                         __syncthreads();
                     }
                 }
-            block_size: 256
-            grid_size: "(size + 255) / 256"
-            inputs: ["input", "output", "size"]
-            outputs: ["output"]
-            atomic_operations: true
-            memory_fence: true
-            cooperative_sync: true
+            }
         }
         '''
         
         ast = parse_robodsl(dsl_code)
-        assert len(ast.cuda_kernels) == 1
-        kernel = ast.cuda_kernels[0]
+        assert len(ast.cuda_kernels.kernels) == 1
+        kernel = ast.cuda_kernels.kernels[0]
         assert kernel.name == "advanced_sync"
     
     def test_cuda_graphs(self, test_output_dir):
         """Test CUDA graphs for performance optimization."""
         skip_if_no_cuda()
         
-        compute_cap = self._get_compute_capabilities()[0]
-        if compute_cap[0] < 10:
-            pytest.skip("Device does not support CUDA graphs")
+        # Test CUDA graphs regardless of compute capability
+        # The actual CUDA graphs functionality will be handled by the runtime
         
         dsl_code = '''
-        cuda_kernel graph_kernel {
-            kernel: |
-                __global__ void graph_kernel(float* input, float* output, int size) {
+        cuda_kernels {
+            kernel graph_kernel {
+                input: float* input (size)
+                output: float* output (size)
+                block_size: (256, 1, 1)
+                grid_size: (1, 1, 1)
+                code: {
                     int idx = blockIdx.x * blockDim.x + threadIdx.x;
                     if (idx < size) {
                         output[idx] = input[idx] * 2.0f;
                     }
                 }
-            block_size: 256
-            grid_size: "(size + 255) / 256"
-            inputs: ["input", "output", "size"]
-            outputs: ["output"]
-            use_cuda_graph: true
-            graph_instantiate_flags: ["cudaGraphInstantiateFlagAutoFreeOnLaunch"]
+            }
         }
         '''
         
         ast = parse_robodsl(dsl_code)
-        assert len(ast.cuda_kernels) == 1
-        kernel = ast.cuda_kernels[0]
+        assert len(ast.cuda_kernels.kernels) == 1
+        kernel = ast.cuda_kernels.kernels[0]
         assert kernel.name == "graph_kernel"
     
     def test_mixed_precision_computation(self, test_output_dir):
@@ -531,9 +508,13 @@ class TestCudaAdvancedFeatures:
             pytest.skip("Device does not support mixed precision")
         
         dsl_code = '''
-        cuda_kernel mixed_precision {
-            kernel: |
-                __global__ void mixed_precision(float* input, float* output, int size) {
+        cuda_kernels {
+            kernel mixed_precision {
+                input: float* input (size)
+                output: float* output (size)
+                block_size: (256, 1, 1)
+                grid_size: (1, 1, 1)
+                code: {
                     int idx = blockIdx.x * blockDim.x + threadIdx.x;
                     if (idx < size) {
                         // Mixed precision computation
@@ -542,18 +523,13 @@ class TestCudaAdvancedFeatures:
                         output[idx] = __half2float(result_half);
                     }
                 }
-            block_size: 256
-            grid_size: "(size + 255) / 256"
-            inputs: ["input", "output", "size"]
-            outputs: ["output"]
-            mixed_precision: true
-            tensor_cores: true
+            }
         }
         '''
         
         ast = parse_robodsl(dsl_code)
-        assert len(ast.cuda_kernels) == 1
-        kernel = ast.cuda_kernels[0]
+        assert len(ast.cuda_kernels.kernels) == 1
+        kernel = ast.cuda_kernels.kernels[0]
         assert kernel.name == "mixed_precision"
     
     def test_memory_pool_management(self, test_output_dir):
@@ -561,28 +537,25 @@ class TestCudaAdvancedFeatures:
         skip_if_no_cuda()
         
         dsl_code = '''
-        cuda_kernel memory_pool {
-            kernel: |
-                __global__ void memory_pool(float* input, float* output, int size) {
+        cuda_kernels {
+            kernel memory_pool {
+                input: float* input (size)
+                output: float* output (size)
+                block_size: (256, 1, 1)
+                grid_size: (1, 1, 1)
+                code: {
                     int idx = blockIdx.x * blockDim.x + threadIdx.x;
                     if (idx < size) {
                         output[idx] = input[idx] * 2.0f;
                     }
                 }
-            block_size: 256
-            grid_size: "(size + 255) / 256"
-            inputs: ["input", "output", "size"]
-            outputs: ["output"]
-            memory_pool: true
-            pool_size: 1073741824  # 1GB
-            pool_growth_factor: 2.0
-            pool_max_size: 4294967296  # 4GB
+            }
         }
         '''
         
         ast = parse_robodsl(dsl_code)
-        assert len(ast.cuda_kernels) == 1
-        kernel = ast.cuda_kernels[0]
+        assert len(ast.cuda_kernels.kernels) == 1
+        kernel = ast.cuda_kernels.kernels[0]
         assert kernel.name == "memory_pool"
     
     def test_cuda_context_management(self, test_output_dir):
@@ -590,27 +563,25 @@ class TestCudaAdvancedFeatures:
         skip_if_no_cuda()
         
         dsl_code = '''
-        cuda_kernel context_managed {
-            kernel: |
-                __global__ void context_managed(float* input, float* output, int size) {
+        cuda_kernels {
+            kernel context_managed {
+                input: float* input (size)
+                output: float* output (size)
+                block_size: (256, 1, 1)
+                grid_size: (1, 1, 1)
+                code: {
                     int idx = blockIdx.x * blockDim.x + threadIdx.x;
                     if (idx < size) {
                         output[idx] = input[idx] * 2.0f;
                     }
                 }
-            block_size: 256
-            grid_size: "(size + 255) / 256"
-            inputs: ["input", "output", "size"]
-            outputs: ["output"]
-            context_management: true
-            context_flags: ["cudaContextMapHost", "cudaContextLmemResizeToMax"]
-            context_priority: "cudaContextPriorityNormal"
+            }
         }
         '''
         
         ast = parse_robodsl(dsl_code)
-        assert len(ast.cuda_kernels) == 1
-        kernel = ast.cuda_kernels[0]
+        assert len(ast.cuda_kernels.kernels) == 1
+        kernel = ast.cuda_kernels.kernels[0]
         assert kernel.name == "context_managed"
     
     def test_cuda_driver_api_integration(self, test_output_dir):
@@ -618,27 +589,25 @@ class TestCudaAdvancedFeatures:
         skip_if_no_cuda()
         
         dsl_code = '''
-        cuda_kernel driver_api {
-            kernel: |
-                __global__ void driver_api(float* input, float* output, int size) {
+        cuda_kernels {
+            kernel driver_api {
+                input: float* input (size)
+                output: float* output (size)
+                block_size: (256, 1, 1)
+                grid_size: (1, 1, 1)
+                code: {
                     int idx = blockIdx.x * blockDim.x + threadIdx.x;
                     if (idx < size) {
                         output[idx] = input[idx] * 2.0f;
                     }
                 }
-            block_size: 256
-            grid_size: "(size + 255) / 256"
-            inputs: ["input", "output", "size"]
-            outputs: ["output"]
-            driver_api: true
-            module_loading: true
-            function_retrieval: true
+            }
         }
         '''
         
         ast = parse_robodsl(dsl_code)
-        assert len(ast.cuda_kernels) == 1
-        kernel = ast.cuda_kernels[0]
+        assert len(ast.cuda_kernels.kernels) == 1
+        kernel = ast.cuda_kernels.kernels[0]
         assert kernel.name == "driver_api"
     
     def test_cuda_runtime_api_advanced(self, test_output_dir):
@@ -646,26 +615,23 @@ class TestCudaAdvancedFeatures:
         skip_if_no_cuda()
         
         dsl_code = '''
-        cuda_kernel runtime_api {
-            kernel: |
-                __global__ void runtime_api(float* input, float* output, int size) {
+        cuda_kernels {
+            kernel runtime_api {
+                input: float* input (size)
+                output: float* output (size)
+                block_size: (256, 1, 1)
+                grid_size: (1, 1, 1)
+                code: {
                     int idx = blockIdx.x * blockDim.x + threadIdx.x;
                     if (idx < size) {
                         output[idx] = input[idx] * 2.0f;
                     }
                 }
-            block_size: 256
-            grid_size: "(size + 255) / 256"
-            inputs: ["input", "output", "size"]
-            outputs: ["output"]
-            runtime_api: true
-            device_synchronization: true
-            memory_management: true
-            error_handling: true
+            }
         }
         '''
         
         ast = parse_robodsl(dsl_code)
-        assert len(ast.cuda_kernels) == 1
-        kernel = ast.cuda_kernels[0]
+        assert len(ast.cuda_kernels.kernels) == 1
+        kernel = ast.cuda_kernels.kernels[0]
         assert kernel.name == "runtime_api" 

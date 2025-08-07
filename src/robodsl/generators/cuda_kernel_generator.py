@@ -151,7 +151,7 @@ class CudaKernelGenerator(BaseGenerator):
         for param in kernel_parameters:
             members.append({
                 'name': param['device_name'],
-                'type': f"{param['type']}*",
+                'type': param['type'],  # Don't add extra * - the template will handle it
                 'original_name': param['name']
             })
         

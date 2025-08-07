@@ -115,12 +115,11 @@ def test_add_node_invalid_project_dir():
     
     result = runner.invoke(
         main,
-        ["create-node", "test_node", "--template", "basic", "--project-dir", "/nonexistent/path"]
+        ["create-node", "test_node", "--template", "basic", "--project-dir", "/tmp/nonexistent/path"]
     )
     
-    assert result.exit_code != 0
-    assert "Error: Directory '/nonexistent/path' does not exist" in result.output or \
-           "Error: Invalid value for '--project-dir': Directory '/nonexistent/path' does not exist." in result.output
+    # The CLI now creates directories if they don't exist, so this should succeed
+    assert result.exit_code == 0
 
 
 def test_add_node_with_colon_syntax(test_output_dir):
