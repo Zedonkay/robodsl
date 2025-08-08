@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "robodsl-language-server"
+version = "0.1.0"
+description = "Language Server for RoboDSL"
+requires-python = ">=3.9"
+dependencies = [
+  "pygls>=1.2.1",
+  "lark>=1.1.5",
+]
+
+[project.scripts]
+robodsl-ls = "robodsl_ls.server:run"
+
+[tool.setuptools]
+packages = ["robodsl_ls"]
+

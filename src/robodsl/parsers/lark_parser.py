@@ -8,6 +8,11 @@ import os
 from pathlib import Path
 from typing import Optional, Tuple, List
 from lark import Lark, ParseError
+try:
+    # Available in lark.exceptions, but try direct import first
+    from lark.exceptions import UnexpectedInput  # type: ignore
+except Exception:  # pragma: no cover
+    UnexpectedInput = Exception  # fallback typing
 import re
 
 from .ast_builder import ASTBuilder
@@ -25,7 +30,13 @@ class RoboDSLParser:
             grammar_content = f.read()
         
         # Create Lark parser
-        self.parser = Lark(grammar_content, parser='lalr', lexer='contextual', start='start')
+        self.parser = Lark(
+            grammar_content,
+            parser='lalr',
+            lexer='contextual',
+            start='start',
+            propagate_positions=True,
+        )
         self.ast_builder = ASTBuilder(debug=debug)
         self.semantic_analyzer = SemanticAnalyzer(debug=debug)
         self.debug = debug
@@ -522,17 +533,33 @@ class RoboDSLParser:
                         'rule_id': 'semantic_error'
                     })
         except ParseError as e:
+            line = getattr(e, 'line', None)
+            column = getattr(e, 'column', None)
+            cause = getattr(e, '__cause__', None)
+            if cause is not None:
+                line = getattr(cause, 'line', line)
+                column = getattr(cause, 'column', column)
             issues.append({
                 'level': 'error',
                 'message': f'Parse error: {str(e)}',
-                'rule_id': 'parse_error'
+                'rule_id': 'parse_error',
+                'line': int(line) if isinstance(line, int) else line,
+                'column': int(column) if isinstance(column, int) else column,
             })
             return None, issues
         except Exception as e:
+            line = getattr(e, 'line', None)
+            column = getattr(e, 'column', None)
+            cause = getattr(e, '__cause__', None)
+            if cause is not None:
+                line = getattr(cause, 'line', line)
+                column = getattr(cause, 'column', column)
             issues.append({
                 'level': 'error',
                 'message': f'Parse error: {str(e)}',
-                'rule_id': 'parse_error'
+                'rule_id': 'parse_error',
+                'line': int(line) if isinstance(line, int) else line,
+                'column': int(column) if isinstance(column, int) else column,
             })
             return None, issues
         return ast, issues

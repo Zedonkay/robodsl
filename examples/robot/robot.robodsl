@@ -1,7 +1,7 @@
-// robot1 RoboDSL Configuration
+// robot RoboDSL Configuration
 
 // Project configuration
-project_name: robot1
+project_name: robot
 
 // Global includes (will be added to all nodes)
 include <rclcpp/rclcpp.hpp>
@@ -10,27 +10,15 @@ include <sensor_msgs/msg/image.hpp>
 
 // Main node configuration
 node main_node {
-    // Node namespace (optional)
-    namespace: /robot1
-
-    // Enable lifecycle (default: false)
-    lifecycle {
-        enabled: true
-    }
-
-    // Enable parameter callbacks (default: false)
-    parameter_callbacks: true
-
-    // Topic remapping (optional)
-    remap /source_topic: /target_topic
-
-    // Parameters with different types
+    // Node namespace
+    namespace: /robot
+    // Parameters
     parameter int count = 0
     parameter double rate = 10.0
-    parameter string name = "robot1"
+    parameter string name = "robot"
     parameter bool enabled = true
-
-    // Publisher with QoS settings
+    
+    // Publisher
     publisher /chatter: "std_msgs/msg/String" {
         qos {
             reliability: 1
@@ -39,8 +27,8 @@ node main_node {
         }
         queue_size: 10
     }
-
-    // Subscriber with QoS settings
+    
+    // Subscriber
     subscriber /chatter: "std_msgs/msg/String" {
         qos {
             reliability: 0
@@ -49,31 +37,45 @@ node main_node {
         }
         queue_size: 10
     }
-
-    // Timer example (1.0 second period)
-    timer my_timer: 1.0 {
+    
+    // Timer
+    timer main_timer: 1.0 {
         callback: on_timer_callback
+    }
+    
+    // C++ method for timer callback
+    method on_timer_callback {
+        input: rclcpp::Time current_time
+        code {
+            auto message = std_msgs::msg::String();
+            message.data = "Hello from robot!";
+            chatter_pub_->publish(message);
+        }
+    }
+    
+    // C++ method for message callback
+    method on_message_received {
+        input: const std_msgs::msg::String::SharedPtr msg
+        code {
+            RCLCPP_INFO(this->get_logger(), "Received: %s", msg->data.c_str());
+        }
     }
 }
 
-// CUDA Kernels section
+// CUDA Kernels section (optional)
 cuda_kernels {
     // Example vector addition kernel
     kernel vector_add {
-        // Input parameters
         input: float* a, float* b, int size
         output: float* c
-
-        // Kernel configuration
+        
         block_size: (256, 1, 1)
-
-        // Include additional headers
+        
         include <cuda_runtime.h>
         include <device_launch_parameters.h>
-
-        // Kernel code
+        
         code {
-            __global__ void vector_add(const float* a, const float* b, float* c, int size) {
+            __global__ void vector_add_kernel(const float* a, const float* b, float* c, int size) {
                 int i = blockIdx.x * blockDim.x + threadIdx.x;
                 if (i < size) {
                     c[i] = a[i] + b[i];
@@ -82,5 +84,3 @@ cuda_kernels {
         }
     }
 }
-
-// For more examples and documentation, see: examples/comprehensive_example.robodsl

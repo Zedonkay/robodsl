@@ -4,6 +4,7 @@ import os
 import shutil
 import pytest
 import tempfile
+import platform
 from pathlib import Path
 from robodsl.generators.main_generator import MainGenerator
 from robodsl.parsers.lark_parser import RoboDSLParser
@@ -27,6 +28,15 @@ def has_ros2():
         '/opt/ros/rolling'
     ]
     
+    # Add macOS Homebrew paths
+    if platform.system() == 'Darwin':
+        ros2_paths.extend([
+            '/opt/homebrew/opt/ros2',
+            '/usr/local/opt/ros2',
+            '/opt/homebrew/Cellar/ros2',
+            '/usr/local/Cellar/ros2'
+        ])
+    
     for path in ros2_paths:
         if os.path.exists(path):
             return True
@@ -36,11 +46,44 @@ def has_ros2():
 
 def has_cuda():
     """Check if CUDA is available in the environment."""
+    # On macOS, CUDA is not supported, but we can check for alternatives
+    if platform.system() == 'Darwin':
+        # Check for Metal Performance Shaders (Apple's GPU framework)
+        try:
+            import torch
+            if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+                return True
+        except ImportError:
+            pass
+        
+        # Check for other GPU frameworks
+        try:
+            import tensorflow as tf
+            if tf.config.list_physical_devices('GPU'):
+                return True
+        except ImportError:
+            pass
+        
+        # For development purposes, allow CUDA tests to run on macOS
+        # by checking if we're in a development environment
+        if os.environ.get('ROBODSL_DEV_MODE') == '1':
+            return True
+            
+        return False
+    
+    # On Linux, check for nvcc
     return shutil.which('nvcc') is not None
 
 
 def has_tensorrt():
     """Check if TensorRT is available in the environment."""
+    # On macOS, TensorRT is not officially supported
+    if platform.system() == 'Darwin':
+        # For development purposes, allow TensorRT tests to run on macOS
+        if os.environ.get('ROBODSL_DEV_MODE') == '1':
+            return True
+        return False
+    
     # Check for TensorRT by looking for common installation paths or environment variables
     tensorrt_paths = [
         '/usr/local/tensorrt',
