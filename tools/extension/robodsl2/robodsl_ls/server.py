@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 from pygls.server import LanguageServer
-from pygls.lsp.types import (
+from lsprotocol.types import (
     CompletionItem,
     CompletionItemKind,
     CompletionList,

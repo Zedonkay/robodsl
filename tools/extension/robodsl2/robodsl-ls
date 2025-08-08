@@ -1,0 +1,3 @@
+#!/bin/sh
+cd "/Users/ishayu/Documents/Random_projects/cuif/tools/extension/robodsl2"
+exec python3 -u -m robodsl_ls.server
