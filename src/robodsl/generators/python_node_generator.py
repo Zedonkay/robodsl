@@ -39,26 +39,15 @@ class PythonNodeGenerator(BaseGenerator):
         """Generate a Python file for a ROS2 node."""
         context = self._prepare_node_context(node)
         
-        # Determine subdirectory structure based on node name
-        # For subnodes like "sensors.camera", create "src/sensors/camera_node.py"
-        subdir = ""
+        # Use the same subdirectory structure as C++ nodes
+        subdir = self._get_node_subdirectory(node)
         filename = f'{node.name}_node.py'
-        if '.' in node.name:
-            parts = node.name.split('.')
-            if len(parts) > 1:
-                subdir = '/'.join(parts[:-1])
-                filename = f'{parts[-1]}_node.py'
-                print(f"[DEBUG] Node {node.name}: subdir = '{subdir}', filename = '{filename}', parts = {parts}")
         
         try:
             content = self.render_template('node.py.jinja2', context)
             print(f"[DEBUG] Before file creation: node.name={node.name}, subdir='{subdir}', filename='{filename}'")
-            if subdir:
-                py_path = self.get_output_path('src', subdir, filename)
-                print(f"[DEBUG] Creating Python file at: {py_path}")
-            else:
-                py_path = self.get_output_path('src', filename)
-                print(f"[DEBUG] Creating Python file at: {py_path}")
+            py_path = self.get_output_path('src', subdir, filename)
+            print(f"[DEBUG] Creating Python file at: {py_path}")
             result = self.write_file(py_path, content)
             # Make the file executable
             py_path.chmod(0o755)
@@ -94,6 +83,36 @@ if __name__ == '__main__':
             # Make the file executable
             py_path.chmod(0o755)
             return result
+    
+    def _get_node_subdirectory(self, node: NodeNode) -> str:
+        """Determine the appropriate subdirectory for a node based on its name and content."""
+        # For subnodes with dots, use the existing logic
+        if '.' in node.name:
+            parts = node.name.split('.')
+            if len(parts) > 1:
+                return '/'.join(parts[:-1])
+        
+        # For regular nodes, organize by type/function
+        node_name = node.name.lower()
+        
+        # Main/control nodes
+        if 'main' in node_name:
+            return 'nodes/main'
+        # Perception/vision nodes
+        elif 'perception' in node_name or 'vision' in node_name or 'camera' in node_name:
+            return 'nodes/perception'
+        # Navigation/movement nodes
+        elif 'navigation' in node_name or 'movement' in node_name or 'drive' in node_name:
+            return 'nodes/navigation'
+        # Safety/monitoring nodes
+        elif 'safety' in node_name or 'monitor' in node_name or 'emergency' in node_name:
+            return 'nodes/safety'
+        # Sensor nodes
+        elif 'sensor' in node_name or 'lidar' in node_name or 'imu' in node_name:
+            return 'nodes/sensors'
+        # Default to nodes directory
+        else:
+            return 'nodes'
     
     def _prepare_node_context(self, node: NodeNode) -> Dict[str, Any]:
         """Prepare context for Python node template rendering."""

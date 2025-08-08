@@ -61,7 +61,7 @@ class PipelineGenerator(BaseGenerator):
             has_cuda=len(stage.content.cuda_kernels) > 0,
             has_onnx=len(stage.content.onnx_models) > 0
         )
-        files[f"include/{project_name}/{stage.name}_node.hpp"] = header_content
+        files[f"include/pipelines/{project_name}/{stage.name}_node.hpp"] = header_content
         
         # Generate C++ node implementation
         impl_template = self.template_env.get_template("stage_node.cpp.jinja2")
@@ -74,20 +74,9 @@ class PipelineGenerator(BaseGenerator):
             has_cuda=len(stage.content.cuda_kernels) > 0,
             has_onnx=len(stage.content.onnx_models) > 0
         )
-        files[f"src/{stage.name}_node.cpp"] = impl_content
+        files[f"src/pipelines/{stage.name}_node.cpp"] = impl_content
         
-        # Generate Python node (alternative)
-        py_template = self.template_env.get_template("stage_node.py.jinja2")
-        py_content = py_template.render(
-            stage=stage,
-            pipeline_name=pipeline_name,
-            stage_namespace=stage_namespace,
-            project_name=project_name,
-            stage_index=stage_index,
-            has_cuda=len(stage.content.cuda_kernels) > 0,
-            has_onnx=len(stage.content.onnx_models) > 0
-        )
-        files[f"src/{stage.name}_node.py"] = py_content
+        # Python generation disabled - focusing on C++/CUDA only
         
         # Generate CUDA kernel integration if needed
         if stage.content.cuda_kernels:
@@ -111,7 +100,7 @@ class PipelineGenerator(BaseGenerator):
             stage=stage,
             project_name=project_name
         )
-        files[f"include/{project_name}/{stage.name}_cuda.hpp"] = cuda_header_content
+        files[f"include/pipelines/{project_name}/{stage.name}_cuda.hpp"] = cuda_header_content
         
         # Generate CUDA kernel wrapper implementation
         cuda_impl_template = self.template_env.get_template("cuda_integration.cpp.jinja2")
@@ -119,7 +108,7 @@ class PipelineGenerator(BaseGenerator):
             stage=stage,
             project_name=project_name
         )
-        files[f"src/{stage.name}_cuda.cpp"] = cuda_impl_content
+        files[f"src/pipelines/{stage.name}_cuda.cpp"] = cuda_impl_content
         
         return files
     
@@ -133,7 +122,7 @@ class PipelineGenerator(BaseGenerator):
             stage=stage,
             project_name=project_name
         )
-        files[f"include/{project_name}/{stage.name}_onnx.hpp"] = onnx_header_content
+        files[f"include/pipelines/{project_name}/{stage.name}_onnx.hpp"] = onnx_header_content
         
         # Generate ONNX integration implementation
         onnx_impl_template = self.template_env.get_template("onnx_integration.cpp.jinja2")
@@ -141,7 +130,7 @@ class PipelineGenerator(BaseGenerator):
             stage=stage,
             project_name=project_name
         )
-        files[f"src/{stage.name}_onnx.cpp"] = onnx_impl_content
+        files[f"src/pipelines/{stage.name}_onnx.cpp"] = onnx_impl_content
         
         return files
     

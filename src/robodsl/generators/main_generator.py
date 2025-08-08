@@ -84,11 +84,7 @@ class MainGenerator(BaseGenerator):
         all_generated_files.extend(cuda_files)
         print(f"Generated {len(cuda_files)} CUDA files")
         
-        # Generate Python node files
-        print("Generating Python node files...")
-        python_files = self.python_generator.generate(ast)
-        all_generated_files.extend(python_files)
-        print(f"Generated {len(python_files)} Python files")
+        # Python generation disabled - focusing on C++/CUDA only
         
         # Generate CMake files
         print("Generating CMake files...")
@@ -176,15 +172,15 @@ class MainGenerator(BaseGenerator):
         generated_files = []
         
         if hasattr(ast, 'raw_cpp_code') and ast.raw_cpp_code:
-            # Create src directory if it doesn't exist
-            src_dir = Path(self.output_dir) / 'src'
-            src_dir.mkdir(parents=True, exist_ok=True)
+            # Create src/utils directory for global code
+            utils_dir = Path(self.output_dir) / 'src' / 'utils'
+            utils_dir.mkdir(parents=True, exist_ok=True)
             
             for i, cpp_block in enumerate(ast.raw_cpp_code):
                 if cpp_block.location == "global":
                     # Generate a unique filename for each global C++ code block
                     filename = f"global_cpp_code_{i}.cpp"
-                    file_path = src_dir / filename
+                    file_path = utils_dir / filename
                     
                     # Write the raw C++ code directly to the file
                     file_path.write_text(cpp_block.code)
@@ -526,7 +522,7 @@ Apache-2.0
                 
                 # Generate CMake integration
                 cmake_content = self.onnx_generator.generate_cmake_integration(model, model.name)
-                cmake_path = self.get_output_path(f"{model.name}_onnx.cmake")
+                cmake_path = self.get_output_path("cmake", f"{model.name}_onnx.cmake")
                 generated_files.append(self.write_file(cmake_path, cmake_content))
                 
             except Exception as e:
@@ -548,12 +544,12 @@ Apache-2.0
                     
                     # Generate CMake integration for the node
                     cmake_content = self.onnx_generator.generate_cmake_integration(model, node.name)
-                    cmake_path = self.get_output_path(f"{node.name}_onnx.cmake")
+                    cmake_path = self.get_output_path("cmake", f"{node.name}_onnx.cmake")
                     generated_files.append(self.write_file(cmake_path, cmake_content))
                     
                     # Generate node integration code
                     node_integration = self.onnx_generator.generate_node_integration(model, node.name)
-                    node_path = self.get_output_path(f"{node.name}_main.cpp")
+                    node_path = self.get_output_path("src", "onnx", f"{node.name}_main.cpp")
                     generated_files.append(self.write_file(node_path, node_integration))
                     
                 except Exception as e:

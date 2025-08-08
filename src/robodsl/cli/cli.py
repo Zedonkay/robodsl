@@ -2,6 +2,7 @@
 
 import os
 import sys
+import stat
 import click
 import subprocess
 from pathlib import Path
@@ -88,7 +89,7 @@ node {node_base_name} {{
     
     // Timer for publishing
     timer publish_timer: 1.0 / publish_rate {{
-        callback: on_publish_timer
+        callback: "on_publish_timer"
     }}
     
     // C++ method for timer callback
@@ -116,7 +117,7 @@ node {node_base_name} {{
     // Subscriber
     subscriber /chatter: "std_msgs/msg/String" {{
         qos {{
-            reliability: 0
+            reliability: 1
             history: 1
             depth: 10
         }}
@@ -261,7 +262,7 @@ node {node_base_name} {{
     // Subscribers
     subscriber /chatter: "std_msgs/msg/String" {{
         qos {{
-            reliability: 0
+            reliability: 1
             history: 1
             depth: 10
         }}
@@ -279,11 +280,11 @@ node {node_base_name} {{
     
     // Timers
     timer main_timer: 1.0 {{
-        callback: on_main_timer
+        callback: "on_main_timer"
     }}
     
     timer status_timer: 5.0 {{
-        callback: on_status_timer
+        callback: "on_status_timer"
     }}
     
     // C++ methods
@@ -435,7 +436,7 @@ node {node_base_name} {{
     // Subscribers
     subscriber /raw_data: "std_msgs/msg/Float32MultiArray" {{
         qos {{
-            reliability: 0
+            reliability: 1
             history: 1
             depth: 10
         }}
@@ -443,7 +444,7 @@ node {node_base_name} {{
     
     // Timer
     timer process_timer: 1.0 / frequency {{
-        callback: on_process_timer
+        callback: "on_process_timer"
     }}
     
     // C++ methods
@@ -633,9 +634,6 @@ def init(project_name: str, template: str, output_dir: str) -> None:
         with open(main_config, 'w') as f:
             f.write(f"""// {project_name} RoboDSL Configuration
 
-// Project configuration
-project_name: {project_name}
-
 // Global includes (will be added to all nodes)
 include <rclcpp/rclcpp.hpp>
 include <std_msgs/msg/string.hpp>
@@ -665,7 +663,7 @@ node main_node {{
     // Subscriber
     subscriber /chatter: "std_msgs/msg/String" {{
         qos {{
-            reliability: 0
+            reliability: 1
             history: 1
             depth: 10
         }}
@@ -674,7 +672,7 @@ node main_node {{
     
     // Timer
     timer main_timer: 1.0 {{
-        callback: on_timer_callback
+        callback: "on_timer_callback"
     }}
     
     // C++ method for timer callback

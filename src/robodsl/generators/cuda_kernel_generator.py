@@ -53,6 +53,8 @@ class CudaKernelGenerator(BaseGenerator):
         hpp_path = self._generate_kernel_wrapper_header(kernel)
         generated_files.append(hpp_path)
         
+
+        
         return generated_files
     
     def _generate_kernel_header(self, kernel: KernelNode) -> Path:
@@ -67,13 +69,13 @@ class CudaKernelGenerator(BaseGenerator):
         
         try:
             content = self.render_template('kernel.cuh.jinja2', context)
-            cuh_path = self.get_output_path('include', f'{kernel.name}_kernel.cuh')
+            cuh_path = self.get_output_path('include', 'cuda', f'{kernel.name}_kernel.cuh')
             return self.write_file(cuh_path, content)
         except Exception as e:
             print(f"Template error for kernel {kernel.name}: {e}")
             # Fallback to simple header
             content = f"__global__ void {kernel.name}_kernel();"
-            cuh_path = self.get_output_path('include', f'{kernel.name}_kernel.cuh')
+            cuh_path = self.get_output_path('include', 'cuda', f'{kernel.name}_kernel.cuh')
             return self.write_file(cuh_path, content)
     
     def _generate_kernel_implementation(self, kernel: KernelNode) -> Path:
@@ -82,13 +84,13 @@ class CudaKernelGenerator(BaseGenerator):
         
         try:
             content = self.render_template('kernel.cu.jinja2', context)
-            cu_path = self.get_output_path('src', f'{kernel.name}_kernel.cu')
+            cu_path = self.get_output_path('src', 'cuda', f'{kernel.name}_kernel.cu')
             return self.write_file(cu_path, content)
         except Exception as e:
             print(f"Template error for kernel {kernel.name}: {e}")
             # Fallback to simple implementation
             content = f"__global__ void {kernel.name}_kernel() {{\n  // Implementation\n}}"
-            cu_path = self.get_output_path('src', f'{kernel.name}_kernel.cu')
+            cu_path = self.get_output_path('src', 'cuda', f'{kernel.name}_kernel.cu')
             return self.write_file(cu_path, content)
     
     def _generate_kernel_wrapper_header(self, kernel: KernelNode) -> Path:
@@ -96,15 +98,17 @@ class CudaKernelGenerator(BaseGenerator):
         context = self._prepare_kernel_context(kernel)
         
         try:
-            content = self.render_template('kernel.cuh.jinja2', context)  # Use same template as .cuh
-            hpp_path = self.get_output_path('include', f'{kernel.name}_wrapper.hpp')
+            content = self.render_template('kernel_wrapper.hpp.jinja2', context)
+            hpp_path = self.get_output_path('include', 'cuda', f'{kernel.name}_wrapper.hpp')
             return self.write_file(hpp_path, content)
         except Exception as e:
-            print(f"Template error for kernel {kernel.name}: {e}")
+            print(f"Template error for kernel {kernel.name} wrapper header: {e}")
             # Fallback to simple wrapper
             content = f"class {kernel.name}_wrapper {{\npublic:\n  void call();\n}};"
-            hpp_path = self.get_output_path('include', f'{kernel.name}_wrapper.hpp')
+            hpp_path = self.get_output_path('include', 'cuda', f'{kernel.name}_wrapper.hpp')
             return self.write_file(hpp_path, content)
+    
+
     
     def _prepare_kernel_context(self, kernel: KernelNode) -> Dict[str, Any]:
         """Prepare context for kernel template rendering."""

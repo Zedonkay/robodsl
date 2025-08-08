@@ -8,8 +8,8 @@ from rclpy.lifecycle import Node, State, TransitionCallbackReturn
 from rclpy.node import Node
 {% endif %}
 from rclpy.qos import QoSPresetProfiles, QoSProfile
-{% for msg_import in message_imports %}
-{{ msg_import }}
+{% for import in imports %}
+{{ import }}
 {% endfor %}
 
 class {{ class_name }}({% if is_lifecycle %}Node{% else %}Node{% endif %}):

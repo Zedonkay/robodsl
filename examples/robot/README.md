@@ -1,64 +1,52 @@
-# robot
+# robodsl_package
 
-A RoboDSL generated ROS2 package.
+Generated ROS2 package from RoboDSL specification
+
+## Overview
+
+This package contains 0 ROS2 nodes.
+
+## Package Structure
+
+```
+robodsl_package/
+├── CMakeLists.txt
+├── package.xml
+├── README.md
+├── src/
+│   └── robodsl_package/
+├── launch/
+│   └── robodsl_package_launch.py
+├── include/
+│   └── robodsl_package/
+├── config/
+│   └── params.yaml
+└── test/
+    └── test_robodsl_package.py
+```
+
+## Nodes
+
+
 
 ## Building
 
 ```bash
-# Build the package
-colcon build --packages-select robot
-
-# Source the workspace
-source install/setup.bash
+colcon build
 ```
 
 ## Running
 
 ```bash
-# Run the main node
-ros2 run robot robot_node
+# Source the workspace
+source install/setup.bash
 
-# Or use the launch file
-ros2 launch robot main_node.launch.py
+# Launch all nodes
+ros2 launch robodsl_package robodsl_package_launch.py
+
+# Or launch individual nodes
 ```
 
-## Development
+## License
 
-1. Edit the RoboDSL configuration in `robot.robodsl`
-2. Regenerate the C++ code: `robodsl generate robot.robodsl`
-3. Build and test your changes
-
-## Project Structure
-
-- `robot.robodsl` - Main RoboDSL configuration
-- `src/` - Generated C++ source files
-- `include/` - Generated C++ header files
-- `launch/` - Launch files
-- `config/` - Configuration files
-- `robodsl/` - Additional RoboDSL node definitions
-
-## Data Structures
-
-RoboDSL supports defining custom data structures:
-- **Structs**: Simple data containers
-- **Classes**: Object-oriented data structures with methods
-- **Enums**: Enumerated types
-- **Typedefs**: Type aliases
-- **Using declarations**: Modern C++ type aliases
-
-Example:
-```robodsl
-struct SensorData {
-    double timestamp;
-    std::vector<float> values;
-    bool valid;
-};
-
-enum class SensorType {
-    CAMERA,
-    LIDAR,
-    IMU
-};
-
-typedef std::vector<SensorData> SensorDataArray;
-```
+Apache-2.0 

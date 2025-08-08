@@ -43,63 +43,68 @@ class CppNodeGenerator(BaseGenerator):
         """Generate a C++ header file for a ROS2 node."""
         context = self._prepare_node_context(node)
         
-        # Determine subdirectory structure based on node name
-        # For subnodes like "robot.sensors.camera.depth", create "include/robot/sensors/camera/depth_node.hpp"
-        subdir = ""
-        if '.' in node.name:
-            # Extract the directory part (everything before the last dot)
-            parts = node.name.split('.')
-            if len(parts) > 1:
-                subdir = '/'.join(parts[:-1])  # All parts except the last one
+        # Use the same subdirectory structure as source files
+        subdir = self._get_node_subdirectory(node)
         
         try:
             content = self.render_template('node.hpp.jinja2', context)
-            # Create flat structure - subnodes are CLI-only for organization
-            if subdir:
-                # Use the base name (last part after dot) for flat structure
-                header_path = self.get_output_path('include', f'{node.name.split(".")[-1]}_node.hpp')
-            else:
-                header_path = self.get_output_path('include', f'{node.name}_node.hpp')
+            header_path = self.get_output_path('include', subdir, f'{node.name}_node.hpp')
             return self.write_file(header_path, content)
         except Exception as e:
             print(f"Template error for node {node.name}: {e}")
             # Fallback to simple header
             content = f"// Generated header for {node.name}\n"
-            if subdir:
-                header_path = self.get_output_path('include', f'{node.name.split(".")[-1]}_node.hpp')
-            else:
-                header_path = self.get_output_path('include', f'{node.name}_node.hpp')
+            header_path = self.get_output_path('include', subdir, f'{node.name}_node.hpp')
             return self.write_file(header_path, content)
     
     def _generate_node_source(self, node: NodeNode) -> Path:
         """Generate a C++ source file for a ROS2 node."""
         context = self._prepare_node_context(node)
         
-        # Determine subdirectory structure based on node name
-        # For subnodes like "robot.sensors.camera.depth", create "src/robot/sensors/camera/depth_node.cpp"
-        subdir = ""
-        if '.' in node.name:
-            # Extract the directory part (everything before the last dot)
-            parts = node.name.split('.')
-            if len(parts) > 1:
-                subdir = '/'.join(parts[:-1])  # All parts except the last one
+        # Determine subdirectory structure based on node name and type
+        # Organize nodes into subdirectories for better structure
+        subdir = self._get_node_subdirectory(node)
         
         try:
             content = self.render_template('node.cpp.jinja2', context)
-            if subdir:
-                source_path = self.get_output_path('src', subdir, f'{node.name.split(".")[-1]}_node.cpp')
-            else:
-                source_path = self.get_output_path('src', f'{node.name}_node.cpp')
+            source_path = self.get_output_path('src', subdir, f'{node.name}_node.cpp')
             return self.write_file(source_path, content)
         except Exception as e:
             print(f"Template error for node {node.name}: {e}")
             # Fallback to simple source
             content = f"// Generated source for {node.name}\n"
-            if subdir:
-                source_path = self.get_output_path('src', subdir, f'{node.name.split(".")[-1]}_node.cpp')
-            else:
-                source_path = self.get_output_path('src', f'{node.name}_node.cpp')
+            source_path = self.get_output_path('src', subdir, f'{node.name}_node.cpp')
             return self.write_file(source_path, content)
+    
+    def _get_node_subdirectory(self, node: NodeNode) -> str:
+        """Determine the appropriate subdirectory for a node based on its name and content."""
+        # For subnodes with dots, use the existing logic
+        if '.' in node.name:
+            parts = node.name.split('.')
+            if len(parts) > 1:
+                return '/'.join(parts[:-1])
+        
+        # For regular nodes, organize by type/function
+        node_name = node.name.lower()
+        
+        # Main/control nodes
+        if 'main' in node_name:
+            return 'nodes/main'
+        # Perception/vision nodes
+        elif 'perception' in node_name or 'vision' in node_name or 'camera' in node_name:
+            return 'nodes/perception'
+        # Navigation/movement nodes
+        elif 'navigation' in node_name or 'movement' in node_name or 'drive' in node_name:
+            return 'nodes/navigation'
+        # Safety/monitoring nodes
+        elif 'safety' in node_name or 'monitor' in node_name or 'emergency' in node_name:
+            return 'nodes/safety'
+        # Sensor nodes
+        elif 'sensor' in node_name or 'lidar' in node_name or 'imu' in node_name:
+            return 'nodes/sensors'
+        # Default to nodes directory
+        else:
+            return 'nodes'
     
     def _ros_type_to_cpp(self, ros_type: str) -> str:
         """Convert ROS type from slash notation to C++ namespace notation."""

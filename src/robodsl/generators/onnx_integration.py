@@ -28,12 +28,12 @@ class OnnxIntegrationGenerator:
         
         # Generate header file
         header_content = self._generate_header(model, node_name)
-        header_path = self.output_dir / f"{node_name}_onnx.hpp"
+        header_path = self.output_dir / "include" / "onnx" / f"{node_name}_onnx.hpp"
         generated_files[str(header_path)] = header_content
         
         # Generate implementation file
         impl_content = self._generate_implementation(model, node_name)
-        impl_path = self.output_dir / f"{node_name}_onnx.cpp"
+        impl_path = self.output_dir / "src" / "onnx" / f"{node_name}_onnx.cpp"
         generated_files[str(impl_path)] = impl_content
         
         return generated_files

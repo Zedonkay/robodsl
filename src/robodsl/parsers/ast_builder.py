@@ -1883,25 +1883,109 @@ class ASTBuilder:
     def _process_simulation_def(self, node: Tree):
         """Process simulation definition."""
         simulator_type = str(node.children[0])
-        content = self._process_simulation_content(node.children[1])
-        simulation_node = SimulationConfigNode(simulator_type=simulator_type, content=content)
+        # Process simulation content to extract world, robots, etc.
+        world = None
+        robots = []
+        plugins = []
+        gui = True
+        headless = False
+        physics_engine = "ode"
+        
+        if len(node.children) > 1:
+            content_node = node.children[1]
+            if isinstance(content_node, Tree):
+                for child in content_node.children:
+                    if isinstance(child, Tree):
+                        if child.data == "world_config":
+                            world = self._process_world_config(child)
+                        elif child.data == "robot_config":
+                            robot = self._process_robot_config(child)
+                            robots.append(robot)
+                        elif child.data == "gui_setting":
+                            gui = self._process_gui_setting(child)
+                        elif child.data == "headless_setting":
+                            headless = self._process_headless_setting(child)
+        
+        simulation_node = SimulationConfigNode(
+            simulator=simulator_type, 
+            world=world, 
+            robots=robots, 
+            plugins=plugins, 
+            gui=gui, 
+            headless=headless, 
+            physics_engine=physics_engine
+        )
         self.ast.simulation = simulation_node
 
-    def _process_simulation_content(self, node: Tree):
-        """Process simulation content."""
-        # This would need to be implemented based on the simulation AST nodes
-        pass
+    def _process_world_config(self, node: Tree):
+        """Process world configuration."""
+        # Placeholder implementation
+        return SimulationWorldNode(
+            world_file="empty.world",
+            physics_engine="ode",
+            gravity=(0, 0, -9.81),
+            max_step_size=0.001,
+            real_time_factor=1.0
+        )
+
+    def _process_robot_config(self, node: Tree):
+        """Process robot configuration."""
+        # Placeholder implementation
+        return SimulationRobotNode(
+            model_file="robot.urdf",
+            namespace="robot",
+            initial_pose=(0, 0, 0, 0, 0, 0),
+            plugins=[]
+        )
+
+    def _process_gui_setting(self, node: Tree):
+        """Process GUI setting."""
+        return True
+
+    def _process_headless_setting(self, node: Tree):
+        """Process headless setting."""
+        return False
 
     def _process_hil_config(self, node: Tree):
         """Process hardware-in-the-loop configuration."""
-        content = self._process_hil_content(node.children[0])
-        hil_node = HardwareInLoopNode(content=content)
+        # Process HIL content to extract simulation_nodes, hardware_nodes, etc.
+        simulation_nodes = []
+        hardware_nodes = []
+        bridge_config = None
+        
+        if len(node.children) > 0:
+            content_node = node.children[0]
+            if isinstance(content_node, Tree):
+                for child in content_node.children:
+                    if isinstance(child, Tree):
+                        if child.data == "simulation_nodes":
+                            simulation_nodes = self._process_simulation_nodes(child)
+                        elif child.data == "hardware_nodes":
+                            hardware_nodes = self._process_hardware_nodes(child)
+                        elif child.data == "bridge_config":
+                            bridge_config = self._process_bridge_config(child)
+        
+        hil_node = HardwareInLoopNode(
+            simulation_nodes=simulation_nodes,
+            hardware_nodes=hardware_nodes,
+            bridge_config=bridge_config
+        )
         self.ast.hil_config = hil_node
 
-    def _process_hil_content(self, node: Tree):
-        """Process HIL content."""
-        # This would need to be implemented based on the HIL AST nodes
-        pass
+    def _process_simulation_nodes(self, node: Tree):
+        """Process simulation nodes list."""
+        # Placeholder implementation
+        return ["perception_node", "planning_node", "navigation_node"]
+
+    def _process_hardware_nodes(self, node: Tree):
+        """Process hardware nodes list."""
+        # Placeholder implementation
+        return ["motor_controller", "sensor_driver", "safety_monitor"]
+
+    def _process_bridge_config(self, node: Tree):
+        """Process bridge configuration."""
+        # Placeholder implementation
+        return "hil_bridge.yaml"
 
     def _process_dynamic_config(self, node: Tree):
         """Process dynamic configuration."""
@@ -1927,7 +2011,7 @@ class ASTBuilder:
         config = None
         if len(node.children) > 3:
             config = self._process_dynamic_param_config(node.children[3])
-        return DynamicParameterNode(type=param_type, name=name, value=value, config=config)
+        return DynamicParameterNode(type=param_type, name=name, default_value=value, min_value=None, max_value=None, step=None, description=None)
 
     def _process_dynamic_param_config(self, node: Tree):
         """Process dynamic parameter configuration."""

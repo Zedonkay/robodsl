@@ -209,7 +209,7 @@ concept_requirement: cpp_type "operator" operator_symbol LPAR cpp_type (COMMA cp
 operator_symbol: PLUS_OP | MINUS_OP | MULTIPLY_OP | EQUALS | NOT_EQUALS | LESS_THAN | GREATER_THAN | LESS_EQUAL | GREATER_EQUAL | LEFT_SHIFT | RIGHT_SHIFT | FUNCTION_CALL
 REQUIRES: "requires"
 
-start: include_stmt* (package_def | data_structure | custom_interface | node_def | cpp_node_def | kernel_def | cuda_kernels_block | cuda_kernel_def | onnx_model | pipeline_def | simulation_config | dynamic_config | raw_cpp_code | advanced_cpp_feature (_NL|SEMICOLON)?)*
+start: include_stmt* (package_def | data_structure | custom_interface | node_def | cpp_node_def | kernel_def | cuda_kernels_block | onnx_model | pipeline_def | simulation_config | dynamic_config | raw_cpp_code | advanced_cpp_feature (_NL|SEMICOLON)?)*
 
 // Package definitions
 package_def: "package" NAME LBRACE package_content RBRACE
@@ -661,14 +661,9 @@ method_param_size_item: SIGNED_NUMBER | NAME | STRING | dotted_name
 // CUDA kernels block - Developer-friendly with comma-separated parameters
 cuda_kernels_block: CUDA_KERNELS LBRACE kernel_def* RBRACE
 
-// Standalone CUDA kernel definition
-cuda_kernel_def: "cuda_kernel" NAME LBRACE cuda_kernel_content RBRACE
-
 // NOTE: CUDA kernels must be defined at the global scope. They cannot be nested inside a namespace or class.
 kernel_def: KERNEL NAME LBRACE kernel_content RBRACE
-kernel_content: (block_size | grid_size | shared_memory | use_thrust | kernel_input_param | kernel_output_param | kernel_parameters | code_block | cuda_include)*
-
-cuda_kernel_content: (kernel | block_size | grid_size | shared_memory | use_thrust | inputs | outputs | kernel_input_param | kernel_output_param | kernel_parameters | code_block | cuda_include | use_streams | stream_count | synchronize | dynamic_parallelism | multi_gpu | gpu_count | gpu_memory_per_device | gpu_architectures | compute_capabilities | error_handling | performance_monitoring | memory_hierarchy | concurrent_kernel | advanced_synchronization | mixed_precision | memory_pool | context_management | driver_api | runtime_api)*
+kernel_content: (block_size | grid_size | shared_memory | use_thrust | kernel_input_param | kernel_output_param | kernel_parameters | code_block | cuda_include | use_streams | stream_count | synchronize | dynamic_parallelism | multi_gpu | gpu_count | gpu_memory_per_device | gpu_architectures | compute_capabilities | error_handling | performance_monitoring | memory_hierarchy | concurrent_kernel | advanced_synchronization | mixed_precision | memory_pool | context_management | driver_api | runtime_api)*
 
 kernel: "kernel" ":" (PIPE _NL cpp_raw_content* | PIPE CPP_BLOCK_PLACEHOLDER | code_block)
 
