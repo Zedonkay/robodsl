@@ -1,0 +1,19 @@
+{
+  "iconDefinitions": {
+    "robodslFile": { "iconPath": "../images/icon.png" }
+  },
+  "fileExtensions": {
+    "robodsl": "robodslFile"
+  },
+  "light": {
+    "fileExtensions": {
+      "robodsl": "robodslFile"
+    }
+  },
+  "highContrast": {
+    "fileExtensions": {
+      "robodsl": "robodslFile"
+    }
+  }
+}
+

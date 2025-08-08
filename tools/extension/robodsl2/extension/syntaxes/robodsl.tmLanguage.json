@@ -1,0 +1,109 @@
+{
+  "scopeName": "source.robodsl",
+  "patterns": [
+    { "include": "#brace-nesting-robodsl" },
+    { "include": "#code-embed-cpp" },
+    { "include": "#cpp-embed" },
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#colon-keywords" },
+    { "include": "#keywords" },
+    { "include": "#sections" }
+  ],
+  "repository": {
+    "brace-nesting-robodsl": {
+      "begin": "\\{",
+      "beginCaptures": {
+        "0": { "name": "punctuation.section.block.begin.brace.curly.robodsl" }
+      },
+      "end": "\\}",
+      "endCaptures": {
+        "0": { "name": "punctuation.section.block.end.brace.curly.robodsl" }
+      },
+      "contentName": "source.robodsl",
+      "patterns": [
+        { "include": "#brace-nesting-robodsl" }
+      ]
+    },
+    "code-embed-cpp": {
+      "name": "meta.embedded.block.cpp.robodsl",
+      "begin": "\\bcode\\b\\s*:?\\s*\\{",
+      "beginCaptures": {
+        "0": { "name": "keyword.other.code.robodsl" }
+      },
+      "end": "\\}",
+      "endCaptures": {
+        "0": { "name": "punctuation.section.block.end.brace.curly.robodsl" }
+      },
+      "contentName": "source.cpp",
+      "patterns": [
+        { "include": "#brace-nesting-cpp" },
+        { "include": "source.cpp" }
+      ]
+    },
+    "colon-keywords": {
+      "patterns": [
+        { "name": "keyword.control.robodsl", "match": "\\b(?:cpp|code)\\b\\s*:" }
+      ]
+    },
+    "cpp-embed": {
+      "name": "meta.embedded.block.cpp.robodsl",
+      "begin": "\\bcpp\\b\\s*:?\\s*\\{",
+      "beginCaptures": {
+        "0": { "name": "keyword.other.cpp.robodsl" }
+      },
+      "end": "\\}",
+      "endCaptures": {
+        "0": { "name": "punctuation.section.block.end.brace.curly.robodsl" }
+      },
+      "contentName": "source.cpp",
+      "patterns": [
+        { "include": "#brace-nesting-cpp" },
+        { "include": "source.cpp" }
+      ]
+    },
+    "brace-nesting-cpp": {
+      "begin": "\\{",
+      "beginCaptures": {
+        "0": { "name": "punctuation.section.block.begin.brace.curly.robodsl" }
+      },
+      "end": "\\}",
+      "endCaptures": {
+        "0": { "name": "punctuation.section.block.end.brace.curly.robodsl" }
+      },
+      "contentName": "source.cpp",
+      "patterns": [
+        { "include": "#brace-nesting-cpp" },
+        { "include": "source.cpp" }
+      ]
+    },
+    "comments": {
+      "patterns": [
+        { "name": "comment.line.double-slash.robodsl", "match": "//.*$" },
+        { "name": "comment.block.robodsl", "begin": "/\\*", "end": "\\*/" }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        { "name": "string.quoted.double.robodsl", "begin": '"', "end": '"', "patterns": [{ "match": "\\\\." }] }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        { "name": "constant.numeric.robodsl", "match": "-?\\b\\d+(?:\\.\\d+)?\\b" }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        { "name": "keyword.control.robodsl", "match": "\\b(package|node|parameter|publisher|subscriber|service|action|client|timer|remap|namespace|cpp|code|cuda_kernels|kernel|onnx_model|pipeline|qos|config|inputs|outputs|device|optimization)\\b" }
+      ]
+    },
+    "sections": {
+      "patterns": [
+        { "name": "entity.name.type.robodsl", "match": "\\b(node|kernel|onnx_model)\\s+[A-Za-z_][A-Za-z0-9_]*" }
+      ]
+    }
+  }
+}
+

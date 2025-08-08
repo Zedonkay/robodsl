@@ -1,0 +1,73 @@
+{
+  "name": "robodsl-vscode",
+  "displayName": "RoboDSL",
+  "description": "VS Code support for RoboDSL (language server: robodsl-ls)",
+  "version": "0.1.0",
+  "publisher": "local",
+  "repository": {
+    "type": "git",
+    "url": "https://example.com/robodsl-vscode.git"
+  },
+  "engines": {
+    "vscode": "^1.87.0"
+  },
+  "icon": "images/icon.png",
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:robodsl"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "robodsl",
+        "aliases": ["RoboDSL", "robodsl"],
+        "extensions": [".robodsl"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "robodsl",
+        "scopeName": "source.robodsl",
+        "path": "./syntaxes/robodsl.tmLanguage.json"
+      }
+    ],
+    "iconThemes": [
+      {
+        "id": "robodsl-icons",
+        "label": "RoboDSL Icons",
+        "path": "./fileicons/robodsl-icon-theme.json"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "RoboDSL",
+      "properties": {
+        "robodsl.languageServerPath": {
+          "type": "string",
+          "default": "robodsl-ls",
+          "description": "Path to robodsl language server executable (robodsl-ls)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.19",
+    "@types/vscode": "^1.87.0",
+    "typescript": "^5.4.0",
+    "vsce": "^2.15.0"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  }
+}
+
