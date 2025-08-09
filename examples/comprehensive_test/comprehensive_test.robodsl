@@ -565,7 +565,7 @@ node main_node {
         queue_size: 5
     }
     
-    publisher /detections: "DetectionResult" {
+    publisher /detections: "std_msgs/msg/String" {
         qos {
             reliability: reliable
             history: keep_last
@@ -594,7 +594,7 @@ node main_node {
     }
     
     // ROS2 Services
-    service /process_image: "ImageProcessing" {
+    service /process_image: "std_srvs/srv/SetBool" {
         qos {
             reliability: reliable
             history: keep_last
@@ -750,7 +750,7 @@ node perception_node {
     parameter string model_path = "models/detection.onnx"
     
     subscriber /camera/image_raw: "sensor_msgs/msg/Image"
-    publisher /detections: "DetectionResult"
+    publisher /detections: "std_msgs/msg/String"
     publisher /segmentation: "sensor_msgs/msg/Image"
     
     timer processing_timer: 0.033 {

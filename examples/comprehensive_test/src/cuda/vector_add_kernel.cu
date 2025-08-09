@@ -4,11 +4,16 @@
 #include <device_launch_parameters.h>
 #include <thrust/device_vector.h>
 
-#include "vector_add_kernel.cuh"
+#include "cuda/vector_add_kernel.cuh"
 #include <algorithm>
 #include <stdexcept>
 #include <thrust/device_vector.h>
 // NOTE: Thrust algorithms are used in this kernel.
+
+// Define uchar type if not already defined
+#ifndef __UCHAR_TYPE__
+typedef unsigned char uchar;
+#endif
 
 namespace robodsl {
 
@@ -80,8 +85,11 @@ bool vector_addKernel::initialize(const float** input, size_t input_size) {
         return false;
     }
     
+    // Declare status variable once
+    cudaError_t status;
+    
     // Copy input data to device
-    cudaError_t status = cudaMemcpyAsync(
+    status = cudaMemcpyAsync(
         d_a_, 
         input, 
         input_size_ * sizeof(float*), 
@@ -92,7 +100,7 @@ bool vector_addKernel::initialize(const float** input, size_t input_size) {
     if (!checkCudaError(status, "Copy a to device")) {
         return false;
     }
-    cudaError_t status = cudaMemcpyAsync(
+    status = cudaMemcpyAsync(
         d_b_, 
         input, 
         input_size_ * sizeof(float*), 
@@ -103,7 +111,7 @@ bool vector_addKernel::initialize(const float** input, size_t input_size) {
     if (!checkCudaError(status, "Copy b to device")) {
         return false;
     }
-    cudaError_t status = cudaMemcpyAsync(
+    status = cudaMemcpyAsync(
         d_size_, 
         input, 
         input_size_ * sizeof(int), 
@@ -130,7 +138,7 @@ bool vector_addKernel::initialize(const float** input, size_t input_size) {
     return true;
 }
 
-bool vector_addKernel::process(const void* parameters, size_t param_size, float** output, size_t output_size) {
+bool vector_addKernel::process(const float** parameters, size_t param_size, float** output, size_t output_size) {
     if (!initialized_) {
         return false;
     }
@@ -140,7 +148,25 @@ bool vector_addKernel::process(const void* parameters, size_t param_size, float*
         return false;
     }
     
+    // Declare status variable for this method
+    cudaError_t status;
+    
     // Copy parameters to device if needed
+    if (parameters && !parameters_copied_) {
+        status = cudaMemcpyAsync(
+            d_parameters_, 
+            parameters, 
+            param_size, 
+            cudaMemcpyHostToDevice,
+            stream_ ? *stream_ : 0
+        );
+        
+        if (!checkCudaError(status, "Copy parameters to device")) {
+            return false;
+        }
+        
+        parameters_copied_ = true;
+    }
     
     // Calculate grid and block dimensions
     int block_size = std::min(max_threads_per_block_, kBlockSize);
@@ -153,7 +179,7 @@ bool vector_addKernel::process(const void* parameters, size_t param_size, float*
     );
     
     // Check for kernel launch errors
-    cudaError_t status = cudaGetLastError();
+    status = cudaGetLastError();
     if (!checkCudaError(status, "Kernel launch")) {
         return false;
     }

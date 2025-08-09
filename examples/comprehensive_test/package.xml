@@ -1,15 +1,15 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>robodsl_package</name>
+  <name>robot_package</name>
   <version>0.1.0</version>
   <description>Generated ROS2 package from RoboDSL specification</description>
   <maintainer email="ishikhar@andrew.cmu.edu">Ishayu Shikhare</maintainer>
   <license>Apache-2.0</license>
 
-  <url type="website">https://github.com/robodsl/robodsl_package</url>
-  <url type="bugtracker">https://github.com/robodsl/robodsl_package/issues</url>
-  <url type="repository">https://github.com/robodsl/robodsl_package.git</url>
+  <url type="website">https://github.com/robodsl/robot_package</url>
+  <url type="bugtracker">https://github.com/robodsl/robot_package/issues</url>
+  <url type="repository">https://github.com/robodsl/robot_package.git</url>
 
   <author email="ishikhar@andrew.cmu.edu">Ishayu Shikhare</author>
 

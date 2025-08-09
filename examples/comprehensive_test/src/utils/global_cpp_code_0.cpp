@@ -1,3 +1,6 @@
+#include <algorithm>
+#include <cmath>
+
 
     // Additional C++ code that gets included in the generated files
     namespace robot_utils {

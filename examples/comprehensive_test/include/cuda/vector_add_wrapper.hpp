@@ -24,7 +24,7 @@
 #include <sensor_msgs/msg/image.hpp>
 
 // CUDA kernel header
-#include "vector_add_kernel.cuh"
+#include "cuda/vector_add_kernel.cuh"
 
 namespace robodsl {
 
@@ -308,7 +308,7 @@ public:
     bool processDataWithParameters(
         const std::vector<float>& input_data,
         std::vector<float>& output_data,
-        const void& parameters
+        const float*& parameters
     ) {
         if (!initialized_) {
             last_error_ = "Wrapper not initialized";
@@ -595,7 +595,7 @@ private:
         return true;
     }
     
-    bool launchKernelWithParameters(size_t num_elements, const void& parameters) {
+    bool launchKernelWithParameters(size_t num_elements, const float*& parameters) {
         auto start_time = std::chrono::high_resolution_clock::now();
         
         // Calculate grid and block dimensions

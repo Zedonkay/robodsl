@@ -7,17 +7,65 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <map>
+#include <cmath>
 
 // ROS2 includes
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_lifecycle/lifecycle_node.hpp>
 #include <rclcpp_lifecycle/lifecycle_publisher.hpp>
-#include <rclcpp_lifecycle/lifecycle_node_interface.hpp>
-#include <rclcpp_components/register_node_macro.hpp>
+#include <rclcpp_lifecycle/node_interfaces/lifecycle_node_interface.hpp>
+#include <rclcpp_action/rclcpp_action.hpp>
+// #include <rclcpp_components/register_node_macro.hpp>  // Optional component registration
+
+// CUDA includes (if needed)
+
+// Type definitions
+#ifndef __UCHAR_TYPE__
+typedef unsigned char uchar;
+#endif
+
+// Forward declarations for custom types
+struct DetectionResult {
+    int id;
+    float confidence;
+    float x, y, width, height;
+};
+
+struct CudaParams {
+    int device_id;
+    bool enable_processing;
+};
+
+// Include geometry_msgs for PoseStamped
+#include <geometry_msgs/msg/pose_stamped.hpp>
+
+// Placeholder for missing action types
+namespace navigation_msgs { namespace action {
+    struct NavigationAction {
+        struct Goal {
+            geometry_msgs::msg::PoseStamped target_pose;
+        };
+        struct Result {
+            bool success;
+        };
+        struct Feedback {
+            geometry_msgs::msg::PoseStamped current_pose;
+        };
+    };
+}} // namespace navigation_msgs::action
+
+// Alias for convenience
+using NavigationAction = navigation_msgs::action::NavigationAction;
+
+// OpenCV forward declarations (minimal)
+namespace cv {
+    class Mat;
+}
 
 // Message includes
-#include <sensor_msgs/msg/Image.hpp>
-#include <DetectionResult.hpp>
+#include <std_msgs/msg/string.hpp>
+#include <sensor_msgs/msg/image.hpp>
 
 
 // Global C++ code blocks (passed through as-is)
@@ -68,13 +116,13 @@ public:
      * @brief process_frame - User-defined C++ method
      * @param code Input parameter of type void     */
     void process_frame(
-void code    );
+    );
 
     // Raw C++ code blocks (passed through as-is)
 
 private:
     // ROS2 publishers
-    rclcpp::Publisher<DetectionResult>::SharedPtr detections_pub_;
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr detections_pub_;
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr segmentation_pub_;
 
     // ROS2 subscribers
@@ -87,10 +135,16 @@ private:
     // ROS2 timers
     rclcpp::TimerBase::SharedPtr processing_timer_timer_;
 
+    // Lifecycle state tracking
+
+    // Additional node state variables
+    
+    // Message storage for processing
+
     // Parameters
     bool enable_gpu_;
-    float confidence_threshold_;
-    string model_path_;
+    double confidence_threshold_;
+    std::string model_path_;
 
     // CUDA members
 
@@ -107,7 +161,7 @@ private:
 } // namespace robodsl
 
 // Register component
-#include <rclcpp_components/register_node_macro.hpp>
+// #include <rclcpp_components/register_node_macro.hpp>  // Optional component registration
 RCLCPP_COMPONENTS_REGISTER_NODE(::robodsl::Perception_nodeNode)
 
 #endif // PERCEPTION_NODE_NODE_HPP

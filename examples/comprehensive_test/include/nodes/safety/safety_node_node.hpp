@@ -7,18 +7,66 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <map>
+#include <cmath>
 
 // ROS2 includes
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_lifecycle/lifecycle_node.hpp>
 #include <rclcpp_lifecycle/lifecycle_publisher.hpp>
-#include <rclcpp_lifecycle/lifecycle_node_interface.hpp>
-#include <rclcpp_components/register_node_macro.hpp>
+#include <rclcpp_lifecycle/node_interfaces/lifecycle_node_interface.hpp>
+#include <rclcpp_action/rclcpp_action.hpp>
+// #include <rclcpp_components/register_node_macro.hpp>  // Optional component registration
+
+// CUDA includes (if needed)
+
+// Type definitions
+#ifndef __UCHAR_TYPE__
+typedef unsigned char uchar;
+#endif
+
+// Forward declarations for custom types
+struct DetectionResult {
+    int id;
+    float confidence;
+    float x, y, width, height;
+};
+
+struct CudaParams {
+    int device_id;
+    bool enable_processing;
+};
+
+// Include geometry_msgs for PoseStamped
+#include <geometry_msgs/msg/pose_stamped.hpp>
+
+// Placeholder for missing action types
+namespace navigation_msgs { namespace action {
+    struct NavigationAction {
+        struct Goal {
+            geometry_msgs::msg::PoseStamped target_pose;
+        };
+        struct Result {
+            bool success;
+        };
+        struct Feedback {
+            geometry_msgs::msg::PoseStamped current_pose;
+        };
+    };
+}} // namespace navigation_msgs::action
+
+// Alias for convenience
+using NavigationAction = navigation_msgs::action::NavigationAction;
+
+// OpenCV forward declarations (minimal)
+namespace cv {
+    class Mat;
+}
 
 // Message includes
-#include <std_msgs/msg/Bool.hpp>
-#include <geometry_msgs/msg/Twist.hpp>
-#include <sensor_msgs/msg/LaserScan.hpp>
+#include <std_msgs/msg/bool.hpp>
+#include <sensor_msgs/msg/laser_scan.hpp>
+#include <geometry_msgs/msg/twist.hpp>
 
 
 // Global C++ code blocks (passed through as-is)
@@ -70,7 +118,7 @@ public:
      * @brief safety_check - User-defined C++ method
      * @param code Input parameter of type void     */
     void safety_check(
-void code    );
+    );
 
     // Raw C++ code blocks (passed through as-is)
 
@@ -90,9 +138,15 @@ private:
     // ROS2 timers
     rclcpp::TimerBase::SharedPtr safety_timer_timer_;
 
+    // Lifecycle state tracking
+
+    // Additional node state variables
+    
+    // Message storage for processing
+
     // Parameters
-    float max_acceleration_;
-    float emergency_stop_distance_;
+    double max_acceleration_;
+    double emergency_stop_distance_;
     bool enable_emergency_stop_;
 
     // CUDA members
@@ -110,7 +164,7 @@ private:
 } // namespace robodsl
 
 // Register component
-#include <rclcpp_components/register_node_macro.hpp>
+// #include <rclcpp_components/register_node_macro.hpp>  // Optional component registration
 RCLCPP_COMPONENTS_REGISTER_NODE(::robodsl::Safety_nodeNode)
 
 #endif // SAFETY_NODE_NODE_HPP

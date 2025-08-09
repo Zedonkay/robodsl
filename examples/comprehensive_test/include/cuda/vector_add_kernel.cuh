@@ -13,6 +13,11 @@
 #include <cstdint>
 #include <string>
 
+// Define uchar type if not already defined
+#ifndef __UCHAR_TYPE__
+typedef unsigned char uchar;
+#endif
+
 
 
 namespace robodsl {
@@ -60,7 +65,7 @@ public:
      * @return std::vector<float*> Processed output data
      */
     // Process the input data using the CUDA kernel (host pointer and size)
-    bool process(const void* parameters, size_t param_size, float** output, size_t output_size);
+    bool process(const float** parameters, size_t param_size, float** output, size_t output_size);
     
     /**
      * @brief Get the last error message, if any
@@ -92,6 +97,8 @@ private:
 
     // Parameter state (for kernels with parameters)
     bool parameters_copied_ = false;
+    float* last_parameters_{};
+    float** d_parameters_ = nullptr;
 
     cudaStream_t* stream_ = nullptr;  //!< CUDA stream for async operations
     bool initialized_ = false;        //!< Whether the kernel is properly initialized

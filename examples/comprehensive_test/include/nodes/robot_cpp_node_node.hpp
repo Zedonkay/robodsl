@@ -7,16 +7,64 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <map>
+#include <cmath>
 
 // ROS2 includes
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_lifecycle/lifecycle_node.hpp>
 #include <rclcpp_lifecycle/lifecycle_publisher.hpp>
-#include <rclcpp_lifecycle/lifecycle_node_interface.hpp>
-#include <rclcpp_components/register_node_macro.hpp>
+#include <rclcpp_lifecycle/node_interfaces/lifecycle_node_interface.hpp>
+#include <rclcpp_action/rclcpp_action.hpp>
+// #include <rclcpp_components/register_node_macro.hpp>  // Optional component registration
+
+// CUDA includes (if needed)
+
+// Type definitions
+#ifndef __UCHAR_TYPE__
+typedef unsigned char uchar;
+#endif
+
+// Forward declarations for custom types
+struct DetectionResult {
+    int id;
+    float confidence;
+    float x, y, width, height;
+};
+
+struct CudaParams {
+    int device_id;
+    bool enable_processing;
+};
+
+// Include geometry_msgs for PoseStamped
+#include <geometry_msgs/msg/pose_stamped.hpp>
+
+// Placeholder for missing action types
+namespace navigation_msgs { namespace action {
+    struct NavigationAction {
+        struct Goal {
+            geometry_msgs::msg::PoseStamped target_pose;
+        };
+        struct Result {
+            bool success;
+        };
+        struct Feedback {
+            geometry_msgs::msg::PoseStamped current_pose;
+        };
+    };
+}} // namespace navigation_msgs::action
+
+// Alias for convenience
+using NavigationAction = navigation_msgs::action::NavigationAction;
+
+// OpenCV forward declarations (minimal)
+namespace cv {
+    class Mat;
+}
 
 // Message includes
-#include <std_msgs/msg/String.hpp>
+#include <std_msgs/msg/string.hpp>
 
 
 // Global C++ code blocks (passed through as-is)
@@ -78,6 +126,12 @@ private:
 
     // ROS2 timers
 
+    // Lifecycle state tracking
+
+    // Additional node state variables
+    
+    // Message storage for processing
+
     // Parameters
     int cpp_param_;
 
@@ -96,7 +150,7 @@ private:
 } // namespace robodsl
 
 // Register component
-#include <rclcpp_components/register_node_macro.hpp>
+// #include <rclcpp_components/register_node_macro.hpp>  // Optional component registration
 RCLCPP_COMPONENTS_REGISTER_NODE(::robodsl::Robot_cpp_nodeNode)
 
 #endif // ROBOT_CPP_NODE_NODE_HPP
