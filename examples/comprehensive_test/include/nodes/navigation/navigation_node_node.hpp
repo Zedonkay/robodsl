@@ -9,16 +9,23 @@
 #include <vector>
 #include <map>
 #include <cmath>
+#include <functional>
+#include <thread>
+#include <atomic>
 
 // ROS2 includes
 #include <rclcpp/rclcpp.hpp>
-#include <rclcpp_lifecycle/lifecycle_node.hpp>
-#include <rclcpp_lifecycle/lifecycle_publisher.hpp>
-#include <rclcpp_lifecycle/node_interfaces/lifecycle_node_interface.hpp>
-#include <rclcpp_action/rclcpp_action.hpp>
-// #include <rclcpp_components/register_node_macro.hpp>  // Optional component registration
+
+// Message includes
+#include <geometry_msgs/msg/pose_stamped.hpp>
+#include <geometry_msgs/msg/twist.hpp>
+#include <nav_msgs/msg/path.hpp>
+
+// Additional ROS2 includes
 
 // CUDA includes (if needed)
+
+// OpenCV includes (if needed)
 
 // Type definitions
 #ifndef __UCHAR_TYPE__
@@ -26,79 +33,16 @@ typedef unsigned char uchar;
 #endif
 
 // Forward declarations for custom types
-struct DetectionResult {
-    int id;
-    float confidence;
-    float x, y, width, height;
-};
 
-struct CudaParams {
-    int device_id;
-    bool enable_processing;
-};
+// CUDA parameter structs
 
-// Include geometry_msgs for PoseStamped
-#include <geometry_msgs/msg/pose_stamped.hpp>
-
-// Placeholder for missing action types
-namespace navigation_msgs { namespace action {
-    struct NavigationAction {
-        struct Goal {
-            geometry_msgs::msg::PoseStamped target_pose;
-        };
-        struct Result {
-            bool success;
-        };
-        struct Feedback {
-            geometry_msgs::msg::PoseStamped current_pose;
-        };
-    };
-}} // namespace navigation_msgs::action
-
-// Alias for convenience
-using NavigationAction = navigation_msgs::action::NavigationAction;
-
-// OpenCV forward declarations (minimal)
-namespace cv {
-    class Mat;
-}
-
-// Message includes
-#include <geometry_msgs/msg/pose_stamped.hpp>
-// #include <nav_msgs/msg/path.hpp>  // Custom message - would need to be generated separately
-#include <geometry_msgs/msg/twist.hpp>
-
-
-// Global C++ code blocks (passed through as-is)
-
-    // Additional C++ code that gets included in the generated files
-    namespace robot_utils {
-        // Utility functions
-        template<typename T>
-        T clamp(T value, T min, T max) {
-            return std::max(min, std::min(max, value));
-        }
-        
-        double radians_to_degrees(double radians) {
-            return radians * 180.0 / M_PI;
-        }
-        
-        double degrees_to_radians(double degrees) {
-            return degrees * M_PI / 180.0;
-        }
-    }
-
-
-namespace robodsl {
-
+namespace navigation {
 
 class Navigation_nodeNode : public rclcpp::Node {
 public:
-    // Referenced global CUDA kernels
     explicit Navigation_nodeNode(const rclcpp::NodeOptions& options = rclcpp::NodeOptions());
-    ~Navigation_nodeNode() override;
+    virtual ~Navigation_nodeNode();
 
-    // Lifecycle node interface
 
     // Timer callbacks
     void on_navigation_timer();
@@ -108,74 +52,47 @@ public:
 
     // Service callbacks
 
-    // Action server callbacks
-    rclcpp_action::GoalResponse handle__navigate_to_pose_goal(
-        const rclcpp_action::GoalUUID& uuid,
-        std::shared_ptr<const NavigationAction::Goal> goal);
-        
-    rclcpp_action::CancelResponse handle__navigate_to_pose_cancel(
-        const std::shared_ptr<rclcpp_action::ServerGoalHandle<NavigationAction>> goal_handle);
-        
-    void handle__navigate_to_pose_accepted(
-        const std::shared_ptr<rclcpp_action::ServerGoalHandle<NavigationAction>> goal_handle);
-    
-    void execute__navigate_to_pose(
-        const std::shared_ptr<rclcpp_action::ServerGoalHandle<NavigationAction>> goal_handle);
 
-    // CUDA kernels
 
     // User-defined C++ methods
-    /**
-     * @brief navigation_step - User-defined C++ method
-     * @param code Input parameter of type void     */
-    void navigation_step(
-    );
-
-    // Raw C++ code blocks (passed through as-is)
 
 private:
-    // ROS2 publishers
-    rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
-    // Custom message publisher for nav_msgs::msg::Path - would need message generation
+    // Publishers
+    std::shared_ptr<rclcpp::Publisher<geometry_msgs::msg::Twist>> cmd_vel_pub_;
+    std::shared_ptr<rclcpp::Publisher<nav_msgs::msg::Path>> path_pub_;
 
-    // ROS2 subscribers
+    // Subscribers
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr goal_pose_sub_;
 
-    // ROS2 services
+    // Services
 
-    // ROS2 action servers
-    rclcpp_action::Server<NavigationAction>::SharedPtr _navigate_to_pose_action_server_;
 
-    // ROS2 timers
+    // Timers
     rclcpp::TimerBase::SharedPtr navigation_timer_timer_;
 
     // Lifecycle state tracking
 
-    // Additional node state variables
     
-    // Message storage for processing
+    // Processing control
+    bool enable_processing_{true};
 
     // Parameters
-    double max_velocity_;
-    double goal_tolerance_;
+    // Parameter max_velocity of type float not supported in member variables
+    // Parameter goal_tolerance of type float not supported in member variables
     bool enable_obstacle_avoidance_;
 
-    // CUDA members
+    // Latest message storage
 
-    // Private methods
+    // CUDA kernel member variables
+
+    // Helper methods
     void init_parameters();
     void init_publishers();
     void init_subscribers();
     void init_services();
-    void init_action_servers();
     void init_timers();
-    void init_cuda();
 };
 
-} // namespace robodsl
-
-// Register component
-// #include <rclcpp_components/register_node_macro.hpp>  // Optional component registration
-RCLCPP_COMPONENTS_REGISTER_NODE(::robodsl::Navigation_nodeNode)
+} // namespace navigation
 
 #endif // NAVIGATION_NODE_NODE_HPP

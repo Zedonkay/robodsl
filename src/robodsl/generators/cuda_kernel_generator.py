@@ -153,9 +153,18 @@ class CudaKernelGenerator(BaseGenerator):
         # Prepare member variables for the wrapper class
         members = []
         for param in kernel_parameters:
+            # Fix parameter types - ensure they're proper CUDA types
+            param_type = param['type']
+            # If the type already has *, keep it as is; otherwise add * for device pointer
+            if '*' not in param_type:
+                param_type = param_type
+            else:
+                # Remove extra * if it exists (fix float** -> float*)
+                param_type = param_type.replace('**', '*')
+            
             members.append({
                 'name': param['device_name'],
-                'type': param['type'],  # Don't add extra * - the template will handle it
+                'type': param_type,
                 'original_name': param['name']
             })
         
@@ -163,7 +172,7 @@ class CudaKernelGenerator(BaseGenerator):
             'kernel_name': kernel.name,
             'namespace': 'robodsl',
             'include_guard': f"{kernel.name.upper()}_KERNEL_HPP",
-            'include_path': f"{kernel.name}_kernel.cuh",
+            'include_path': f"cuda/{kernel.name}_kernel.cuh",
             'kernel_parameters': kernel_parameters,
             'parameters': kernel_param_defs,  # Always use kernel parameter definitions for struct
             'input_params': input_params,

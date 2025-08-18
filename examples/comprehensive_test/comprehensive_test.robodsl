@@ -16,58 +16,61 @@ include <cuda_runtime.h>
 include <device_launch_parameters.h>
 
 // ============================================================================
-// CUSTOM MESSAGE DEFINITIONS
+// CUSTOM MESSAGE DEFINITIONS (NOT YET SUPPORTED)
 // ============================================================================
-message CustomImage {
-    uint32 width;
-    uint32 height;
-    uint8 data[];
-    string format = "RGB";
-    float64 timestamp;
-}
+// TODO: Custom message generation is not yet implemented in the robodsl tool
+// For now, these are commented out and we use standard ROS2 messages instead
 
-message DetectionResult {
-    uint32 id;
-    string label;
-    float64 confidence;
-    float64 bbox_x;
-    float64 bbox_y;
-    float64 bbox_width;
-    float64 bbox_height;
-}
+// message CustomImage {
+//     uint32 width;
+//     uint32 height;
+//     uint8 data[];
+//     string format = "RGB";
+//     float64 timestamp;
+// }
 
-// ============================================================================
-// CUSTOM SERVICE DEFINITIONS
-// ============================================================================
-service ImageProcessing {
-    uint32 image_id;
-    string operation;
-    float64 threshold = 0.5;
-    ---
-    bool success;
-    string error_message;
-    uint32 processed_id;
-}
+// message DetectionResult {
+//     uint32 id;
+//     string label;
+//     float64 confidence;
+//     float64 bbox_x;
+//     float64 bbox_y;
+//     float64 bbox_width;
+//     float64 bbox_height;
+// }
 
 // ============================================================================
-// CUSTOM ACTION DEFINITIONS
+// CUSTOM SERVICE DEFINITIONS (NOT YET SUPPORTED)
 // ============================================================================
-action NavigationAction {
-    float64 target_x;
-    float64 target_y;
-    float64 target_z;
-    float64 target_yaw;
-    ---
-    float64 current_x;
-    float64 current_y;
-    float64 current_z;
-    float64 current_yaw;
-    float64 distance_to_goal;
-    ---
-    bool reached_goal;
-    float64 final_distance;
-    string status_message;
-}
+// service ImageProcessing {
+//     uint32 image_id;
+//     string operation;
+//     float64 threshold = 0.5;
+//     ---
+//     bool success;
+//     string error_message;
+//     uint32 processed_id;
+// }
+
+// ============================================================================
+// CUSTOM ACTION DEFINITIONS (NOT YET SUPPORTED)
+// ============================================================================
+// action NavigationAction {
+//     float64 target_x;
+//     float64 target_y;
+//     float64 target_z;
+//     float64 target_yaw;
+//     ---
+//     float64 current_x;
+//     float64 current_y;
+//     float64 current_z;
+//     float64 current_yaw;
+//     float64 distance_to_goal;
+//     ---
+//     bool reached_goal;
+//     float64 final_distance;
+//     string status_message;
+// }
 
 // ============================================================================
 // ADVANCED C++ FEATURES
@@ -810,7 +813,7 @@ node navigation_node {
     publisher /cmd_vel: "geometry_msgs/msg/Twist"
     publisher /path: "nav_msgs/msg/Path"
     
-    action /navigate_to_pose: "NavigationAction"
+    // action /navigate_to_pose: "NavigationAction"  // TODO: Custom actions not yet supported
     
     timer navigation_timer: 0.1 {
         callback: "navigation_step"

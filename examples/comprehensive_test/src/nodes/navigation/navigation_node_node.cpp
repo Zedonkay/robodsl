@@ -5,35 +5,17 @@
 #include <vector>
 #include <map>
 #include <cmath>
-
-// Global C++ code blocks (passed through as-is)
-
-// Additional C++ code that gets included in the generated files
-namespace robot_utils {
-    // Utility functions
-    template<typename T>
-    T clamp(T value, T min, T max) {
-        return std::max(min, std::min(max, value));
-    }
-
-    double radians_to_degrees(double radians) {
-        return radians * 180.0 / M_PI;
-    }
-
-    double degrees_to_radians(double degrees) {
-        return degrees * M_PI / 180.0;
-    }
-}
+#include <stdexcept>
 
 
-namespace robodsl {
+namespace navigation {
 
 Navigation_nodeNode::Navigation_nodeNode(const rclcpp::NodeOptions& options)
 : rclcpp::Node("navigation_node", options)
 {
     // Initialize parameters
-    this->declare_parameter<double>("max_velocity", 2.0);
-    this->declare_parameter<double>("goal_tolerance", 0.1);
+    this->declare_parameter<std::string>("max_velocity", "2.0");
+    this->declare_parameter<std::string>("goal_tolerance", "0.1");
     this->declare_parameter<bool>("enable_obstacle_avoidance", true);
 
     // Create publishers
@@ -42,7 +24,11 @@ Navigation_nodeNode::Navigation_nodeNode(const rclcpp::NodeOptions& options)
         cmd_vel_pub_ = this->create_publisher<geometry_msgs::msg::Twist>(
             "/cmd_vel", qos);
     }
-    // Custom publisher for nav_msgs::msg::Path - would need message generation
+    {
+        rclcpp::QoS qos(10);
+        path_pub_ = this->create_publisher<nav_msgs::msg::Path>(
+            "/path", qos);
+    }
 
     // Create subscribers
     {
@@ -59,101 +45,51 @@ Navigation_nodeNode::Navigation_nodeNode(const rclcpp::NodeOptions& options)
         );
     }
 
-    // Create services with proper error handling
+    // Create services
     
-    // Initialize action servers
-    {
-        using namespace std::placeholders;
-        
-        try {
-            auto handle_goal = [this](
-                const rclcpp_action::GoalUUID& uuid,
-                std::shared_ptr<const NavigationAction::Goal> goal
-            ) -> rclcpp_action::GoalResponse {
-                RCLCPP_INFO(this->get_logger(), 
-                    "Received goal request for action /navigate_to_pose");
-                (void)uuid;
-                (void)goal;
-                return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
-            };
-            
-            auto handle_cancel = [this](
-                const std::shared_ptr<rclcpp_action::ServerGoalHandle<NavigationAction>> goal_handle
-            ) -> rclcpp_action::CancelResponse {
-                RCLCPP_INFO(this->get_logger(), 
-                    "Received request to cancel goal for action /navigate_to_pose");
-                (void)goal_handle;
-                return rclcpp_action::CancelResponse::ACCEPT;
-            };
-            
-            auto handle_accepted = [this](
-                const std::shared_ptr<rclcpp_action::ServerGoalHandle<NavigationAction>> goal_handle
-            ) {
-                std::thread{
-                    std::bind(&Navigation_nodeNode::execute__navigate_to_pose, this, _1), 
-                    goal_handle
-                }.detach();
-            };
-            
-            _navigate_to_pose_action_server_ = rclcpp_action::create_server<NavigationAction>(
-                this->get_node_base_interface(),
-                this->get_node_clock_interface(),
-                this->get_node_logging_interface(),
-                this->get_node_waitables_interface(),
-                "/navigate_to_pose",
-                handle_goal,
-                handle_cancel,
-                handle_accepted
-            );
-            
-            RCLCPP_INFO(this->get_logger(), 
-                "Created action server: %s", "/navigate_to_pose");
-                
-        } catch (const std::exception& e) {
-            RCLCPP_ERROR(this->get_logger(), 
-                "Failed to create action server /navigate_to_pose: %s", e.what());
-            throw;
-        }
-    }
+
+    // Create timers
+    navigation_timer_timer_ = this->create_wall_timer(
+        std::chrono::duration<double>(0.1),
+        std::bind(&Navigation_nodeNode::on_navigation_timer, this)
+    );
+
 }
 
 Navigation_nodeNode::~Navigation_nodeNode()
 {
-    // Clean up CUDA resources if enabled
-    
-    // Cleanup CUDA resources if needed
 }
 
 
 // Timer callbacks
 void Navigation_nodeNode::on_navigation_timer()
 {
-    // Timer callback implementation
     RCLCPP_DEBUG(this->get_logger(), "Timer navigation_timer triggered");
+    
+    // Custom timer implementation
+    RCLCPP_DEBUG(this->get_logger(), "Custom timer navigation_timer executed");
 }
-
 
 // Subscriber callbacks
 void Navigation_nodeNode::on_goal_pose(const geometry_msgs::msg::PoseStamped::ConstSharedPtr msg)
 {
-    // Store the latest message for processing
     
-    // Process message
     RCLCPP_DEBUG(this->get_logger(), "Received message on /goal_pose");
 }
 
-
 // Service callbacks
 
-// CUDA methods
+
 
 // User-defined C++ methods
-void Navigation_nodeNode::navigation_step(
-) {
-    process_navigation_step();
-        
+
+} // namespace navigation
+
+int main(int argc, char* argv[])
+{
+    rclcpp::init(argc, argv);
+    auto node = std::make_shared<navigation::Navigation_nodeNode>();
+    rclcpp::spin(node);
+    rclcpp::shutdown();
+    return 0;
 }
-
-// Raw C++ code blocks already placed at file scope above
-
-} // namespace robodsl

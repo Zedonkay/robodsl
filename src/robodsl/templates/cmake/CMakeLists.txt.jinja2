@@ -1,14 +1,16 @@
-cmake_minimum_required(VERSION {{ cmake_minimum_version }})
+cmake_minimum_required(VERSION 3.8)
 project({{ package_name }} VERSION {{ version }})
 
 # Set C++ standard
-set(CMAKE_CXX_STANDARD {{ cxx_standard }})
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Compiler flags
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   # Only add warning flags for C++ (not CUDA)
-  add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-Wall;-Wextra;-Wpedantic>)
+  add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-Wall>)
+  add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-Wextra>)
+  add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-Wpedantic>)
   add_compile_options(-fPIC)
 endif()
 
@@ -32,8 +34,8 @@ find_package({{ msg_dep }} REQUIRED)
 {% if has_cuda %}
 find_package(CUDA REQUIRED)
 enable_language(CUDA)
-set(CMAKE_CUDA_ARCHITECTURES {{ cuda_arch }})
-set(CMAKE_CUDA_STANDARD {{ cuda_std }})
+set(CMAKE_CUDA_ARCHITECTURES 60 70 75 80 86)
+set(CMAKE_CUDA_STANDARD 17)
 
 # CUDA compiler flags
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O3")
@@ -52,15 +54,11 @@ include_directories(include)
 include_directories({{ include_dir }})
 {% endfor %}
 
-# Create library for common code
-add_library(${PROJECT_NAME}_lib STATIC
-{% for header in header_files %}
-  {{ header }}
-{% endfor %}
-)
+# Create library for common code (INTERFACE for header-only library)
+add_library(${PROJECT_NAME}_lib INTERFACE)
 
-target_include_directories(${PROJECT_NAME}_lib PUBLIC include)
-ament_target_dependencies(${PROJECT_NAME}_lib rclcpp)
+target_include_directories(${PROJECT_NAME}_lib INTERFACE include)
+ament_target_dependencies(${PROJECT_NAME}_lib INTERFACE rclcpp)
 
 {% if has_cuda %}
 # CUDA library
@@ -80,35 +78,33 @@ target_link_libraries(${PROJECT_NAME}_cuda ${PROJECT_NAME}_lib)
 {% endif %}
 
 # Create executables
-{% for executable in executables %}
-add_executable({{ executable }}
-{% for cpp_source in cpp_sources %}
-  {{ cpp_source }}
-{% endfor %}
+{% for exec in executables %}
+add_executable({{ exec.name }}
+  {{ exec.source }}
 )
 
-target_link_libraries({{ executable }} ${PROJECT_NAME}_lib)
+target_link_libraries({{ exec.name }} ${PROJECT_NAME}_lib)
 {% if has_cuda %}
-target_link_libraries({{ executable }} ${PROJECT_NAME}_cuda)
+target_link_libraries({{ exec.name }} ${PROJECT_NAME}_cuda)
 {% endif %}
 
-ament_target_dependencies({{ executable }} rclcpp)
+ament_target_dependencies({{ exec.name }} rclcpp)
 {% for dep in dependencies %}
-ament_target_dependencies({{ executable }} {{ dep }})
+ament_target_dependencies({{ exec.name }} {{ dep }})
 {% endfor %}
 {% for msg_dep in message_dependencies %}
-ament_target_dependencies({{ executable }} {{ msg_dep }})
+ament_target_dependencies({{ exec.name }} {{ msg_dep }})
 {% endfor %}
 
 {% endfor %}
 
-# Python modules
-python_install_package(${PROJECT_NAME})
+# Python modules (if any)
+# python_install_package(${PROJECT_NAME})  # Disabled for C++-only packages
 
 # Install targets
 install(TARGETS
-{% for executable in executables %}
-  {{ executable }}
+{% for exec in executables %}
+  {{ exec.name }}
 {% endfor %}
   ${PROJECT_NAME}_lib
 {% if has_cuda %}
@@ -123,11 +119,11 @@ install(DIRECTORY include/
   FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h" PATTERN "*.cuh"
 )
 
-# Install Python modules
-install(DIRECTORY
-  ${PROJECT_NAME}
-  DESTINATION lib/python3/dist-packages/
-)
+# Install Python modules (if any)
+# install(DIRECTORY
+#   ${PROJECT_NAME}
+#   DESTINATION lib/python3/dist-packages/
+# )
 
 # Install launch files
 install(DIRECTORY
@@ -146,6 +142,9 @@ if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
   
+  find_package(ament_cmake_gtest REQUIRED)
+  find_package(ament_cmake_pytest REQUIRED)
+  
   {% for test_dep in test_dependencies %}
   find_package({{ test_dep }} REQUIRED)
   {% endfor %}
@@ -157,11 +156,11 @@ if(BUILD_TESTING)
   ament_target_dependencies(test_{{ test_source.split('/')[-1].replace('.cpp', '') }} rclcpp)
   {% endfor %}
   
-  # Python tests
-  ament_add_pytest_test(test_${PROJECT_NAME}_python
-    ${PROJECT_NAME}/test_${PROJECT_NAME}.py
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  )
+  # Python tests (disabled for C++-only packages)
+  # ament_add_pytest_test(test_${PROJECT_NAME}_python
+  #   ${PROJECT_NAME}/test_${PROJECT_NAME}.py
+  #   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  # )
 endif()
 
 # Documentation

@@ -5,35 +5,17 @@
 #include <vector>
 #include <map>
 #include <cmath>
-
-// Global C++ code blocks (passed through as-is)
-
-// Additional C++ code that gets included in the generated files
-namespace robot_utils {
-    // Utility functions
-    template<typename T>
-    T clamp(T value, T min, T max) {
-        return std::max(min, std::min(max, value));
-    }
-
-    double radians_to_degrees(double radians) {
-        return radians * 180.0 / M_PI;
-    }
-
-    double degrees_to_radians(double degrees) {
-        return degrees * M_PI / 180.0;
-    }
-}
+#include <stdexcept>
 
 
-namespace robodsl {
+namespace safety {
 
 Safety_nodeNode::Safety_nodeNode(const rclcpp::NodeOptions& options)
 : rclcpp::Node("safety_node", options)
 {
     // Initialize parameters
-    this->declare_parameter<double>("max_acceleration", 2.0);
-    this->declare_parameter<double>("emergency_stop_distance", 0.5);
+    this->declare_parameter<std::string>("max_acceleration", "2.0");
+    this->declare_parameter<std::string>("emergency_stop_distance", "0.5");
     this->declare_parameter<bool>("enable_emergency_stop", true);
 
     // Create publishers
@@ -76,57 +58,58 @@ Safety_nodeNode::Safety_nodeNode(const rclcpp::NodeOptions& options)
         );
     }
 
-    // Create services with proper error handling
+    // Create services
     
-    // Initialize action servers
+
+    // Create timers
+    safety_timer_timer_ = this->create_wall_timer(
+        std::chrono::duration<double>(0.01),
+        std::bind(&Safety_nodeNode::on_safety_timer, this)
+    );
+
 }
 
 Safety_nodeNode::~Safety_nodeNode()
 {
-    // Clean up CUDA resources if enabled
-    
-    // Cleanup CUDA resources if needed
 }
 
 
 // Timer callbacks
 void Safety_nodeNode::on_safety_timer()
 {
-    // Timer callback implementation
     RCLCPP_DEBUG(this->get_logger(), "Timer safety_timer triggered");
+    
+    // Custom timer implementation
+    RCLCPP_DEBUG(this->get_logger(), "Custom timer safety_timer executed");
 }
-
 
 // Subscriber callbacks
 void Safety_nodeNode::on_sensor_data(const sensor_msgs::msg::LaserScan::ConstSharedPtr msg)
 {
-    // Store the latest message for processing
+    latest_scan_ = msg;
     
-    // Process message
     RCLCPP_DEBUG(this->get_logger(), "Received message on /sensor_data");
 }
-
 void Safety_nodeNode::on_cmd_vel(const geometry_msgs::msg::Twist::ConstSharedPtr msg)
 {
-    // Store the latest message for processing
     latest_twist_ = msg;
     
-    // Process message
     RCLCPP_DEBUG(this->get_logger(), "Received message on /cmd_vel");
 }
 
-
 // Service callbacks
 
-// CUDA methods
+
 
 // User-defined C++ methods
-void Safety_nodeNode::safety_check(
-) {
-    process_safety_check();
-        
+
+} // namespace safety
+
+int main(int argc, char* argv[])
+{
+    rclcpp::init(argc, argv);
+    auto node = std::make_shared<safety::Safety_nodeNode>();
+    rclcpp::spin(node);
+    rclcpp::shutdown();
+    return 0;
 }
-
-// Raw C++ code blocks already placed at file scope above
-
-} // namespace robodsl

@@ -9,16 +9,22 @@
 #include <vector>
 #include <map>
 #include <cmath>
+#include <functional>
+#include <thread>
+#include <atomic>
 
 // ROS2 includes
 #include <rclcpp/rclcpp.hpp>
-#include <rclcpp_lifecycle/lifecycle_node.hpp>
-#include <rclcpp_lifecycle/lifecycle_publisher.hpp>
-#include <rclcpp_lifecycle/node_interfaces/lifecycle_node_interface.hpp>
-#include <rclcpp_action/rclcpp_action.hpp>
-// #include <rclcpp_components/register_node_macro.hpp>  // Optional component registration
+
+// Message includes
+#include <sensor_msgs/msg/image.hpp>
+#include <std_msgs/msg/string.hpp>
+
+// Additional ROS2 includes
 
 // CUDA includes (if needed)
+
+// OpenCV includes (if needed)
 
 // Type definitions
 #ifndef __UCHAR_TYPE__
@@ -26,78 +32,16 @@ typedef unsigned char uchar;
 #endif
 
 // Forward declarations for custom types
-struct DetectionResult {
-    int id;
-    float confidence;
-    float x, y, width, height;
-};
 
-struct CudaParams {
-    int device_id;
-    bool enable_processing;
-};
+// CUDA parameter structs
 
-// Include geometry_msgs for PoseStamped
-#include <geometry_msgs/msg/pose_stamped.hpp>
-
-// Placeholder for missing action types
-namespace navigation_msgs { namespace action {
-    struct NavigationAction {
-        struct Goal {
-            geometry_msgs::msg::PoseStamped target_pose;
-        };
-        struct Result {
-            bool success;
-        };
-        struct Feedback {
-            geometry_msgs::msg::PoseStamped current_pose;
-        };
-    };
-}} // namespace navigation_msgs::action
-
-// Alias for convenience
-using NavigationAction = navigation_msgs::action::NavigationAction;
-
-// OpenCV forward declarations (minimal)
-namespace cv {
-    class Mat;
-}
-
-// Message includes
-#include <std_msgs/msg/string.hpp>
-#include <sensor_msgs/msg/image.hpp>
-
-
-// Global C++ code blocks (passed through as-is)
-
-    // Additional C++ code that gets included in the generated files
-    namespace robot_utils {
-        // Utility functions
-        template<typename T>
-        T clamp(T value, T min, T max) {
-            return std::max(min, std::min(max, value));
-        }
-        
-        double radians_to_degrees(double radians) {
-            return radians * 180.0 / M_PI;
-        }
-        
-        double degrees_to_radians(double degrees) {
-            return degrees * M_PI / 180.0;
-        }
-    }
-
-
-namespace robodsl {
-
+namespace perception {
 
 class Perception_nodeNode : public rclcpp::Node {
 public:
-    // Referenced global CUDA kernels
     explicit Perception_nodeNode(const rclcpp::NodeOptions& options = rclcpp::NodeOptions());
-    ~Perception_nodeNode() override;
+    virtual ~Perception_nodeNode();
 
-    // Lifecycle node interface
 
     // Timer callbacks
     void on_processing_timer();
@@ -107,61 +51,48 @@ public:
 
     // Service callbacks
 
-    // Action server callbacks
 
-    // CUDA kernels
 
     // User-defined C++ methods
-    /**
-     * @brief process_frame - User-defined C++ method
-     * @param code Input parameter of type void     */
-    void process_frame(
-    );
-
-    // Raw C++ code blocks (passed through as-is)
 
 private:
-    // ROS2 publishers
-    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr detections_pub_;
-    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr segmentation_pub_;
+    // Publishers
+    std::shared_ptr<rclcpp::Publisher<std_msgs::msg::String>> detections_pub_;
+    std::shared_ptr<rclcpp::Publisher<sensor_msgs::msg::Image>> segmentation_pub_;
 
-    // ROS2 subscribers
+    // Subscribers
     rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_raw_sub_;
 
-    // ROS2 services
+    // Services
 
-    // ROS2 action servers
 
-    // ROS2 timers
+    // Timers
     rclcpp::TimerBase::SharedPtr processing_timer_timer_;
 
     // Lifecycle state tracking
 
-    // Additional node state variables
     
-    // Message storage for processing
+    // Processing control
+    bool enable_processing_{true};
 
     // Parameters
     bool enable_gpu_;
-    double confidence_threshold_;
-    std::string model_path_;
+    // Parameter confidence_threshold of type float not supported in member variables
+    // Parameter model_path of type string not supported in member variables
 
-    // CUDA members
+    // Latest message storage
+    sensor_msgs::msg::Image::ConstSharedPtr latest_image_;
 
-    // Private methods
+    // CUDA kernel member variables
+
+    // Helper methods
     void init_parameters();
     void init_publishers();
     void init_subscribers();
     void init_services();
-    void init_action_servers();
     void init_timers();
-    void init_cuda();
 };
 
-} // namespace robodsl
-
-// Register component
-// #include <rclcpp_components/register_node_macro.hpp>  // Optional component registration
-RCLCPP_COMPONENTS_REGISTER_NODE(::robodsl::Perception_nodeNode)
+} // namespace perception
 
 #endif // PERCEPTION_NODE_NODE_HPP

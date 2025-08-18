@@ -9,17 +9,29 @@
 #include <vector>
 #include <map>
 #include <cmath>
+#include <functional>
+#include <thread>
+#include <atomic>
 
 // ROS2 includes
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_lifecycle/lifecycle_node.hpp>
 #include <rclcpp_lifecycle/lifecycle_publisher.hpp>
 #include <rclcpp_lifecycle/node_interfaces/lifecycle_node_interface.hpp>
-#include <rclcpp_action/rclcpp_action.hpp>
-// #include <rclcpp_components/register_node_macro.hpp>  // Optional component registration
+#include <rclcpp/rclcpp.hpp>
+
+// Message includes
+#include <geometry_msgs/msg/pose_stamped.hpp>
+#include <sensor_msgs/msg/image.hpp>
+#include <std_msgs/msg/string.hpp>
+#include <std_srvs/srv/set_bool.hpp>
+
+// Additional ROS2 includes
+#include <rclcpp/rclcpp.hpp>
 
 // CUDA includes (if needed)
-#include <cuda_runtime.h>
+
+// OpenCV includes (if needed)
 
 // Type definitions
 #ifndef __UCHAR_TYPE__
@@ -27,110 +39,17 @@ typedef unsigned char uchar;
 #endif
 
 // Forward declarations for custom types
-struct DetectionResult {
-    int id;
-    float confidence;
-    float x, y, width, height;
-};
 
-struct CudaParams {
-    int device_id;
-    bool enable_processing;
-};
+// CUDA parameter structs
 
-// Include geometry_msgs for PoseStamped
-#include <geometry_msgs/msg/pose_stamped.hpp>
-
-// Placeholder for missing action types
-namespace navigation_msgs { namespace action {
-    struct NavigationAction {
-        struct Goal {
-            geometry_msgs::msg::PoseStamped target_pose;
-        };
-        struct Result {
-            bool success;
-        };
-        struct Feedback {
-            geometry_msgs::msg::PoseStamped current_pose;
-        };
-    };
-}} // namespace navigation_msgs::action
-
-// Alias for convenience
-using NavigationAction = navigation_msgs::action::NavigationAction;
-
-// OpenCV forward declarations (minimal)
-namespace cv {
-    class Mat;
-}
-
-// Message includes
-#include <std_msgs/msg/string.hpp>
-#include <geometry_msgs/msg/pose_stamped.hpp>
-#include <sensor_msgs/msg/image.hpp>
-#include <std_srvs/srv/set_bool.hpp>
-
-
-// Global C++ code blocks (passed through as-is)
-
-    // Additional C++ code that gets included in the generated files
-    namespace robot_utils {
-        // Utility functions
-        template<typename T>
-        T clamp(T value, T min, T max) {
-            return std::max(min, std::min(max, value));
-        }
-        
-        double radians_to_degrees(double radians) {
-            return radians * 180.0 / M_PI;
-        }
-        
-        double degrees_to_radians(double degrees) {
-            return degrees * M_PI / 180.0;
-        }
-    }
-
-
-namespace robodsl {
-
-// CUDA kernel parameter structs
-// Struct for vector_add kernel parameters
-struct Vector_addParameters {
-    float* a;
-    float* b;
-    int size;
-    float* c;
-};
-// Struct for matrix_multiply kernel parameters
-struct Matrix_multiplyParameters {
-    float* a;
-    float* b;
-    int m;
-    int n;
-    int k;
-    float* c;
-};
-// Struct for image_filter kernel parameters
-struct Image_filterParameters {
-    uchar* input_image;
-    int width;
-    int height;
-    uchar* output_image;
-};
+namespace robot {
 
 class Main_nodeNode : public rclcpp_lifecycle::LifecycleNode {
 public:
-    // Referenced global CUDA kernels
-    /**
-     * Referenced global CUDA kernels:
-     *      *   - vector_add
-     *      *   - matrix_multiply
-     *      *   - image_filter
-     *      */
     explicit Main_nodeNode(const rclcpp::NodeOptions& options = rclcpp::NodeOptions());
-    ~Main_nodeNode() override;
+    virtual ~Main_nodeNode();
 
-    // Lifecycle node interface
+    // Lifecycle callbacks
     rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn 
     on_configure(const rclcpp_lifecycle::State& previous_state) override;
     
@@ -145,9 +64,6 @@ public:
     
     rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn 
     on_shutdown(const rclcpp_lifecycle::State& previous_state) override;
-    
-    rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn 
-    on_error(const rclcpp_lifecycle::State& previous_state) override;
 
     // Timer callbacks
     void on_main_timer();
@@ -162,168 +78,58 @@ public:
         const std::shared_ptr<std_srvs::srv::SetBool::Request> request,
         std::shared_ptr<std_srvs::srv::SetBool::Response> response);
 
-    // Action server callbacks
 
-    // CUDA kernels
-    /**
-     * @brief Process data using CUDA acceleration
-     * @param input Input data to process
-     * @param parameters Processing parameters
-     * @return Processed output data
-     * @note This is a virtual method that can be overridden by derived classes
-     * to provide custom CUDA-accelerated processing. The default implementation
-     * will return an empty vector if not overridden.
-     */
-    virtual std::vector<float> processWithCuda(
-        const std::vector<float>& input,
-        const CudaParams& parameters);
-    
-    /**
-     * @brief Initialize CUDA resources
-     * @return true if initialization was successful, false otherwise
-     * @note Override this method to perform custom CUDA initialization.
-     * Call the base class implementation if you override this method.
-     */
-    virtual bool initializeCuda();
-    
-    /**
-     * @brief Clean up CUDA resources
-     * @note Override this method to perform custom CUDA cleanup.
-     * Call the base class implementation if you override this method.
-     */
-    virtual void cleanupCuda();
-    
-    // Individual CUDA kernel declarations
-    /**
-     * @brief Process data using CUDA kernel: vector_add
-     * @note This method provides a C++ interface to the vector_add CUDA kernel.
-     * The actual CUDA kernel implementation should be provided in a .cu file.
-     */
-    virtual std::vector<float> call__kernel(
-        const std::vector<float>& input,
-        const Vector_addParameters& parameters    );
-    /**
-     * @brief Process data using CUDA kernel: matrix_multiply
-     * @note This method provides a C++ interface to the matrix_multiply CUDA kernel.
-     * The actual CUDA kernel implementation should be provided in a .cu file.
-     */
-    virtual std::vector<float> call__kernel(
-        const std::vector<float>& input,
-        const Matrix_multiplyParameters& parameters    );
-    /**
-     * @brief Process data using CUDA kernel: image_filter
-     * @note This method provides a C++ interface to the image_filter CUDA kernel.
-     * The actual CUDA kernel implementation should be provided in a .cu file.
-     */
-    virtual std::vector<float> call__kernel(
-        const std::vector<float>& input,
-        const Image_filterParameters& parameters    );
-    // NOTE: This node uses Thrust algorithms in at least one CUDA kernel.
-    // Thrust includes disabled due to namespace conflicts
-    // #include <thrust/device_vector.h>
-    // #include <thrust/transform.h>
-    // #include <thrust/functional.h>
 
     // User-defined C++ methods
-    /**
-     * @brief on_timer_callback - User-defined C++ method
-     * @param current_time Input parameter of type rclcpp::Time     */
-    void on_timer_callback(
-rclcpp::Time current_time    );
-    /**
-     * @brief on_processing_callback - User-defined C++ method
-     * @param code Input parameter of type void     */
-    void on_processing_callback(
-    );
-    /**
-     * @brief process_image - User-defined C++ method
-     * @param image_msg Input parameter of type const sensor_msgs::msg::Image::SharedPtr     * @param detections Output parameter of type std::vector<DetectionResult>&     */
-    void process_image(
-const sensor_msgs::msg::Image::SharedPtr image_msg, std::vector<DetectionResult>&& detections    );
-    /**
-     * @brief process_image_gpu - User-defined C++ method
-     * @param image Input parameter of type const cv::Mat&     * @param detections Output parameter of type std::vector<DetectionResult>&     */
-    void process_image_gpu(
-const cv::Mat& image, std::vector<DetectionResult>&& detections    );
-    /**
-     * @brief run_detection_inference - User-defined C++ method
-     * @param image Input parameter of type const cv::Mat&     * @param detections Output parameter of type std::vector<DetectionResult>&     */
-    void run_detection_inference(
-const cv::Mat& image, std::vector<DetectionResult>&& detections    );
-
-    // Raw C++ code blocks (passed through as-is)
 
 private:
-    // ROS2 publishers
+    // Publishers
     std::shared_ptr<rclcpp_lifecycle::LifecyclePublisher<std_msgs::msg::String>> chatter_pub_;
     std::shared_ptr<rclcpp_lifecycle::LifecyclePublisher<sensor_msgs::msg::Image>> image_processed_pub_;
     std::shared_ptr<rclcpp_lifecycle::LifecyclePublisher<std_msgs::msg::String>> detections_pub_;
 
-    // ROS2 subscribers
+    // Subscribers
     rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_raw_sub_;
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr goal_pose_sub_;
 
-    // ROS2 services
+    // Services
     rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr process_image_srv_;
 
-    // ROS2 action servers
 
-    // ROS2 timers
+    // Timers
     rclcpp::TimerBase::SharedPtr main_timer_timer_;
     rclcpp::TimerBase::SharedPtr processing_timer_timer_;
 
     // Lifecycle state tracking
-    bool is_active_;
-    bool main_timer_was_active_;
-    bool processing_timer_was_active_;
+    std::atomic<bool> is_active_{false};
+    bool main_timer_was_active_{false};
+    bool processing_timer_was_active_{false};
 
-    // Additional node state variables
-    bool cuda_device_id_;
-    bool enable_processing_;
     
-    // Message storage for processing
+    // Processing control
+    bool enable_processing_{true};
 
     // Parameters
     int count_;
     double rate_;
-    std::string name_;
+    // Parameter name of type string not supported in member variables
     bool enabled_;
-    std::vector<double> array_coords_;
-    std::map<std::string, double> dict_config_;
+    // Parameter array_coords of type list not supported in member variables
+    // Parameter dict_config of type dict not supported in member variables
 
-    // CUDA members
-    //  members
-    float* a_;
-    float* b_;
-    int size_;
-    float* c_;
-    //  members
-    float* a_;
-    float* b_;
-    int m_;
-    int n_;
-    int k_;
-    float* c_;
-    //  members
-    uchar* input_image_;
-    int width_;
-    int height_;
-    uchar* output_image_;
+    // Latest message storage
+    sensor_msgs::msg::Image::ConstSharedPtr latest_image_;
 
-    // Private methods
+    // CUDA kernel member variables
+
+    // Helper methods
     void init_parameters();
     void init_publishers();
     void init_subscribers();
     void init_services();
-    void init_action_servers();
     void init_timers();
-    void init_cuda();
 };
 
-} // namespace robodsl
-
-// Register component
-// #include <rclcpp_components/register_node_macro.hpp>  // Optional component registration
-RCLCPP_COMPONENTS_REGISTER_NODE(::robodsl::Main_nodeNode)
+} // namespace robot
 
 #endif // MAIN_NODE_NODE_HPP

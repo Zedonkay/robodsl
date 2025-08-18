@@ -76,7 +76,7 @@ robodsl_package/
 - **Type**: Standard Node- **Publishers**: 2
 - **Subscribers**: 1
 - **Services**: 0
-- **Actions**: 1
+- **Actions**: 0
 - **Timers**: 1
 - **Parameters**: 3
 

@@ -182,8 +182,9 @@ class MainGenerator(BaseGenerator):
                     filename = f"global_cpp_code_{i}.cpp"
                     file_path = utils_dir / filename
                     
-                    # Write the raw C++ code directly to the file
-                    file_path.write_text(cpp_block.code)
+                    # Add necessary includes and write the raw C++ code
+                    content = "#include <algorithm>\n#include <cmath>\n\n" + cpp_block.code
+                    file_path.write_text(content)
                     generated_files.append(file_path)
                     
                     if self.debug:

@@ -65,6 +65,10 @@ class BaseGenerator(ABC):
         env.filters['indent'] = lambda text, n: '\n'.join(' ' * n + line if line.strip() else line 
                                                 for line in text.split('\n'))
         
+        # Add dedent filter to remove common leading whitespace
+        import textwrap
+        env.filters['dedent'] = lambda text: textwrap.dedent(text)
+        
         return env
     
     @abstractmethod

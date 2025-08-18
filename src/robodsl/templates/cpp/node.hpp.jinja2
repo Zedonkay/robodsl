@@ -7,30 +7,74 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <map>
+#include <cmath>
+#include <functional>
+#include <thread>
+#include <atomic>
 
 // ROS2 includes
 #include <rclcpp/rclcpp.hpp>
+{% if is_lifecycle %}
 #include <rclcpp_lifecycle/lifecycle_node.hpp>
 #include <rclcpp_lifecycle/lifecycle_publisher.hpp>
-#include <rclcpp_lifecycle/lifecycle_node_interface.hpp>
-#include <rclcpp_components/register_node_macro.hpp>
+#include <rclcpp_lifecycle/node_interfaces/lifecycle_node_interface.hpp>
+{% endif %}
+{% if actions %}
+#include <rclcpp_action/rclcpp_action.hpp>
+{% endif %}
+{% if services %}
+#include <rclcpp/rclcpp.hpp>
+{% endif %}
 
 // Message includes
 {% for include in includes %}
+{% if include.startswith('#include <std_') or include.startswith('#include <sensor_') or include.startswith('#include <geometry_') or include.startswith('#include <nav_') %}
 {{ include }}
+{% endif %}
 {% endfor %}
 
-{% if ros2_includes %}
 // Additional ROS2 includes
 {% for include in ros2_includes %}
 {{ include }}
 {% endfor %}
+
+// CUDA includes (if needed)
+{% if cuda_kernels %}
+#include <cuda_runtime.h>
+#include <device_launch_parameters.h>
 {% endif %}
 
-{% if global_cpp_code %}
-// Global C++ code blocks (passed through as-is)
-{% for cpp_block in global_cpp_code %}
-{{ cpp_block.code }}
+// OpenCV includes (if needed)
+{% if opencv_needed %}
+#include <opencv2/opencv.hpp>
+#include <cv_bridge/cv_bridge.h>
+{% endif %}
+
+// Type definitions
+#ifndef __UCHAR_TYPE__
+typedef unsigned char uchar;
+#endif
+
+// Forward declarations for custom types
+{% if custom_types %}
+{% for type in custom_types %}
+struct {{ type.name }} {
+    {% for field in type.fields %}
+    {{ field.type }} {{ field.name }}{% if field.default_value %} = {{ field.default_value }}{% endif %};
+    {% endfor %}
+};
+{% endfor %}
+{% endif %}
+
+// CUDA parameter structs
+{% if cuda_kernels %}
+{% for kernel in cuda_kernels %}
+struct {{ kernel.struct_name }} {
+    {% for param in kernel.parameters %}
+    {{ param.type }} {{ param.name }};
+    {% endfor %}
+};
 {% endfor %}
 {% endif %}
 
@@ -38,36 +82,13 @@
 namespace {{ namespace }} {
 {% endif %}
 
-{% if cuda_kernels %}
-// CUDA kernel parameter structs
-{% for kernel in cuda_kernels %}
-{% if kernel.struct_name %}
-// Struct for {{ kernel.kernel_name }} kernel parameters
-struct {{ kernel.struct_name }} {
-{% for param in kernel.parameters %}
-    {{ param.type }} {{ param.name }};
-{% endfor %}
-};
-{% endif %}
-{% endfor %}
-{% endif %}
-
 class {{ class_name }} : public {{ base_class }} {
 public:
-    // Referenced global CUDA kernels
-    {% if referenced_kernels %}
-    /**
-     * Referenced global CUDA kernels:
-     * {% for k in referenced_kernels %}
-     *   - {{ k }}
-     * {% endfor %}
-     */
-    {% endif %}
     explicit {{ class_name }}(const rclcpp::NodeOptions& options = rclcpp::NodeOptions());
-    ~{{ class_name }}() override;
+    virtual ~{{ class_name }}();
 
-    // Lifecycle node interface
     {% if is_lifecycle %}
+    // Lifecycle callbacks
     rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn 
     on_configure(const rclcpp_lifecycle::State& previous_state) override;
     
@@ -82,9 +103,6 @@ public:
     
     rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn 
     on_shutdown(const rclcpp_lifecycle::State& previous_state) override;
-    
-    rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn 
-    on_error(const rclcpp_lifecycle::State& previous_state) override;
     {% endif %}
 
     // Timer callbacks
@@ -104,155 +122,147 @@ public:
         std::shared_ptr<{{ srv.srv_type }}::Response> response);
     {% endfor %}
 
-    // Action server callbacks
+    {% if actions %}
+    // Action callbacks
     {% for action in actions %}
-    rclcpp_action::GoalResponse handle_{{ action.name }}_goal(
-        const rclcpp_action::GoalUUID& uuid,
-        std::shared_ptr<const {{ action.action_type }}::Goal> goal);
-        
-    rclcpp_action::CancelResponse handle_{{ action.name }}_cancel(
-        const std::shared_ptr<rclcpp_action::ServerGoalHandle<{{ action.action_type }}>> goal_handle);
-        
-    void handle_{{ action.name }}_accepted(
-        const std::shared_ptr<rclcpp_action::ServerGoalHandle<{{ action.action_type }}>> goal_handle);
-    
-    void execute_{{ action.name }}(
+    void execute_{{ action.name | replace('/', '_') }}(
         const std::shared_ptr<rclcpp_action::ServerGoalHandle<{{ action.action_type }}>> goal_handle);
     {% endfor %}
-
-    // CUDA kernels
-    {% if cuda_kernels %}
-    /**
-     * @brief Process data using CUDA acceleration
-     * @param input Input data to process
-     * @param parameters Processing parameters
-     * @return Processed output data
-     * @note This is a virtual method that can be overridden by derived classes
-     * to provide custom CUDA-accelerated processing. The default implementation
-     * will return an empty vector if not overridden.
-     */
-    virtual std::vector<{{ cuda_default_output_type|default('float') }}> processWithCuda(
-        const std::vector<{{ cuda_default_input_type|default('float') }}>& input,
-        const {{ cuda_default_param_type|default('CudaParams') }}& parameters);
-    
-    /**
-     * @brief Initialize CUDA resources
-     * @return true if initialization was successful, false otherwise
-     * @note Override this method to perform custom CUDA initialization.
-     * Call the base class implementation if you override this method.
-     */
-    virtual bool initializeCuda();
-    
-    /**
-     * @brief Clean up CUDA resources
-     * @note Override this method to perform custom CUDA cleanup.
-     * Call the base class implementation if you override this method.
-     */
-    virtual void cleanupCuda();
-    
-    // Individual CUDA kernel declarations
-    {% for kernel in cuda_kernels %}
-    /**
-     * @brief {{ kernel.description|default("Process data using CUDA kernel: " + kernel.kernel_name) }}
-     * @note This method provides a C++ interface to the {{ kernel.kernel_name }} CUDA kernel.
-     * The actual CUDA kernel implementation should be provided in a .cu file.
-     */
-    virtual void {{ kernel.kernel_name }}(
-        {%- for param in kernel.parameters -%}
-        {{ param.type }} {{ param.name }}{% if not loop.last %}, {% endif %}
-        {%- endfor -%}
-    );
-    {% endfor %}
-    {% if cuda_kernels|selectattr('use_thrust')|list %}
-    // NOTE: This node uses Thrust algorithms in at least one CUDA kernel.
-    #include <thrust/device_vector.h>
-    #include <thrust/transform.h>
-    #include <thrust/functional.h>
     {% endif %}
+
+    {% if cuda_kernels %}
+    // CUDA methods
+    virtual bool initializeCuda();
+    virtual void cleanupCuda();
+    virtual std::vector<float> processWithCuda(
+        const std::vector<float>& input,
+        const CudaParams& parameters);
+    
+    // CUDA kernel wrappers
+    {% for kernel in cuda_kernels %}
+    virtual std::vector<float> call_{{ kernel.name }}_kernel(
+        const std::vector<float>& input,
+        const {{ kernel.struct_name }}& parameters);
+    {% endfor %}
     {% endif %}
 
     // User-defined C++ methods
     {% for method in cpp_methods %}
-    /**
-     * @brief {{ method.name }} - User-defined C++ method
-     {% for input in method.inputs %}
-     * @param {{ input.name }} Input parameter of type {{ input.type }}{% if input.size_expr %} with size {{ input.size_expr }}{% endif %}
-     {% endfor %}
-     {% for output in method.outputs %}
-     * @param {{ output.name }} Output parameter of type {{ output.type }}{% if output.size_expr %} with size {{ output.size_expr }}{% endif %}
-     {% endfor %}
-     */
     void {{ method.name }}(
-        {% for input in method.inputs %}{{ input.type }} {{ input.name }}{% if input.size_expr %}[{{ input.size_expr }}]{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}
-        {% if method.inputs and method.outputs %}, {% endif %}
-        {% for output in method.outputs %}{{ output.type }}& {{ output.name }}{% if output.size_expr %}[{{ output.size_expr }}]{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}
+        {% set valid_inputs = [] -%}
+        {%- for input in method.inputs -%}
+            {%- if input.type != 'void' -%}
+                {%- set _ = valid_inputs.append(input) -%}
+            {%- endif -%}
+        {%- endfor -%}
+        {% for input in valid_inputs %}{{ input.type }} {{ input.name }}{% if not loop.last %}, {% endif %}{% endfor %}
+        {% if valid_inputs and method.outputs %}, {% endif %}
+        {% for output in method.outputs %}{{ output.type }}& {{ output.name }}{% if not loop.last %}, {% endif %}{% endfor %}
     );
     {% endfor %}
 
-    // Raw C++ code blocks (passed through as-is)
-    {% for cpp_block in raw_cpp_code %}
-    {{ cpp_block.code }}
-    {% endfor %}
-
 private:
-    // ROS2 publishers
+    // Publishers
     {% for pub in publishers %}
-    {% if is_lifecycle %}
-    std::shared_ptr<rclcpp_lifecycle::LifecyclePublisher<{{ pub.msg_type }}>> {{ pub.name }}_pub_;
-    {% else %}
-    rclcpp::Publisher<{{ pub.msg_type }}>::SharedPtr {{ pub.name }}_pub_;
-    {% endif %}
+    std::shared_ptr<{% if is_lifecycle %}rclcpp_lifecycle::LifecyclePublisher<{{ pub.msg_type }}>{% else %}rclcpp::Publisher<{{ pub.msg_type }}>{% endif %}> {{ pub.name }}_pub_;
     {% endfor %}
 
-    // ROS2 subscribers
+    // Subscribers
     {% for sub in subscribers %}
     rclcpp::Subscription<{{ sub.msg_type }}>::SharedPtr {{ sub.name }}_sub_;
     {% endfor %}
 
-    // ROS2 services
+    // Services
     {% for srv in services %}
     rclcpp::Service<{{ srv.srv_type }}>::SharedPtr {{ srv.name }}_srv_;
     {% endfor %}
 
-    // ROS2 action servers
+    {% if actions %}
+    // Action servers
     {% for action in actions %}
-    rclcpp_action::Server<{{ action.action_type }}>::SharedPtr {{ action.name }}_action_server_;
+    rclcpp_action::Server<{{ action.action_type }}>::SharedPtr {{ action.name | replace('/', '_') }}_action_server_;
     {% endfor %}
+    {% endif %}
 
-    // ROS2 timers
+    // Timers
     {% for timer in timers %}
     rclcpp::TimerBase::SharedPtr {{ timer.name }}_timer_;
     {% endfor %}
 
+    // Lifecycle state tracking
+    {% if is_lifecycle %}
+    std::atomic<bool> is_active_{false};
+    {% for timer in timers %}
+    bool {{ timer.name }}_was_active_{false};
+    {% endfor %}
+    {% endif %}
+
+    {% if cuda_kernels %}
+    // CUDA resources
+    int cuda_device_id_{0};
+    std::map<std::string, cudaStream_t> cuda_streams_;
+    {% endif %}
+    
+    // Processing control
+    bool enable_processing_{true};
+
     // Parameters
     {% for param in parameters %}
-    {{ param.type }} {{ param.name }}_;
+    {% if param.type == 'int' %}
+    int {{ param.name }}_;
+    {% elif param.type == 'double' %}
+    double {{ param.name }}_;
+    {% elif param.type == 'bool' %}
+    bool {{ param.name }}_;
+    {% elif param.type == 'std::string' %}
+    std::string {{ param.name }}_;
+    {% elif param.type.startswith('std::vector<int>') %}
+    std::vector<int> {{ param.name }}_;
+    {% elif param.type.startswith('std::vector<double>') %}
+    std::vector<double> {{ param.name }}_;
+    {% elif param.type.startswith('std::vector<std::string>') %}
+    std::vector<std::string> {{ param.name }}_;
+    {% else %}
+    // Parameter {{ param.name }} of type {{ param.type }} not supported in member variables
+    {% endif %}
     {% endfor %}
 
-    // CUDA members
+    // Latest message storage
+    {% for sub in subscribers %}
+    {% if sub.msg_type == 'sensor_msgs::msg::Image' %}
+    {{ sub.msg_type }}::ConstSharedPtr latest_image_;
+    {% elif sub.msg_type == 'sensor_msgs::msg::PointCloud2' %}
+    {{ sub.msg_type }}::ConstSharedPtr latest_pointcloud_;
+    {% elif sub.msg_type == 'geometry_msgs::msg::Twist' %}
+    {{ sub.msg_type }}::ConstSharedPtr latest_twist_;
+    {% elif sub.msg_type == 'sensor_msgs::msg::LaserScan' %}
+    {{ sub.msg_type }}::ConstSharedPtr latest_scan_;
+    {% endif %}
+    {% endfor %}
+
+    // CUDA kernel member variables
     {% for kernel in cuda_kernels %}
-    // {{ kernel.name }} members
     {% for member in kernel.members %}
     {{ member.type }} {{ member.name }}_;
     {% endfor %}
     {% endfor %}
 
-    // Private methods
+    // Helper methods
     void init_parameters();
     void init_publishers();
     void init_subscribers();
     void init_services();
+    {% if actions %}
     void init_action_servers();
+    {% endif %}
     void init_timers();
+    {% if cuda_kernels %}
     void init_cuda();
+    {% endif %}
 };
 
 {% if namespace %}
 } // namespace {{ namespace }}
 {% endif %}
-
-// Register component
-#include <rclcpp_components/register_node_macro.hpp>
-RCLCPP_COMPONENTS_REGISTER_NODE({{ '::' if namespace }}{{ namespace }}{{ '::' if namespace }}{{ class_name }})
 
 #endif // {{ include_guard }}

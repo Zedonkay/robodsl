@@ -1,13 +1,13 @@
 """Launch Generator for RoboDSL.
 
-This generator creates ROS2 launch files for running nodes.
+This generator creates ROS2 launch files for the generated nodes.
 """
 
 from pathlib import Path
 from typing import Dict, List, Any
 
 from .base_generator import BaseGenerator
-from ..core.ast import RoboDSLAST, NodeNode
+from ..core.ast import RoboDSLAST
 
 
 class LaunchGenerator(BaseGenerator):
@@ -25,7 +25,8 @@ class LaunchGenerator(BaseGenerator):
         generated_files = []
         
         # Create launch directory
-        (self.output_dir / 'launch').mkdir(parents=True, exist_ok=True)
+        launch_dir = self.output_dir / 'launch'
+        launch_dir.mkdir(parents=True, exist_ok=True)
         
         # Generate main launch file
         main_launch_path = self._generate_main_launch(ast)
@@ -39,172 +40,231 @@ class LaunchGenerator(BaseGenerator):
         return generated_files
     
     def _generate_main_launch(self, ast: RoboDSLAST) -> Path:
-        """Generate the main launch file that starts all nodes."""
+        """Generate the main launch file that launches all nodes."""
         context = self._prepare_main_launch_context(ast)
         
         try:
-            content = self.render_template('main_launch.py.jinja2', context)
-            launch_path = self.get_output_path('launch', 'main_launch.py')
+            content = self.render_template('launch/main_launch.py.jinja2', context)
+            launch_path = self.output_dir / 'launch' / 'main_launch.py'
             return self.write_file(launch_path, content)
         except Exception as e:
             print(f"Template error for main launch: {e}")
-            # Fallback to simple launch file
+            # Fallback to simple launch
             content = self._generate_fallback_main_launch(ast)
-            launch_path = self.get_output_path('launch', 'main_launch.py')
+            launch_path = self.output_dir / 'launch' / 'main_launch.py'
             return self.write_file(launch_path, content)
     
-    def _generate_node_launch(self, node: NodeNode) -> Path:
+    def _generate_node_launch(self, node) -> Path:
         """Generate a launch file for a single node."""
         context = self._prepare_node_launch_context(node)
         
-        # Determine subdirectory structure based on node name
-        # For subnodes like "sensors.camera", create "launch/sensors/camera.launch.py"
-        subdir = ""
-        filename = f'{node.name}.launch.py'
-        if '.' in node.name:
-            parts = node.name.split('.')
-            if len(parts) > 1:
-                subdir = '/'.join(parts[:-1])
-                filename = f'{parts[-1]}.launch.py'
-        
         try:
-            content = self.render_template('node.launch.py.jinja2', context)
-            if subdir:
-                launch_path = self.get_output_path('launch', subdir, filename)
-            else:
-                launch_path = self.get_output_path('launch', filename)
+            content = self.render_template('launch/node_launch.py.jinja2', context)
+            launch_path = self.output_dir / 'launch' / f'{node.name}_launch.py'
             return self.write_file(launch_path, content)
         except Exception as e:
             print(f"Template error for node {node.name} launch: {e}")
-            # Fallback to simple node launch
+            # Fallback to simple launch
             content = self._generate_fallback_node_launch(node)
-            if subdir:
-                launch_path = self.get_output_path('launch', subdir, filename)
-            else:
-                launch_path = self.get_output_path('launch', filename)
+            launch_path = self.output_dir / 'launch' / f'{node.name}_launch.py'
             return self.write_file(launch_path, content)
     
     def _prepare_main_launch_context(self, ast: RoboDSLAST) -> Dict[str, Any]:
-        """Prepare context for main launch template rendering."""
-        # Determine package name
-        package_name = getattr(ast, 'package_name', 'robodsl_package')
-        
-        # Prepare node configurations
+        """Prepare context for main launch template."""
         nodes = []
+        
         for node in ast.nodes:
-            node_config = {
-                'name': node.name,
-                'executable': f'{node.name}_node',
-                'package': package_name,
-                'namespace': f'/{node.name}',
-                'parameters': []
-            }
-            
-            # Add parameters if any
-            for param in node.content.parameters:
-                node_config['parameters'].append({
-                    'name': param.name,
-                    'value': param.value.value or 'null'
-                })
-            
-            nodes.append(node_config)
+            node_info = self._prepare_node_launch_info(node)
+            nodes.append(node_info)
         
         return {
-            'package_name': package_name,
             'nodes': nodes,
-            'description': 'Launch all nodes from RoboDSL specification'
+            'package_name': 'robodsl_package'
         }
     
-    def _prepare_node_launch_context(self, node: NodeNode) -> Dict[str, Any]:
-        """Prepare context for node launch template rendering."""
-        # Determine package name
-        package_name = getattr(node, 'package_name', 'robodsl_package')
+    def _prepare_node_launch_context(self, node) -> Dict[str, Any]:
+        """Prepare context for node launch template."""
+        node_info = self._prepare_node_launch_info(node)
         
-        # Prepare parameters
+        return {
+            'node': node_info,
+            'package_name': 'robodsl_package'
+        }
+    
+    def _prepare_node_launch_info(self, node) -> Dict[str, Any]:
+        """Prepare node information for launch file generation."""
+        # Get node parameters
         parameters = []
-        for param in node.content.parameters:
+        for param in getattr(node, 'parameters', []):
+            param_value = self._format_parameter_value(param)
             parameters.append({
                 'name': param.name,
-                'value': param.value.value or 'null'
+                'value': param_value
             })
         
-        # Determine if this is a lifecycle node
-        is_lifecycle = node.content.lifecycle is not None
+        # Add common parameters
+        parameters.append({
+            'name': 'use_sim_time',
+            'value': 'LaunchConfiguration("use_sim_time")'
+        })
         
         return {
-            'node_name': node.name,
+            'name': node.name,
             'executable': f'{node.name}_node',
-            'package': package_name,
             'namespace': f'/{node.name}',
-            'parameters': parameters,
-            'is_lifecycle': is_lifecycle,
-            'description': f'Launch {node.name} node'
+            'parameters': parameters
         }
     
-    def _generate_fallback_main_launch(self, ast: RoboDSLAST) -> str:
-        """Generate a fallback main launch file if template fails."""
-        package_name = getattr(ast, 'package_name', 'robodsl_package')
+    def _format_parameter_value(self, param) -> str:
+        """Format parameter value for launch file."""
+        param_type = getattr(param, 'type', 'string')
+        default_value = getattr(param, 'default_value', None)
         
-        content = """#!/usr/bin/env python3
-
-from launch import LaunchDescription
-from launch_ros.actions import Node
-
-def generate_launch_description():
-    return LaunchDescription([
-"""
-        
-        # Add each node
-        for node in ast.nodes:
-            content += f"""        Node(
-            package='{package_name}',
-            executable='{node.name}_node',
-            name='{node.name}_node',
-            namespace='/{node.name}',
-"""
-            
-            # Add parameters if any
-            if node.content.parameters:
-                content += "            parameters=[\n"
-                for param in node.content.parameters:
-                    value = param.value.value or 'null'
-                    content += f"                {{'{param.name}': {value}}},\n"
-                content += "            ],\n"
-            
-            content += "        ),\n"
-        
-        content += "    ])\n"
-        
-        return content
+        if param_type == 'string':
+            if default_value is None:
+                return '""'
+            return f'"{default_value}"'
+        elif param_type == 'int':
+            if default_value is None:
+                return '0'
+            return str(default_value)
+        elif param_type == 'double':
+            if default_value is None:
+                return '0.0'
+            return str(float(default_value))
+        elif param_type == 'bool':
+            if default_value is None:
+                return 'False'
+            return 'True' if default_value else 'False'
+        elif param_type.startswith('std::vector<int>'):
+            if default_value is None:
+                return '[]'
+            if isinstance(default_value, list):
+                return str(default_value)
+            return '[]'
+        elif param_type.startswith('std::vector<double>'):
+            if default_value is None:
+                return '[]'
+            if isinstance(default_value, list):
+                return str([float(x) for x in default_value])
+            return '[]'
+        elif param_type.startswith('std::vector<std::string>'):
+            if default_value is None:
+                return '[]'
+            if isinstance(default_value, list):
+                return str([f'"{x}"' for x in default_value])
+            return '[]'
+        elif param_type.startswith('std::map'):
+            if default_value is None:
+                return '{}'
+            if isinstance(default_value, dict):
+                formatted_dict = {}
+                for k, v in default_value.items():
+                    if isinstance(v, str):
+                        formatted_dict[k] = f'"{v}"'
+                    else:
+                        formatted_dict[k] = v
+                return str(formatted_dict)
+            return '{}'
+        else:
+            # Default to string
+            if default_value is None:
+                return '""'
+            return f'"{str(default_value)}"'
     
-    def _generate_fallback_node_launch(self, node: NodeNode) -> str:
-        """Generate a fallback node launch file if template fails."""
-        package_name = getattr(node, 'package_name', 'robodsl_package')
+    def _generate_fallback_main_launch(self, ast: RoboDSLAST) -> str:
+        """Generate a fallback main launch file."""
+        nodes_content = []
         
-        content = f"""#!/usr/bin/env python3
+        for node in ast.nodes:
+            node_content = f"""    # {node.name} node
+    {node.name}_node = Node(
+        package='robodsl_package',
+        executable='{node.name}_node',
+        name='{node.name}_node',
+        namespace='/{node.name}',
+        output='screen',
+        parameters=[
+            {{'use_sim_time': LaunchConfiguration('use_sim_time')}},
+        ],
+        arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')],
+    )
+    nodes.append({node.name}_node)"""
+            nodes_content.append(node_content)
+        
+        return f"""#!/usr/bin/env python3
+\"\"\"
+Launch all nodes from RoboDSL specification
+
+This file was auto-generated by RoboDSL.
+\"\"\"
 
 from launch import LaunchDescription
 from launch_ros.actions import Node
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
 
 def generate_launch_description():
-    return LaunchDescription([
-        Node(
-            package='{package_name}',
-            executable='{node.name}_node',
-            name='{node.name}_node',
-            namespace='/{node.name}',
-"""
-        
-        # Add parameters if any
-        if node.content.parameters:
-            content += "            parameters=[\n"
-            for param in node.content.parameters:
-                value = param.value.value or 'null'
-                content += f"                {{'{param.name}': {value}}},\n"
-            content += "            ],\n"
-        
-        content += """        ),
-    ])
-"""
-        
-        return content 
+    # Declare launch arguments
+    launch_arguments = [
+        DeclareLaunchArgument(
+            'use_sim_time',
+            default_value='false',
+            description='Use simulation time'
+        ),
+        DeclareLaunchArgument(
+            'log_level',
+            default_value='info',
+            description='Log level for all nodes'
+        ),
+    ]
+    
+    # Create nodes
+    nodes = []
+{chr(10).join(nodes_content)}
+
+    return LaunchDescription(launch_arguments + nodes)"""
+    
+    def _generate_fallback_node_launch(self, node) -> str:
+        """Generate a fallback node launch file."""
+        return f"""#!/usr/bin/env python3
+\"\"\"
+Launch {node.name} node
+
+This file was auto-generated by RoboDSL.
+\"\"\"
+
+from launch import LaunchDescription
+from launch_ros.actions import Node
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
+
+def generate_launch_description():
+    # Declare launch arguments
+    launch_arguments = [
+        DeclareLaunchArgument(
+            'use_sim_time',
+            default_value='false',
+            description='Use simulation time'
+        ),
+        DeclareLaunchArgument(
+            'log_level',
+            default_value='info',
+            description='Log level for the node'
+        ),
+    ]
+    
+    # Create node
+    {node.name}_node = Node(
+        package='robodsl_package',
+        executable='{node.name}_node',
+        name='{node.name}_node',
+        namespace='/{node.name}',
+        output='screen',
+        parameters=[
+            {{'use_sim_time': LaunchConfiguration('use_sim_time')}},
+        ],
+        arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')],
+    )
+
+    return LaunchDescription(launch_arguments + [{node.name}_node])""" 

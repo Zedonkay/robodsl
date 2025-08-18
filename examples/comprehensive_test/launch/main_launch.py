@@ -35,13 +35,13 @@ def generate_launch_description():
         namespace='/main_node',
         output='screen',
         parameters=[
-            {'count': null},
-            {'rate': 10.0},
-            {'name': robot},
-            {'enabled': True},
-            {'array_coords': [1.0, 2.0, 3.0]},
-            {'dict_config': {'max_iterations': 100, 'timeout': 5.0, 'enabled': True}},
-            {'use_sim_time': LaunchConfiguration('use_sim_time')},
+            {'count': 0},
+            {'rate': 0.0},
+            {'name': ""},
+            {'enabled': False},
+            {'array_coords': ""},
+            {'dict_config': ""},
+            {'use_sim_time': LaunchConfiguration("use_sim_time")},
         ],
         arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')],
     )
@@ -54,10 +54,10 @@ def generate_launch_description():
         namespace='/perception_node',
         output='screen',
         parameters=[
-            {'enable_gpu': True},
-            {'confidence_threshold': 0.5},
-            {'model_path': models/detection.onnx},
-            {'use_sim_time': LaunchConfiguration('use_sim_time')},
+            {'enable_gpu': False},
+            {'confidence_threshold': ""},
+            {'model_path': ""},
+            {'use_sim_time': LaunchConfiguration("use_sim_time")},
         ],
         arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')],
     )
@@ -70,10 +70,10 @@ def generate_launch_description():
         namespace='/navigation_node',
         output='screen',
         parameters=[
-            {'max_velocity': 2.0},
-            {'goal_tolerance': 0.1},
-            {'enable_obstacle_avoidance': True},
-            {'use_sim_time': LaunchConfiguration('use_sim_time')},
+            {'max_velocity': ""},
+            {'goal_tolerance': ""},
+            {'enable_obstacle_avoidance': False},
+            {'use_sim_time': LaunchConfiguration("use_sim_time")},
         ],
         arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')],
     )
@@ -86,10 +86,10 @@ def generate_launch_description():
         namespace='/safety_node',
         output='screen',
         parameters=[
-            {'max_acceleration': 2.0},
-            {'emergency_stop_distance': 0.5},
-            {'enable_emergency_stop': True},
-            {'use_sim_time': LaunchConfiguration('use_sim_time')},
+            {'max_acceleration': ""},
+            {'emergency_stop_distance': ""},
+            {'enable_emergency_stop': False},
+            {'use_sim_time': LaunchConfiguration("use_sim_time")},
         ],
         arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')],
     )
@@ -102,8 +102,8 @@ def generate_launch_description():
         namespace='/robot_cpp_node',
         output='screen',
         parameters=[
-            {'cpp_param': 42},
-            {'use_sim_time': LaunchConfiguration('use_sim_time')},
+            {'cpp_param': 0},
+            {'use_sim_time': LaunchConfiguration("use_sim_time")},
         ],
         arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')],
     )

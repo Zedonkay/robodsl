@@ -1,20 +1,20 @@
 """Package Generator for RoboDSL.
 
-This generator creates package.xml files for ROS2 packages.
+This generator creates package.xml and other package-related files.
 """
 
 from pathlib import Path
 from typing import Dict, List, Any
 
 from .base_generator import BaseGenerator
-from ..core.ast import RoboDSLAST, NodeNode
+from ..core.ast import RoboDSLAST
 
 
 class PackageGenerator(BaseGenerator):
-    """Generates ROS2 package.xml files."""
+    """Generates package.xml and other package files."""
     
     def generate(self, ast: RoboDSLAST) -> List[Path]:
-        """Generate package.xml files from the AST.
+        """Generate package files from the AST.
         
         Args:
             ast: The parsed RoboDSL AST
@@ -25,127 +25,121 @@ class PackageGenerator(BaseGenerator):
         generated_files = []
         
         # Generate package.xml
-        package_path = self._generate_package_xml(ast)
-        generated_files.append(package_path)
+        package_xml_path = self._generate_package_xml(ast)
+        generated_files.append(package_xml_path)
         
         return generated_files
     
     def _generate_package_xml(self, ast: RoboDSLAST) -> Path:
-        """Generate the package.xml file."""
+        """Generate package.xml file."""
         context = self._prepare_package_context(ast)
         
         try:
             content = self.render_template('package.xml.jinja2', context)
-            package_path = self.get_output_path('package.xml')
-            return self.write_file(package_path, content)
+            package_xml_path = self.output_dir / 'package.xml'
+            return self.write_file(package_xml_path, content)
         except Exception as e:
             print(f"Template error for package.xml: {e}")
             # Fallback to simple package.xml
             content = self._generate_fallback_package_xml(ast)
-            package_path = self.get_output_path('package.xml')
-            return self.write_file(package_path, content)
+            package_xml_path = self.output_dir / 'package.xml'
+            return self.write_file(package_xml_path, content)
     
     def _prepare_package_context(self, ast: RoboDSLAST) -> Dict[str, Any]:
-        """Prepare context for package.xml template rendering."""
-        # Determine package name
-        package_name = getattr(ast, 'package_name', 'robodsl_package')
+        """Prepare context for package template rendering."""
+        # Get package information
+        package_info = getattr(ast, 'package', {})
+        package_name = package_info.get('name', 'robodsl_package')
+        version = package_info.get('version', '0.1.0')
+        description = package_info.get('description', 'Generated ROS2 package from RoboDSL specification')
+        maintainer = package_info.get('maintainer', 'robot_team@example.com')
+        license = package_info.get('license', 'Apache-2.0')
         
         # Collect all dependencies
         dependencies = set()
-        build_dependencies = set()
-        exec_dependencies = set()
-        test_dependencies = set()
+        optional_dependencies = set()
+        system_dependencies = set()
         
         # Add basic ROS2 dependencies
-        build_dependencies.update([
-            'ament_cmake',
-            'ament_cmake_python'
-        ])
-        
-        exec_dependencies.update([
+        dependencies.update([
             'rclcpp',
-            'std_msgs'
+            'std_msgs',
+            'geometry_msgs',
+            'sensor_msgs'
         ])
         
-        # Check if we have any CUDA kernels
-        has_cuda_kernels = bool(ast.cuda_kernels and ast.cuda_kernels.kernels)
-        
-        # Check nodes for CUDA kernels
+        # Add dependencies based on node content
         for node in ast.nodes:
-            if node.content.cuda_kernels:
-                has_cuda_kernels = True
-        
-        # Add CUDA dependencies if needed
-        if has_cuda_kernels:
-            build_dependencies.add('cuda')
-            exec_dependencies.add('cuda_runtime')
-        
-        # Add lifecycle dependencies if any node is lifecycle
-        for node in ast.nodes:
-            if node.content.lifecycle:
-                exec_dependencies.add('rclcpp_lifecycle')
-                break
-        
-        # Collect message dependencies from publishers/subscribers
-        for node in ast.nodes:
-            for pub in node.content.publishers:
-                if '.' in pub.msg_type:
-                    package = pub.msg_type.split('.')[0]
-                    exec_dependencies.add(package)
-                else:
-                    exec_dependencies.add('std_msgs')
+            # Check for lifecycle nodes
+            if getattr(node, 'lifecycle', False) or 'lifecycle' in node.name.lower():
+                dependencies.add('rclcpp_lifecycle')
             
-            for sub in node.content.subscribers:
-                if '.' in sub.msg_type:
-                    package = sub.msg_type.split('.')[0]
-                    exec_dependencies.add(package)
-                else:
-                    exec_dependencies.add('std_msgs')
+            # Check for action nodes
+            if hasattr(node, 'actions') and node.actions:
+                dependencies.add('rclcpp_action')
             
-            for srv in node.content.services:
-                if '.' in srv.srv_type:
-                    package = srv.srv_type.split('.')[0]
-                    exec_dependencies.add(package)
-                else:
-                    exec_dependencies.add('std_srvs')
+            # Check for service nodes
+            if hasattr(node, 'services') and node.services:
+                dependencies.add('std_srvs')
             
-            for action in node.content.actions:
-                if '.' in action.action_type:
-                    package = action.action_type.split('.')[0]
-                    exec_dependencies.add(package)
-                else:
-                    exec_dependencies.add('std_msgs')
+            # Check for navigation messages
+            for pub in getattr(node, 'publishers', []):
+                if 'nav_msgs' in pub.msg_type:
+                    dependencies.add('nav_msgs')
+            
+            for sub in getattr(node, 'subscribers', []):
+                if 'nav_msgs' in sub.msg_type:
+                    dependencies.add('nav_msgs')
+        
+        # Check for CUDA usage
+        if hasattr(ast, 'cuda_kernels') and ast.cuda_kernels:
+            system_dependencies.add('cuda')
+        
+        # Check for OpenCV usage
+        opencv_needed = False
+        if hasattr(ast, 'global_cpp_code'):
+            for code_block in ast.global_cpp_code:
+                if 'cv_bridge' in str(code_block) or 'opencv' in str(code_block) or 'cv::' in str(code_block):
+                    opencv_needed = True
+                    break
+        
+        if opencv_needed:
+            dependencies.add('cv_bridge')
+            system_dependencies.add('opencv')
+        
+        # Check for ONNX usage
+        if hasattr(ast, 'onnx_models') and ast.onnx_models:
+            system_dependencies.add('onnxruntime')
+            system_dependencies.add('tensorrt')
         
         # Add test dependencies
-        test_dependencies.update([
+        optional_dependencies.update([
             'ament_lint_auto',
-            'ament_lint_common'
+            'ament_lint_common',
+            'ament_cmake_gtest',
+            'ament_cmake_pytest'
         ])
         
         return {
             'package_name': package_name,
-            'version': '0.1.0',
-            'description': 'Generated ROS2 package from RoboDSL specification',
-            'maintainer': 'Ishayu Shikhare',
-            'maintainer_email': 'ishikhar@andrew.cmu.edu',
-            'license': 'Apache-2.0',
-            'build_dependencies': sorted(list(build_dependencies)),
-            'exec_dependencies': sorted(list(exec_dependencies)),
-            'test_dependencies': sorted(list(test_dependencies)),
-            'has_cuda': has_cuda_kernels
+            'version': version,
+            'description': description,
+            'maintainer': maintainer,
+            'license': license,
+            'dependencies': sorted(list(dependencies)),
+            'optional_dependencies': sorted(list(optional_dependencies)),
+            'system_dependencies': sorted(list(system_dependencies))
         }
     
     def _generate_fallback_package_xml(self, ast: RoboDSLAST) -> str:
         """Generate a fallback package.xml if template fails."""
-        package_name = getattr(ast, 'package_name', 'robodsl_package')
-        
-        content = f"""<?xml version="1.0"?>
+        return f"""<?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>{package_name}</name>
+  <name>robodsl_package</name>
   <version>0.1.0</version>
   <description>Generated ROS2 package from RoboDSL specification</description>
-  <maintainer email="ishikhar@andrew.cmu.edu">Ishayu Shikhare</maintainer>
+  <maintainer email="robot_team@example.com">Robot Team</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
@@ -153,56 +147,16 @@ class PackageGenerator(BaseGenerator):
 
   <depend>rclcpp</depend>
   <depend>std_msgs</depend>
-"""
-        
-        # Add lifecycle dependency if any node is lifecycle
-        for node in ast.nodes:
-            if node.content.lifecycle:
-                content += "  <depend>rclcpp_lifecycle</depend>\n"
-                break
-        
-        # Add message dependencies
-        message_packages = set()
-        for node in ast.nodes:
-            for pub in node.content.publishers:
-                if '.' in pub.msg_type:
-                    package = pub.msg_type.split('.')[0]
-                    message_packages.add(package)
-                else:
-                    message_packages.add('std_msgs')
-            
-            for sub in node.content.subscribers:
-                if '.' in sub.msg_type:
-                    package = sub.msg_type.split('.')[0]
-                    message_packages.add(package)
-                else:
-                    message_packages.add('std_msgs')
-            
-            for srv in node.content.services:
-                if '.' in srv.srv_type:
-                    package = srv.srv_type.split('.')[0]
-                    message_packages.add(package)
-                else:
-                    message_packages.add('std_srvs')
-            
-            for action in node.content.actions:
-                if '.' in action.action_type:
-                    package = action.action_type.split('.')[0]
-                    message_packages.add(package)
-                else:
-                    message_packages.add('std_msgs')
-        
-        for package in sorted(message_packages):
-            content += f"  <depend>{package}</depend>\n"
-        
-        content += """
+  <depend>geometry_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>cv_bridge</depend>
+
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
+  <test_depend>ament_cmake_gtest</test_depend>
+  <test_depend>ament_cmake_pytest</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>
   </export>
-</package>
-"""
-        
-        return content 
+</package>""" 

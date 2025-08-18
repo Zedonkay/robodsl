@@ -2,11 +2,15 @@
 
 #include "{{ include_path }}"
 #include <memory>
+#include <vector>
+#include <map>
+#include <cmath>
+#include <stdexcept>
 
 {% if global_cpp_code %}
 // Global C++ code blocks (passed through as-is)
 {% for cpp_block in global_cpp_code %}
-{{ cpp_block.code }}
+{{ cpp_block.code | dedent }}
 {% endfor %}
 {% endif %}
 
@@ -19,7 +23,7 @@ namespace {{ namespace }} {
 {
     // Initialize parameters
     {% for param in parameters %}
-    this->declare_parameter<{{ param.type }}>("{{ param.name }}", {{ param.default_value }});
+    this->declare_parameter<{{ param.template_type }}>("{{ param.name }}", {{ param.default_value }});
     {% endfor %}
 
     // Create publishers
@@ -27,7 +31,11 @@ namespace {{ namespace }} {
     {
         rclcpp::QoS qos({{ pub.qos.depth | default(10) }});
         {% if pub.qos.reliability %}
-        qos.reliability(rclcpp::{{ pub.qos.reliability }});
+        {% if pub.qos.reliability == 'reliable' %}
+        qos.reliability(rclcpp::ReliabilityPolicy::Reliable);
+        {% elif pub.qos.reliability == 'best_effort' %}
+        qos.reliability(rclcpp::ReliabilityPolicy::BestEffort);
+        {% endif %}
         {% endif %}
         {% if pub.qos.durability %}
         qos.durability(rclcpp::{{ pub.qos.durability }});
@@ -42,7 +50,11 @@ namespace {{ namespace }} {
     {
         rclcpp::QoS qos({{ sub.qos.depth | default(10) }});
         {% if sub.qos.reliability %}
-        qos.reliability(rclcpp::{{ sub.qos.reliability }});
+        {% if sub.qos.reliability == 'reliable' %}
+        qos.reliability(rclcpp::ReliabilityPolicy::Reliable);
+        {% elif sub.qos.reliability == 'best_effort' %}
+        qos.reliability(rclcpp::ReliabilityPolicy::BestEffort);
+        {% endif %}
         {% endif %}
         auto callback = std::bind(
             &{{ class_name }}::{{ sub.callback_name }}, 
@@ -57,167 +69,101 @@ namespace {{ namespace }} {
     }
     {% endfor %}
 
-    // Create services with proper error handling
+    // Create services
     {% for srv in services %}
     {
-        try {
-            auto callback = [this](
-                const std::shared_ptr<{{ srv.srv_type }}::Request> request,
-                std::shared_ptr<{{ srv.srv_type }}::Response> response
-            ) {
-                try {
-                    return this->{{ srv.callback_name }}(request, response);
-                } catch (const std::exception& e) {
-                    RCLCPP_ERROR(this->get_logger(), 
-                        "Exception in service callback {{ srv.callback_name }}: %s", e.what());
-                    response->success = false;
-                    response->message = std::string("Service error: ") + e.what();
-                } catch (...) {
-                    RCLCPP_ERROR(this->get_logger(), 
-                        "Unknown exception in service callback {{ srv.callback_name }}");
-                    response->success = false;
-                    response->message = "Unknown service error";
-                }
-            };
-            
-            {{ srv.name }}_srv_ = this->create_service<{{ srv.srv_type }}>(
-                "{{ srv.service }}", 
-                callback,
-                rclcpp::ServicesQoS().reliable()
-            );
-            
-            RCLCPP_INFO(this->get_logger(), 
-                "Created service server: %s", "{{ srv.service }}");
-                
-        } catch (const std::exception& e) {
-            RCLCPP_ERROR(this->get_logger(), 
-                "Failed to create service {{ srv.service }}: %s", e.what());
-            throw;
-        }
+        auto callback = [this](
+            const std::shared_ptr<{{ srv.srv_type }}::Request> request,
+            std::shared_ptr<{{ srv.srv_type }}::Response> response
+        ) {
+            this->{{ srv.callback_name }}(request, response);
+        };
+        
+        {{ srv.name }}_srv_ = this->create_service<{{ srv.srv_type }}>(
+            "{{ srv.service }}", 
+            callback
+        );
     }
     {% endfor %}
     
+    {% if actions %}
     // Initialize action servers
     {% for action in actions %}
     {
         using namespace std::placeholders;
         
-        try {
-            auto handle_goal = [this](
-                const rclcpp_action::GoalUUID& uuid,
-                std::shared_ptr<const {{ action.action_type }}::Goal> goal
-            ) -> rclcpp_action::GoalResponse {
-                RCLCPP_INFO(this->get_logger(), 
-                    "Received goal request for action {{ action.name }}");
-                (void)uuid;
-                (void)goal;
-                return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
-            };
-            
-            auto handle_cancel = [this](
-                const std::shared_ptr<rclcpp_action::ServerGoalHandle<{{ action.action_type }}>> goal_handle
-            ) -> rclcpp_action::CancelResponse {
-                RCLCPP_INFO(this->get_logger(), 
-                    "Received request to cancel goal for action {{ action.name }}");
-                (void)goal_handle;
-                return rclcpp_action::CancelResponse::ACCEPT;
-            };
-            
-            auto handle_accepted = [this](
-                const std::shared_ptr<rclcpp_action::ServerGoalHandle<{{ action.action_type }}>> goal_handle
-            ) {
-                std::thread{
-                    std::bind(&{{ class_name }}::execute_{{ action.name }}, this, _1), 
-                    goal_handle
-                }.detach();
-            };
-            
-            {{ action.name }}_action_server_ = rclcpp_action::create_server<{{ action.action_type }}>(
-                this->get_node_base_interface(),
-                this->get_node_clock_interface(),
-                this->get_node_logging_interface(),
-                this->get_node_waitables_interface(),
-                "{{ action.topic }}",
-                handle_goal,
-                handle_cancel,
-                handle_accepted
-            );
-            
+        auto handle_goal = [this](
+            const rclcpp_action::GoalUUID& uuid,
+            std::shared_ptr<const {{ action.action_type }}::Goal> goal
+        ) -> rclcpp_action::GoalResponse {
             RCLCPP_INFO(this->get_logger(), 
-                "Created action server: %s", "{{ action.topic }}");
-                
-        } catch (const std::exception& e) {
-            RCLCPP_ERROR(this->get_logger(), 
-                "Failed to create action server {{ action.name }}: %s", e.what());
-            throw;
-        }
+                "Received goal request for action {{ action.name }}");
+            (void)uuid;
+            (void)goal;
+            return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
+        };
+        
+        auto handle_cancel = [this](
+            const std::shared_ptr<rclcpp_action::ServerGoalHandle<{{ action.action_type }}>> goal_handle
+        ) -> rclcpp_action::CancelResponse {
+            RCLCPP_INFO(this->get_logger(), 
+                "Received request to cancel goal for action {{ action.name }}");
+            (void)goal_handle;
+            return rclcpp_action::CancelResponse::ACCEPT;
+        };
+        
+        auto handle_accepted = [this](
+            const std::shared_ptr<rclcpp_action::ServerGoalHandle<{{ action.action_type }}>> goal_handle
+        ) {
+            std::thread{
+                std::bind(&{{ class_name }}::execute_{{ action.name | replace('/', '_') }}, this, _1), 
+                goal_handle
+            }.detach();
+        };
+        
+        {{ action.name | replace('/', '_') }}_action_server_ = rclcpp_action::create_server<{{ action.action_type }}>(
+            this->get_node_base_interface(),
+            this->get_node_clock_interface(),
+            this->get_node_logging_interface(),
+            this->get_node_waitables_interface(),
+            "{{ action.topic }}",
+            handle_goal,
+            handle_cancel,
+            handle_accepted
+        );
     }
     {% endfor %}
+    {% endif %}
+
+    // Create timers
+    {% for timer in timers %}
+    {{ timer.name }}_timer_ = this->create_wall_timer(
+        std::chrono::duration<double>({{ timer.period }}),
+        std::bind(&{{ class_name }}::{{ timer.callback_name }}, this)
+    );
+    {% endfor %}
+
+    {% if cuda_kernels %}
+    // Initialize CUDA if enabled
+    if (enable_processing_) {
+        initializeCuda();
+    }
+    {% endif %}
 }
 
 {{ class_name }}::~{{ class_name }}()
 {
-    // Clean up CUDA resources if enabled
-    {% if cuda_enabled %}
-    #ifdef ENABLE_CUDA
-    try {
-        RCLCPP_DEBUG(this->get_logger(), "Releasing CUDA resources...");
-        
-        // Synchronize and destroy CUDA streams
-        for (auto& [name, stream] : cuda_streams_) {
-            if (stream) {
-                cudaError_t status = cudaStreamSynchronize(stream);
-                if (status != cudaSuccess) {
-                    RCLCPP_ERROR(this->get_logger(), 
-                        "Failed to synchronize CUDA stream '%s': %s", 
-                        name.c_str(), cudaGetErrorString(status));
-                }
-                
-                status = cudaStreamDestroy(stream);
-                if (status != cudaSuccess) {
-                    RCLCPP_ERROR(this->get_logger(), 
-                        "Failed to destroy CUDA stream '%s': %s", 
-                        name.c_str(), cudaGetErrorString(status));
-                }
-                
-                stream = nullptr;
-            }
-        }
-        cuda_streams_.clear();
-        
-        // Reset device to free all allocated resources
-        cudaError_t status = cudaDeviceReset();
-        if (status != cudaSuccess) {
-            RCLCPP_ERROR(this->get_logger(), 
-                "Failed to reset CUDA device: %s", cudaGetErrorString(status));
-        }
-        
-        RCLCPP_DEBUG(this->get_logger(), "CUDA resources released successfully");
-        
-    } catch (const std::exception& e) {
-        RCLCPP_ERROR(this->get_logger(), 
-            "Error during CUDA cleanup: %s", e.what());
-    }
-    #endif
+    {% if cuda_kernels %}
+    // Clean up CUDA resources
+    cleanupCuda();
     {% endif %}
-    
-    // Cleanup CUDA resources if needed
-    {% for kernel in cuda_kernels %}
-    // Cleanup {{ kernel.name }} resources
-    {% for member in kernel.members %}
-    if ({{ member.name }}_) {
-        cudaFree({{ member.name }}_);
-        {{ member.name }}_ = nullptr;
-    }
-    {% endfor %}
-    {% endfor %}
 }
 
+{% if is_lifecycle %}
 // Lifecycle callbacks
-{{ 'rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn' if is_lifecycle else 'void' }}
+rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
 {{ class_name }}::on_configure(const rclcpp_lifecycle::State& previous_state)
 {
-    {% if is_lifecycle %}
     RCLCPP_INFO(
         this->get_logger(), 
         "Configuring from [%s] state...", 
@@ -225,61 +171,31 @@ namespace {{ namespace }} {
     );
     
     try {
-        // Load and validate parameters
+        // Load parameters
         {% for param in parameters %}
         {
             rclcpp::Parameter param;
             if (this->get_parameter("{{ param.name }}", param)) {
-                // Parameter loaded successfully
-                RCLCPP_DEBUG(
-                    this->get_logger(), 
-                    "Loaded parameter '%s': %s", 
-                    "{{ param.name }}", 
-                    param.value_to_string().c_str()
-                );
-                
-                // Store the parameter value
-                {{ param.name }}_ = param.template get<{{ param.type }}>();
-            } else {
-                RCLCPP_WARN(
-                    this->get_logger(), 
-                    "Failed to load parameter '%s', using default value", 
-                    "{{ param.name }}"
-                );
+                {% if param.type == 'int' %}
+                {{ param.name }}_ = param.as_int();
+                {% elif param.type == 'double' %}
+                {{ param.name }}_ = param.as_double();
+                {% elif param.type == 'bool' %}
+                {{ param.name }}_ = param.as_bool();
+                {% elif param.type == 'std::string' %}
+                {{ param.name }}_ = param.as_string();
+                {% elif param.type.startswith('std::vector<int>') %}
+                {{ param.name }}_ = param.as_integer_array();
+                {% elif param.type.startswith('std::vector<double>') %}
+                {{ param.name }}_ = param.as_double_array();
+                {% elif param.type.startswith('std::vector<std::string>') %}
+                {{ param.name }}_ = param.as_string_array();
+                {% else %}
+                // Parameter {{ param.name }} of type {{ param.type }} not supported
+                {% endif %}
             }
         }
         {% endfor %}
-        
-        // Initialize any resources needed before activation
-        {% if cuda_enabled %}
-        #ifdef ENABLE_CUDA
-        try {
-            RCLCPP_DEBUG(this->get_logger(), "Initializing CUDA resources...");
-            // Initialize CUDA streams
-            for (auto& [name, stream] : cuda_streams_) {
-                cudaError_t status = cudaStreamCreate(&stream);
-                if (status != cudaSuccess) {
-                    throw std::runtime_error(
-                        std::string("Failed to create CUDA stream '") + name + "': " + 
-                        cudaGetErrorString(status)
-                    );
-                }
-                RCLCPP_DEBUG(
-                    this->get_logger(), 
-                    "Created CUDA stream: %s", 
-                    name.c_str()
-                );
-            }
-        } catch (const std::exception& e) {
-            RCLCPP_ERROR(
-                this->get_logger(), 
-                "CUDA initialization failed: %s", 
-                e.what()
-            );
-            throw;
-        }
-        #endif
-        {% endif %}
         
         RCLCPP_INFO(this->get_logger(), "Configuration completed successfully");
         return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
@@ -291,22 +207,12 @@ namespace {{ namespace }} {
             e.what()
         );
         return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::FAILURE;
-    } catch (...) {
-        RCLCPP_ERROR(
-            this->get_logger(), 
-            "Unknown error during configuration"
-        );
-        return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::ERROR;
     }
-    {% else %}
-    (void)previous_state;
-    {% endif %}
 }
 
-{{ 'rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn' if is_lifecycle else 'void' }}
+rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
 {{ class_name }}::on_activate(const rclcpp_lifecycle::State& previous_state)
 {
-    {% if is_lifecycle %}
     RCLCPP_INFO(
         this->get_logger(), 
         "Activating from [%s] state...", 
@@ -317,65 +223,10 @@ namespace {{ namespace }} {
         // Activate publishers
         {% for pub in publishers %}
         if ({{ pub.name }}_pub_) {
-            try {
-                auto pub = std::dynamic_pointer_cast<rclcpp_lifecycle::LifecyclePublisher<{{ pub.msg_type }}>>({{ pub.name }}_pub_);
-                if (pub) {
-                    pub->on_activate();
-                    RCLCPP_DEBUG(
-                        this->get_logger(), 
-                        "Activated publisher: %s", 
-                        "{{ pub.topic }}"
-                    );
-                } else {
-                    RCLCPP_WARN(
-                        this->get_logger(), 
-                        "Publisher '%s' is not a lifecycle publisher", 
-                        "{{ pub.topic }}"
-                    );
-                }
-            } catch (const std::exception& e) {
-                RCLCPP_ERROR(
-                    this->get_logger(), 
-                    "Failed to activate publisher '%s': %s", 
-                    "{{ pub.topic }}", 
-                    e.what()
-                );
-                throw;
+            auto pub = std::dynamic_pointer_cast<rclcpp_lifecycle::LifecyclePublisher<{{ pub.msg_type }}>>({{ pub.name }}_pub_);
+            if (pub) {
+                pub->on_activate();
             }
-        } else {
-            RCLCPP_WARN(
-                this->get_logger(), 
-                "Publisher '%s' is null", 
-                "{{ pub.topic }}"
-            );
-        }
-        {% endfor %}
-        
-        // Start timers if they were running before deactivation
-        {% for timer in timers %}
-        if ({{ timer.name }}_was_active_) {
-            try {
-                {{ timer.name }}_timer_->reset();
-                RCLCPP_DEBUG(
-                    this->get_logger(), 
-                    "Restarted timer: %s", 
-                    "{{ timer.name }}"
-                );
-            } catch (const std::exception& e) {
-                RCLCPP_ERROR(
-                    this->get_logger(), 
-                    "Failed to restart timer '%s': %s", 
-                    "{{ timer.name }}", 
-                    e.what()
-                );
-                throw;
-            }
-        } else {
-            RCLCPP_DEBUG(
-                this->get_logger(), 
-                "Skipping timer '%s' (was not active before deactivation)", 
-                "{{ timer.name }}"
-            );
         }
         {% endfor %}
         
@@ -391,28 +242,13 @@ namespace {{ namespace }} {
             "Activation failed: %s", 
             e.what()
         );
-        
-        // Try to clean up partially activated resources
-        try {
-            on_deactivate(previous_state);
-        } catch (...) {
-            RCLCPP_ERROR(
-                this->get_logger(), 
-                "Error during cleanup after failed activation"
-            );
-        }
-        
         return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::FAILURE;
     }
-    {% else %}
-    (void)previous_state;
-    {% endif %}
 }
 
-{{ 'rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn' if is_lifecycle else 'void' }}
+rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
 {{ class_name }}::on_deactivate(const rclcpp_lifecycle::State& previous_state)
 {
-    {% if is_lifecycle %}
     RCLCPP_INFO(
         this->get_logger(), 
         "Deactivating from [%s] state...", 
@@ -420,88 +256,26 @@ namespace {{ namespace }} {
     );
     
     try {
-        // Mark node as inactive first to prevent new processing
+        // Mark node as inactive
         is_active_ = false;
         
-        // Stop all timers and remember their state
+        // Stop timers
         {% for timer in timers %}
         if ({{ timer.name }}_timer_) {
-            try {
-                {{ timer.name }}_was_active_ = !{{ timer.name }}_timer_->is_canceled();
-                if ({{ timer.name }}_was_active_) {
-                    {{ timer.name }}_timer_->cancel();
-                    RCLCPP_DEBUG(
-                        this->get_logger(), 
-                        "Stopped timer: %s", 
-                        "{{ timer.name }}"
-                    );
-                } else {
-                    RCLCPP_DEBUG(
-                        this->get_logger(), 
-                        "Timer '%s' was already stopped", 
-                        "{{ timer.name }}"
-                    );
-                }
-            } catch (const std::exception& e) {
-                RCLCPP_ERROR(
-                    this->get_logger(), 
-                    "Failed to stop timer '%s': %s", 
-                    "{{ timer.name }}", 
-                    e.what()
-                );
-                throw;
+            {{ timer.name }}_was_active_ = !{{ timer.name }}_timer_->is_canceled();
+            if ({{ timer.name }}_was_active_) {
+                {{ timer.name }}_timer_->cancel();
             }
-        } else {
-            RCLCPP_WARN(
-                this->get_logger(), 
-                "Timer '%s' is null", 
-                "{{ timer.name }}"
-            );
         }
         {% endfor %}
         
         // Deactivate publishers
         {% for pub in publishers %}
         if ({{ pub.name }}_pub_) {
-            try {
-                auto pub = std::dynamic_pointer_cast<rclcpp_lifecycle::LifecyclePublisher<{{ pub.msg_type }}>>({{ pub.name }}_pub_);
-                if (pub) {
-                    if (pub->is_activated()) {
-                        pub->on_deactivate();
-                        RCLCPP_DEBUG(
-                            this->get_logger(), 
-                            "Deactivated publisher: %s", 
-                            "{{ pub.topic }}"
-                        );
-                    } else {
-                        RCLCPP_DEBUG(
-                            this->get_logger(), 
-                            "Publisher '%s' was not active", 
-                            "{{ pub.topic }}"
-                        );
-                    }
-                } else {
-                    RCLCPP_WARN(
-                        this->get_logger(), 
-                        "Publisher '%s' is not a lifecycle publisher", 
-                        "{{ pub.topic }}"
-                    );
-                }
-            } catch (const std::exception& e) {
-                RCLCPP_ERROR(
-                    this->get_logger(), 
-                    "Failed to deactivate publisher '%s': %s", 
-                    "{{ pub.topic }}", 
-                    e.what()
-                );
-                throw;
+            auto pub = std::dynamic_pointer_cast<rclcpp_lifecycle::LifecyclePublisher<{{ pub.msg_type }}>>({{ pub.name }}_pub_);
+            if (pub && pub->is_activated()) {
+                pub->on_deactivate();
             }
-        } else {
-            RCLCPP_WARN(
-                this->get_logger(), 
-                "Publisher '%s' is null", 
-                "{{ pub.topic }}"
-            );
         }
         {% endfor %}
         
@@ -516,15 +290,11 @@ namespace {{ namespace }} {
         );
         return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::FAILURE;
     }
-    {% else %}
-    (void)previous_state;
-    {% endif %}
 }
 
-{{ 'rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn' if is_lifecycle else 'void' }}
+rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
 {{ class_name }}::on_cleanup(const rclcpp_lifecycle::State& previous_state)
 {
-    {% if is_lifecycle %}
     RCLCPP_INFO(
         this->get_logger(), 
         "Cleaning up from [%s] state...", 
@@ -535,139 +305,32 @@ namespace {{ namespace }} {
         // Reset timers
         {% for timer in timers %}
         if ({{ timer.name }}_timer_) {
-            try {
-                {{ timer.name }}_timer_->cancel();
-                {{ timer.name }}_timer_.reset();
-                {{ timer.name }}_was_active_ = false;
-                RCLCPP_DEBUG(
-                    this->get_logger(), 
-                    "Reset timer: %s", 
-                    "{{ timer.name }}"
-                );
-            } catch (const std::exception& e) {
-                RCLCPP_ERROR(
-                    this->get_logger(), 
-                    "Failed to reset timer '%s': %s", 
-                    "{{ timer.name }}", 
-                    e.what()
-                );
-                throw;
-            }
+            {{ timer.name }}_timer_->cancel();
+            {{ timer.name }}_timer_.reset();
+            {{ timer.name }}_was_active_ = false;
         }
         {% endfor %}
         
         // Reset publishers
         {% for pub in publishers %}
         if ({{ pub.name }}_pub_) {
-            try {
-                {{ pub.name }}_pub_.reset();
-                RCLCPP_DEBUG(
-                    this->get_logger(), 
-                    "Reset publisher: %s", 
-                    "{{ pub.topic }}"
-                );
-            } catch (const std::exception& e) {
-                RCLCPP_ERROR(
-                    this->get_logger(), 
-                    "Failed to reset publisher '%s': %s", 
-                    "{{ pub.topic }}", 
-                    e.what()
-                );
-                throw;
-            }
+            {{ pub.name }}_pub_.reset();
         }
         {% endfor %}
         
         // Reset subscribers
         {% for sub in subscribers %}
         if ({{ sub.name }}_sub_) {
-            try {
-                {{ sub.name }}_sub_.reset();
-                RCLCPP_DEBUG(
-                    this->get_logger(), 
-                    "Reset subscriber: %s", 
-                    "{{ sub.topic }}"
-                );
-            } catch (const std::exception& e) {
-                RCLCPP_ERROR(
-                    this->get_logger(), 
-                    "Failed to reset subscriber '%s': %s", 
-                    "{{ sub.topic }}", 
-                    e.what()
-                );
-                throw;
-            }
+            {{ sub.name }}_sub_.reset();
         }
         {% endfor %}
         
         // Reset services
         {% for srv in services %}
         if ({{ srv.name }}_srv_) {
-            try {
-                {{ srv.name }}_srv_.reset();
-                RCLCPP_DEBUG(
-                    this->get_logger(), 
-                    "Reset service: %s", 
-                    "{{ srv.service }}"
-                );
-            } catch (const std::exception& e) {
-                RCLCPP_ERROR(
-                    this->get_logger(), 
-                    "Failed to reset service '%s': %s", 
-                    "{{ srv.service }}", 
-                    e.what()
-                );
-                throw;
-            }
+            {{ srv.name }}_srv_.reset();
         }
         {% endfor %}
-        
-        // Clean up CUDA resources if enabled
-        {% if cuda_enabled %}
-        #ifdef ENABLE_CUDA
-        try {
-            RCLCPP_DEBUG(this->get_logger(), "Cleaning up CUDA resources...");
-            
-            // Synchronize and destroy CUDA streams
-            for (auto& [name, stream] : cuda_streams_) {
-                if (stream) {
-                    cudaError_t status = cudaStreamSynchronize(stream);
-                    if (status != cudaSuccess) {
-                        RCLCPP_WARN(
-                            this->get_logger(), 
-                            "Failed to synchronize CUDA stream '%s': %s", 
-                            name.c_str(), 
-                            cudaGetErrorString(status)
-                        );
-                    }
-                    
-                    status = cudaStreamDestroy(stream);
-                    if (status != cudaSuccess) {
-                        RCLCPP_WARN(
-                            this->get_logger(), 
-                            "Failed to destroy CUDA stream '%s': %s", 
-                            name.c_str(), 
-                            cudaGetErrorString(status)
-                        );
-                    }
-                    
-                    stream = nullptr;
-                }
-            }
-            cuda_streams_.clear();
-            
-            RCLCPP_DEBUG(this->get_logger(), "CUDA resources cleaned up");
-            
-        } catch (const std::exception& e) {
-            RCLCPP_WARN(
-                this->get_logger(), 
-                "Error during CUDA cleanup: %s", 
-                e.what()
-            );
-            // Don't rethrow to allow cleanup to continue
-        }
-        #endif
-        {% endif %}
         
         RCLCPP_INFO(this->get_logger(), "Node cleanup completed successfully");
         return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
@@ -680,15 +343,11 @@ namespace {{ namespace }} {
         );
         return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::ERROR;
     }
-    {% else %}
-    (void)previous_state;
-    {% endif %}
 }
 
-{{ 'rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn' if is_lifecycle else 'void' }}
+rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
 {{ class_name }}::on_shutdown(const rclcpp_lifecycle::State& previous_state)
 {
-    {% if is_lifecycle %}
     RCLCPP_INFO(
         this->get_logger(), 
         "Shutting down from [%s] state...", 
@@ -696,34 +355,8 @@ namespace {{ namespace }} {
     );
     
     try {
-        // Call cleanup first to ensure all resources are released
+        // Call cleanup first
         on_cleanup(previous_state);
-        
-        // Additional shutdown-specific cleanup
-        {% if cuda_enabled %}
-        #ifdef ENABLE_CUDA
-        try {
-            RCLCPP_DEBUG(this->get_logger(), "Resetting CUDA device...");
-            cudaError_t status = cudaDeviceReset();
-            if (status != cudaSuccess) {
-                RCLCPP_WARN(
-                    this->get_logger(), 
-                    "Failed to reset CUDA device: %s", 
-                    cudaGetErrorString(status)
-                );
-            } else {
-                RCLCPP_DEBUG(this->get_logger(), "CUDA device reset successfully");
-            }
-        } catch (const std::exception& e) {
-            RCLCPP_WARN(
-                this->get_logger(), 
-                "Error during CUDA device reset: %s", 
-                e.what()
-            );
-            // Don't rethrow to allow shutdown to complete
-        }
-        #endif
-        {% endif %}
         
         RCLCPP_INFO(this->get_logger(), "Node shutdown completed successfully");
         return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
@@ -736,29 +369,50 @@ namespace {{ namespace }} {
         );
         return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::ERROR;
     }
-    {% else %}
-    (void)previous_state;
-    {% endif %}
 }
+{% endif %}
 
 // Timer callbacks
 {% for timer in timers %}
 void {{ class_name }}::{{ timer.callback_name }}()
 {
-    // Timer callback implementation
     RCLCPP_DEBUG(this->get_logger(), "Timer {{ timer.name }} triggered");
+    
+    {% if timer.name == 'main_timer' %}
+    // Main timer implementation
+    auto message = std_msgs::msg::String();
+    message.data = "Hello from {{ node_name }}! Count: " + std::to_string(count_);
+    chatter_pub_->publish(message);
+    count_++;
+    {% elif timer.name == 'processing_timer' %}
+    // Processing timer implementation
+    if (enable_processing_) {
+        // Process latest data
+        RCLCPP_DEBUG(this->get_logger(), "Processing latest data");
+    }
+    {% else %}
+    // Custom timer implementation
+    RCLCPP_DEBUG(this->get_logger(), "Custom timer {{ timer.name }} executed");
+    {% endif %}
 }
-
 {% endfor %}
 
 // Subscriber callbacks
 {% for sub in subscribers %}
 void {{ class_name }}::{{ sub.callback_name }}(const {{ sub.msg_type }}::ConstSharedPtr msg)
 {
-    // Process message
+    {% if sub.msg_type == 'sensor_msgs::msg::Image' %}
+    latest_image_ = msg;
+    {% elif sub.msg_type == 'sensor_msgs::msg::PointCloud2' %}
+    latest_pointcloud_ = msg;
+    {% elif sub.msg_type == 'geometry_msgs::msg::Twist' %}
+    latest_twist_ = msg;
+    {% elif sub.msg_type == 'sensor_msgs::msg::LaserScan' %}
+    latest_scan_ = msg;
+    {% endif %}
+    
     RCLCPP_DEBUG(this->get_logger(), "Received message on {{ sub.topic }}");
 }
-
 {% endfor %}
 
 // Service callbacks
@@ -767,14 +421,35 @@ void {{ class_name }}::{{ srv.callback_name }}(
     const std::shared_ptr<{{ srv.srv_type }}::Request> request,
     std::shared_ptr<{{ srv.srv_type }}::Response> response)
 {
-    // Process service request
     RCLCPP_DEBUG(this->get_logger(), "Service {{ srv.service }} called");
+    
+    // Default service implementation
+    response->success = true;
+    response->message = "Service {{ srv.service }} completed successfully";
 }
-
 {% endfor %}
 
-// CUDA methods
+{% if actions %}
+// Action callbacks
+{% for action in actions %}
+void {{ class_name }}::execute_{{ action.name | replace('/', '_') }}(
+    const std::shared_ptr<rclcpp_action::ServerGoalHandle<{{ action.action_type }}>> goal_handle)
+{
+    RCLCPP_INFO(this->get_logger(), "Executing action {{ action.name }}");
+    
+    const auto goal = goal_handle->get_goal();
+    auto feedback = std::make_shared<{{ action.action_type }}::Feedback>();
+    auto result = std::make_shared<{{ action.action_type }}::Result>();
+    
+    // Action implementation
+    result->success = true;
+    goal_handle->succeed(result);
+}
+{% endfor %}
+{% endif %}
+
 {% if cuda_kernels %}
+// CUDA methods
 bool {{ class_name }}::initializeCuda() {
     RCLCPP_DEBUG(this->get_logger(), "Initializing CUDA resources");
     try {
@@ -806,10 +481,6 @@ bool {{ class_name }}::initializeCuda() {
                    "Exception during CUDA initialization: %s", 
                    e.what());
         return false;
-    } catch (...) {
-        RCLCPP_ERROR(this->get_logger(), 
-                   "Unknown exception during CUDA initialization");
-        return false;
     }
 }
 
@@ -823,76 +494,108 @@ void {{ class_name }}::cleanupCuda() {
         RCLCPP_ERROR(this->get_logger(), 
                    "Exception during CUDA cleanup: %s", 
                    e.what());
-    } catch (...) {
-        RCLCPP_ERROR(this->get_logger(), 
-                   "Unknown exception during CUDA cleanup");
     }
 }
 
-std::vector<{{ cuda_default_output_type|default('float') }}> 
-{{ class_name }}::processWithCuda(
-    const std::vector<{{ cuda_default_input_type|default('float') }}>& input,
-    const {{ cuda_default_param_type|default('CudaParams') }}& parameters) 
+std::vector<float> {{ class_name }}::processWithCuda(
+    const std::vector<float>& input,
+    const CudaParams& parameters)
 {
     RCLCPP_DEBUG(this->get_logger(), "Default processWithCuda implementation called");
     // Default implementation returns an empty vector
-    // Override this method in derived classes to provide actual CUDA processing
     return {};
 }
 
 // CUDA kernel wrappers
 {% for kernel in cuda_kernels %}
-std::vector<{{ kernel.output_type|default('float') }}> 
-{{ class_name }}::{{ kernel.name }}(
-    const std::vector<{{ kernel.input_type|default('float') }}>& input,
-    const {{ kernel.param_type }}{% if kernel.param_type != 'void' %}&{% endif %} parameters)
+std::vector<float> {{ class_name }}::call_{{ kernel.name }}_kernel(
+    const std::vector<float>& input,
+    const {{ kernel.struct_name }}& parameters)
 {
     RCLCPP_DEBUG(this->get_logger(), "CUDA kernel {{ kernel.name }} called with %zu elements", input.size());
     
     // Default implementation returns an empty vector
     // Override this method in derived classes to provide actual CUDA kernel execution
-    return std::vector<{{ kernel.output_type|default('float') }}>();
+    return std::vector<float>();
 }
-
 {% endfor %}
 {% endif %}
 
 // User-defined C++ methods
 {% for method in cpp_methods %}
 void {{ class_name }}::{{ method.name }}(
-    {% for input in method.inputs %}{{ input.type }} {{ input.name }}{% if input.size_expr %}[{{ input.size_expr }}]{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}
-    {% if method.inputs and method.outputs %}, {% endif %}
-    {% for output in method.outputs %}{{ output.type }}& {{ output.name }}{% if output.size_expr %}[{{ output.size_expr }}]{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}
+    {% set valid_inputs = [] -%}
+    {%- for input in method.inputs -%}
+        {%- if input.type != 'void' -%}
+            {%- set _ = valid_inputs.append(input) -%}
+        {%- endif -%}
+    {%- endfor -%}
+    {% for input in valid_inputs %}{{ input.type }} {{ input.name }}{% if not loop.last %}, {% endif %}{% endfor %}
+    {% if valid_inputs and method.outputs %}, {% endif %}
+    {% for output in method.outputs %}{{ output.type }}& {{ output.name }}{% if not loop.last %}, {% endif %}{% endfor %}
 ) {
 {% if method.outputs %}
-    // Method has output parameters, assign to them instead of returning
+    // Method has output parameters
     {% for output in method.outputs %}
-    {% if method.code and method.code.strip() %}
-        {% set code_without_return = method.code | replace('return ', '') | replace(';', '') %}
-        {% if code_without_return.strip() %}
-    {{ output.name }} = {{ code_without_return }};
-        {% else %}
     {{ output.name }} = {};  // Default initialization
-        {% endif %}
-    {% else %}
-    {{ output.name }} = {};  // Default initialization
-    {% endif %}
     {% endfor %}
 {% else %}
-{% if method.code and method.code.strip() %}
+    // Method implementation
+    {% if method.code and method.code.strip() %}
 {{ method.code | indent(4) }}
-{% else %}
-    // Empty method implementation
-{% endif %}
+    {% else %}
+    // TODO: Implement method logic
+    RCLCPP_DEBUG(this->get_logger(), "Method {{ method.name }} called");
+    
+    // Common method implementations
+    {% if method.name == 'process_safety_check' %}
+    // Safety check implementation
+    if (latest_twist_) {
+        // Check velocity limits
+        RCLCPP_DEBUG(this->get_logger(), "Safety check passed");
+    }
+    {% elif method.name == 'process_navigation_step' %}
+    // Navigation step implementation
+    RCLCPP_DEBUG(this->get_logger(), "Navigation step executed");
+    {% elif method.name == 'process_image' %}
+    // Image processing implementation
+    if (latest_image_) {
+        RCLCPP_DEBUG(this->get_logger(), "Processing image");
+        // Add image processing logic here
+    }
+    {% elif method.name == 'process_image_gpu' %}
+    // GPU image processing implementation
+    RCLCPP_DEBUG(this->get_logger(), "Processing image with GPU");
+    // Add GPU image processing logic here
+    {% elif method.name == 'run_detection_inference' %}
+    // Detection inference implementation
+    RCLCPP_DEBUG(this->get_logger(), "Running detection inference");
+    // Add detection inference logic here
+    {% endif %}
+    {% endif %}
 {% endif %}
 }
-{% endfor %}
-
-// Raw C++ code blocks (passed through as-is)
-{% for cpp_block in raw_cpp_code %}
-{{ cpp_block.code | indent(0) }}
 {% endfor %}
 
 {% if namespace %}
 } // namespace {{ namespace }}
 {% endif %}
+
+int main(int argc, char* argv[])
+{
+    rclcpp::init(argc, argv);
+    {% if namespace %}
+    auto node = std::make_shared<{{ namespace }}::{{ class_name }}>();
+    {% else %}
+    auto node = std::make_shared<{{ class_name }}>();
+    {% endif %}
+    {% if is_lifecycle %}
+    rclcpp::executors::MultiThreadedExecutor executor;
+    executor.add_node(node->get_node_base_interface());
+    executor.spin();
+    {% else %}
+    rclcpp::spin(node);
+    {% endif %}
+    rclcpp::shutdown();
+    return 0;
+}

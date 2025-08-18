@@ -5,35 +5,17 @@
 #include <vector>
 #include <map>
 #include <cmath>
-
-// Global C++ code blocks (passed through as-is)
-
-// Additional C++ code that gets included in the generated files
-namespace robot_utils {
-    // Utility functions
-    template<typename T>
-    T clamp(T value, T min, T max) {
-        return std::max(min, std::min(max, value));
-    }
-
-    double radians_to_degrees(double radians) {
-        return radians * 180.0 / M_PI;
-    }
-
-    double degrees_to_radians(double degrees) {
-        return degrees * M_PI / 180.0;
-    }
-}
+#include <stdexcept>
 
 
-namespace robodsl {
+namespace perception {
 
 Perception_nodeNode::Perception_nodeNode(const rclcpp::NodeOptions& options)
 : rclcpp::Node("perception_node", options)
 {
     // Initialize parameters
     this->declare_parameter<bool>("enable_gpu", true);
-    this->declare_parameter<double>("confidence_threshold", 0.5);
+    this->declare_parameter<std::string>("confidence_threshold", "0.5");
     this->declare_parameter<std::string>("model_path", "models/detection.onnx");
 
     // Create publishers
@@ -63,51 +45,55 @@ Perception_nodeNode::Perception_nodeNode(const rclcpp::NodeOptions& options)
         );
     }
 
-    // Create services with proper error handling
+    // Create services
     
-    // Initialize action servers
+
+    // Create timers
+    processing_timer_timer_ = this->create_wall_timer(
+        std::chrono::duration<double>(0.033),
+        std::bind(&Perception_nodeNode::on_processing_timer, this)
+    );
+
 }
 
 Perception_nodeNode::~Perception_nodeNode()
 {
-    // Clean up CUDA resources if enabled
-    
-    // Cleanup CUDA resources if needed
 }
 
 
 // Timer callbacks
 void Perception_nodeNode::on_processing_timer()
 {
-    // Timer callback implementation
     RCLCPP_DEBUG(this->get_logger(), "Timer processing_timer triggered");
+    
+    // Processing timer implementation
+    if (enable_processing_) {
+        // Process latest data
+        RCLCPP_DEBUG(this->get_logger(), "Processing latest data");
+    }
 }
-
 
 // Subscriber callbacks
 void Perception_nodeNode::on_image_raw(const sensor_msgs::msg::Image::ConstSharedPtr msg)
 {
-    // Store the latest message for processing
     latest_image_ = msg;
     
-    // Process message
     RCLCPP_DEBUG(this->get_logger(), "Received message on /camera/image_raw");
 }
 
-
 // Service callbacks
 
-// CUDA methods
+
 
 // User-defined C++ methods
-void Perception_nodeNode::process_frame(
-) {
-    // TODO: Implement method logic
-    RCLCPP_DEBUG(this->get_logger(), "Method process_frame called");
-    
-    // Common method implementations
+
+} // namespace perception
+
+int main(int argc, char* argv[])
+{
+    rclcpp::init(argc, argv);
+    auto node = std::make_shared<perception::Perception_nodeNode>();
+    rclcpp::spin(node);
+    rclcpp::shutdown();
+    return 0;
 }
-
-// Raw C++ code blocks already placed at file scope above
-
-} // namespace robodsl

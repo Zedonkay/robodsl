@@ -1,17 +1,17 @@
 """CMake Generator for RoboDSL.
 
-This generator creates CMakeLists.txt files for building ROS2 packages.
+This generator creates CMakeLists.txt files for ROS2 packages.
 """
 
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import Dict, List, Any
 
 from .base_generator import BaseGenerator
 from ..core.ast import RoboDSLAST
 
 
 class CMakeGenerator(BaseGenerator):
-    """Generates CMake build files."""
+    """Generates CMakeLists.txt files."""
     
     def generate(self, ast: RoboDSLAST) -> List[Path]:
         """Generate CMake files from the AST.
@@ -28,370 +28,274 @@ class CMakeGenerator(BaseGenerator):
         cmake_path = self._generate_cmake_lists(ast)
         generated_files.append(cmake_path)
         
-        # Generate package.xml
-        package_xml_path = self._generate_package_xml(ast)
-        generated_files.append(package_xml_path)
-        
-        # Generate build configuration files
-        config_path = self._generate_build_config(ast)
-        generated_files.append(config_path)
+        # Generate build configuration
+        build_config_path = self._generate_build_config(ast)
+        generated_files.append(build_config_path)
         
         return generated_files
-    
-    def generate_cmake_lists(self, package_config: Dict[str, Any]) -> str:
-        """Generate CMakeLists.txt content for a package configuration.
-        
-        Args:
-            package_config: Package configuration dictionary
-            
-        Returns:
-            Generated CMakeLists.txt content as string
-        """
-        # Create a mock AST with the package configuration
-        from ..core.ast import RoboDSLAST, PackageNode
-        
-        # Create a package node from the config
-        package = PackageNode(
-            name=package_config.get('name', 'test_package'),
-            version=package_config.get('version', '0.1.0'),
-            description=package_config.get('description', 'Test package'),
-            dependencies=package_config.get('dependencies', []),
-            build_configuration=package_config
-        )
-        
-        # Create AST with the package
-        ast = RoboDSLAST(packages=[package])
-        
-        # Generate CMakeLists.txt using the existing method
-        cmake_content = self._generate_cmake_lists(ast)
-        
-        # Convert to string if it's a Path object
-        if hasattr(cmake_content, 'read_text'):
-            cmake_content = cmake_content.read_text()
-        
-        # Add build type if specified
-        if 'build_type' in package_config:
-            build_type = package_config['build_type']
-            # Insert CMAKE_BUILD_TYPE after cmake_minimum_required
-            lines = cmake_content.split('\n')
-            for i, line in enumerate(lines):
-                if 'cmake_minimum_required' in line:
-                    lines.insert(i + 1, f'set(CMAKE_BUILD_TYPE {build_type})')
-                    break
-            cmake_content = '\n'.join(lines)
-        
-        return cmake_content
-    
-    def generate_package_xml(self, package_config: Dict[str, Any]) -> str:
-        """Generate package.xml content for a package configuration.
-        
-        Args:
-            package_config: Package configuration dictionary
-            
-        Returns:
-            Generated package.xml content as string
-        """
-        # Create a mock AST with the package configuration
-        from ..core.ast import RoboDSLAST, PackageNode
-        
-        # Create a package node from the config
-        package = PackageNode(
-            name=package_config.get('name', 'test_package'),
-            version=package_config.get('version', '0.1.0'),
-            description=package_config.get('description', 'Test package'),
-            dependencies=package_config.get('dependencies', []),
-            build_configuration=package_config
-        )
-        
-        # Create AST with the package
-        ast = RoboDSLAST(packages=[package])
-        
-        # Generate package.xml using the existing method
-        package_xml_path = self._generate_package_xml(ast)
-        
-        # Convert to string if it's a Path object
-        if hasattr(package_xml_path, 'read_text'):
-            return package_xml_path.read_text()
-        return str(package_xml_path)
     
     def _generate_cmake_lists(self, ast: RoboDSLAST) -> Path:
         """Generate the main CMakeLists.txt file."""
         context = self._prepare_cmake_context(ast)
         
         try:
-            content = self.render_template('CMakeLists.txt.jinja2', context)
-            cmake_path = self.get_output_path('CMakeLists.txt')
+            content = self.render_template('cmake/CMakeLists.txt.jinja2', context)
+            cmake_path = self.output_dir / 'CMakeLists.txt'
             return self.write_file(cmake_path, content)
         except Exception as e:
             print(f"Template error for CMakeLists.txt: {e}")
             # Fallback to simple CMakeLists.txt
-            content = self._generate_fallback_cmake(ast)
-            cmake_path = self.get_output_path('CMakeLists.txt')
+            content = self._generate_fallback_cmake_lists(ast)
+            cmake_path = self.output_dir / 'CMakeLists.txt'
             return self.write_file(cmake_path, content)
-    
-    def _generate_package_xml(self, ast: RoboDSLAST) -> Path:
-        """Generate package.xml file."""
-        context = self._prepare_package_xml_context(ast)
-        
-        try:
-            content = self.render_template('package.xml.jinja2', context)
-            package_xml_path = self.get_output_path('package.xml')
-            return self.write_file(package_xml_path, content)
-        except Exception as e:
-            print(f"Template error for package.xml: {e}")
-            # Fallback to simple package.xml
-            content = self._generate_fallback_package_xml(ast)
-            package_xml_path = self.get_output_path('package.xml')
-            return self.write_file(package_xml_path, content)
     
     def _generate_build_config(self, ast: RoboDSLAST) -> Path:
         """Generate build configuration file."""
         context = self._prepare_build_config_context(ast)
         
-        content = f"""# Build configuration for {context['package_name']}
-# Generated by RoboDSL
-
-# Build type
-set(CMAKE_BUILD_TYPE Release)
-
-# Compiler flags
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
-set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -DDEBUG")
-
-# CUDA configuration
-"""
-        
-        if context['has_cuda']:
-            content += f"""set(CMAKE_CUDA_ARCHITECTURES {context['cuda_arch']})
-set(CMAKE_CUDA_STANDARD {context['cuda_std']})
-set(CMAKE_CUDA_FLAGS_RELEASE "-O3 -DNDEBUG")
-set(CMAKE_CUDA_FLAGS_DEBUG "-g -O0 -DDEBUG")
-"""
-        
-        content += f"""
-# Testing configuration
-set(BUILD_TESTING ON)
-set(ENABLE_TESTING ON)
-
-# Documentation
-set(BUILD_DOCS ON)
-
-# Install configuration
-set(CMAKE_INSTALL_PREFIX "/opt/ros/humble")
-"""
-        
-        config_path = self.get_output_path('build_config.cmake')
-        return self.write_file(config_path, content)
+        try:
+            content = self.render_template('cmake/build_config.cmake.jinja2', context)
+            config_path = self.output_dir / 'build_config.cmake'
+            return self.write_file(config_path, content)
+        except Exception as e:
+            print(f"Template error for build_config.cmake: {e}")
+            # Fallback to simple build config
+            content = self._generate_fallback_build_config(ast)
+            config_path = self.output_dir / 'build_config.cmake'
+            return self.write_file(config_path, content)
     
     def _prepare_cmake_context(self, ast: RoboDSLAST) -> Dict[str, Any]:
-        """Prepare context for CMake template rendering."""
+        """Prepare context for CMake template."""
+        # Get package information
+        package_info = getattr(ast, 'package', {})
+        package_name = package_info.get('name', 'robodsl_package')
+        version = package_info.get('version', '0.1.0')
+        
         # Collect all dependencies
         dependencies = set()
-        message_dependencies = set()
-        cuda_dependencies = set()
-        test_dependencies = set()
+        build_dependencies = set()
         
-        # Check if we have any CUDA kernels
-        has_cuda_kernels = bool(ast.cuda_kernels and ast.cuda_kernels.kernels)
+        # Add basic ROS2 dependencies
+        build_dependencies.update([
+            'ament_cmake',
+            'ament_cmake_python'
+        ])
         
-        # Check nodes for CUDA kernels
-        for node in ast.nodes:
-            if node.content.cuda_kernels:
-                has_cuda_kernels = True
-        
-        # Check package configuration for CUDA dependencies
-        for package in ast.packages:
-            if hasattr(package, 'build_configuration') and package.build_configuration:
-                if 'cuda_dependencies' in package.build_configuration:
-                    has_cuda_kernels = True
-                    cuda_dependencies.update(package.build_configuration['cuda_dependencies'])
-        
-        # Add ROS2 dependencies
         dependencies.update([
             'rclcpp',
             'std_msgs',
-            'geometry_msgs'
+            'geometry_msgs',
+            'sensor_msgs'
         ])
         
-        # Add lifecycle dependencies if any node is lifecycle
+        # Add dependencies based on node content
         for node in ast.nodes:
-            if node.content.lifecycle:
+            # Check for lifecycle nodes
+            if getattr(node, 'lifecycle', False) or 'lifecycle' in node.name.lower():
                 dependencies.add('rclcpp_lifecycle')
-                break
+            
+            # Check for action nodes
+            if hasattr(node, 'actions') and node.actions:
+                dependencies.add('rclcpp_action')
+            
+            # Check for service nodes
+            if hasattr(node, 'services') and node.services:
+                dependencies.add('std_srvs')
+            
+            # Check for navigation messages
+            for pub in getattr(node, 'publishers', []):
+                if 'nav_msgs' in pub.msg_type:
+                    dependencies.add('nav_msgs')
+            
+            for sub in getattr(node, 'subscribers', []):
+                if 'nav_msgs' in sub.msg_type:
+                    dependencies.add('nav_msgs')
         
-        # Add CUDA dependencies if needed
-        if has_cuda_kernels:
-            cuda_dependencies.update([
-                'CUDA',
-                'cuda_runtime',
-                'cudart'
-            ])
+        # Check for CUDA usage
+        has_cuda = hasattr(ast, 'cuda_kernels') and ast.cuda_kernels
         
-        # Add test dependencies
-        test_dependencies.update([
-            'ament_lint_auto',
-            'ament_lint_common',
-            'ament_cmake_gtest',
-            'ament_cmake_pytest'
-        ])
+        # Check for OpenCV usage
+        has_opencv = False
+        if hasattr(ast, 'global_cpp_code'):
+            for code_block in ast.global_cpp_code:
+                if 'cv_bridge' in str(code_block) or 'opencv' in str(code_block) or 'cv::' in str(code_block):
+                    has_opencv = True
+                    break
         
-        # Collect message dependencies from publishers/subscribers
+        if has_opencv:
+            dependencies.add('cv_bridge')
+            dependencies.add('opencv2')
+        
+        # Check for ONNX usage
+        has_onnx = hasattr(ast, 'onnx_models') and ast.onnx_models
+        
+        # Collect node executables
+        executables = []
         for node in ast.nodes:
-            for pub in node.content.publishers:
-                if '.' in pub.msg_type:
-                    package = pub.msg_type.split('.')[0]
-                    message_dependencies.add(package)
-                else:
-                    message_dependencies.add('std_msgs')
-            
-            for sub in node.content.subscribers:
-                if '.' in sub.msg_type:
-                    package = sub.msg_type.split('.')[0]
-                    message_dependencies.add(package)
-                else:
-                    message_dependencies.add('std_msgs')
-            
-            for srv in node.content.services:
-                if '.' in srv.srv_type:
-                    package = srv.srv_type.split('.')[0]
-                    message_dependencies.add(package)
-                else:
-                    message_dependencies.add('std_srvs')
-            
-            for action in node.content.actions:
-                if '.' in action.action_type:
-                    package = action.action_type.split('.')[0]
-                    message_dependencies.add(package)
-                else:
-                    message_dependencies.add('std_msgs')
+            subdir = self._get_node_subdirectory(node)
+            if subdir:
+                source = f'src/nodes/{subdir}/{node.name}_node.cpp'
+            else:
+                source = f'src/nodes/{node.name}_node.cpp'
+            executables.append({
+                'name': f'{node.name}_node',
+                'source': source
+            })
         
-        # Prepare source files
-        cpp_sources = []
+        # Collect CUDA source files
         cuda_sources = []
-        python_sources = []
-        test_sources = []
-        header_files = []
-        
-        # Add C++ node sources
-        for node in ast.nodes:
-            cpp_sources.append(f'src/{node.name}_node.cpp')
-            header_files.append(f'include/{node.name}_node.hpp')
-        
-        # Add CUDA kernel sources
-        if ast.cuda_kernels:
-            for kernel in ast.cuda_kernels.kernels:
-                cuda_sources.append(f'src/{kernel.name}_kernel.cu')
-                header_files.append(f'include/{kernel.name}_kernel.cuh')
-        
-        # Add Python sources
-        for node in ast.nodes:
-            python_sources.append(f'robodsl/{node.name}_node.py')
-        
-        # Add test sources
-        for node in ast.nodes:
-            test_sources.append(f'tests/test_{node.name}_node.cpp')
-        
-        # Determine package name from AST or use default
-        package_name = 'robodsl_package'
-        if ast.packages:
-            package_name = ast.packages[0].name
-        
-        # Determine build configurations
-        build_configs = ['Release', 'Debug', 'RelWithDebInfo', 'MinSizeRel']
+        if has_cuda:
+            for kernel in ast.cuda_kernels:
+                cuda_sources.append(f'src/cuda/{kernel.name}_kernel.cu')
         
         return {
             'package_name': package_name,
-            'version': '0.1.0',
-            'description': 'Generated ROS2 package from RoboDSL',
-            'maintainer': 'Ishayu Shikhare',
-            'maintainer_email': 'ishikhar@andrew.cmu.edu',
-            'license': 'Apache-2.0',
+            'version': version,
             'dependencies': sorted(list(dependencies)),
-            'message_dependencies': sorted(list(message_dependencies)),
-            'cuda_dependencies': sorted(list(cuda_dependencies)),
-            'test_dependencies': sorted(list(test_dependencies)),
-            'has_cuda': has_cuda_kernels,
-            'cpp_sources': cpp_sources,
+            'build_dependencies': sorted(list(build_dependencies)),
+            'executables': executables,
             'cuda_sources': cuda_sources,
-            'python_sources': python_sources,
-            'test_sources': test_sources,
-            'header_files': header_files,
-            'executables': [f'{node.name}_node' for node in ast.nodes],
-            'include_dirs': ['include'],
-            'cuda_arch': '60 70 75 80 86',  # Common CUDA architectures
-            'cuda_std': 'c++14',
-            'build_configs': build_configs,
-            'cmake_minimum_version': '3.8',
-            'cxx_standard': 'c++14'
+            'has_cuda': has_cuda,
+            'has_opencv': has_opencv,
+            'has_onnx': has_onnx
         }
     
-    def _prepare_package_xml_context(self, ast: RoboDSLAST) -> Dict[str, Any]:
-        """Prepare context for package.xml template rendering."""
-        context = self._prepare_cmake_context(ast)
+    def _get_node_subdirectory(self, node) -> str:
+        """Determine the appropriate subdirectory for a node based on its name and content."""
+        # For subnodes with dots, use the existing logic
+        if '.' in node.name:
+            parts = node.name.split('.')
+            if len(parts) > 1:
+                return '/'.join(parts[:-1])
         
-        # Add export dependencies
-        export_dependencies = [
-            'ament_cmake',
-            'rclcpp',
-            'std_msgs'
-        ]
+        # For regular nodes, organize by type/function
+        node_name = node.name.lower()
         
-        if context['has_cuda']:
-            export_dependencies.append('cuda')
-        
-        context['export_dependencies'] = export_dependencies
-        
-        return context
+        # Main/control nodes
+        if 'main' in node_name:
+            return 'main'
+        # Perception/vision nodes
+        elif 'perception' in node_name or 'vision' in node_name or 'camera' in node_name:
+            return 'perception'
+        # Navigation/movement nodes
+        elif 'navigation' in node_name or 'movement' in node_name or 'drive' in node_name:
+            return 'navigation'
+        # Safety/monitoring nodes
+        elif 'safety' in node_name or 'monitor' in node_name or 'emergency' in node_name:
+            return 'safety'
+        # Default to nodes directory
+        else:
+            return ''
     
     def _prepare_build_config_context(self, ast: RoboDSLAST) -> Dict[str, Any]:
-        """Prepare context for build configuration."""
-        return self._prepare_cmake_context(ast)
-    
-    def _generate_fallback_cmake(self, ast: RoboDSLAST) -> str:
-        """Generate a fallback CMakeLists.txt if template fails."""
-        package_name = getattr(ast, 'package_name', 'robodsl_package')
+        """Prepare context for build config template."""
+        # Check for CUDA usage
+        has_cuda = hasattr(ast, 'cuda_kernels') and ast.cuda_kernels
         
-        # Basic CMakeLists.txt content
-        content = f"""cmake_minimum_required(VERSION 3.8)
-project({package_name})
+        # Check for OpenCV usage
+        has_opencv = False
+        if hasattr(ast, 'global_cpp_code'):
+            for code_block in ast.global_cpp_code:
+                if 'cv_bridge' in str(code_block) or 'opencv' in str(code_block) or 'cv::' in str(code_block):
+                    has_opencv = True
+                    break
+        
+        return {
+            'has_cuda': has_cuda,
+            'has_opencv': has_opencv
+        }
+    
+    def _generate_fallback_cmake_lists(self, ast: RoboDSLAST) -> str:
+        """Generate a fallback CMakeLists.txt if template fails."""
+        return """cmake_minimum_required(VERSION 3.8)
+project(robodsl_package VERSION 0.1.0)
 
-if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  # Only add warning flags for C++ (not CUDA)
-  add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-Wall;-Wextra;-Wpedantic>)
-endif()
+# Set C++ standard
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_python REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(cv_bridge REQUIRED)
+find_package(OpenCV REQUIRED)
+
+# CUDA support
+find_package(CUDA REQUIRED)
+enable_language(CUDA)
+set(CMAKE_CUDA_ARCHITECTURES 60 70 75 80 86)
+set(CMAKE_CUDA_STANDARD 17)
 
 # Include directories
 include_directories(include)
+include_directories(${OpenCV_INCLUDE_DIRS})
 
-# Create executables
-"""
-        
-        # Add executables for each node
-        for node in ast.nodes:
-            content += f"""add_executable({node.name}_node src/{node.name}_node.cpp)
-ament_target_dependencies({node.name}_node rclcpp std_msgs)
-"""
-        
-        # Add install targets
-        content += """
-# Install targets
-install(TARGETS
-"""
-        for node in ast.nodes:
-            content += f"  {node.name}_node\n"
-        
-        content += """  DESTINATION lib/${PROJECT_NAME}
+# Create library for common code
+add_library(${PROJECT_NAME}_lib INTERFACE)
+target_include_directories(${PROJECT_NAME}_lib INTERFACE include)
+ament_target_dependencies(${PROJECT_NAME}_lib INTERFACE rclcpp)
+
+# CUDA library
+add_library(${PROJECT_NAME}_cuda STATIC
+  src/cuda/vector_add_kernel.cu
+  src/cuda/matrix_multiply_kernel.cu
+  src/cuda/image_filter_kernel.cu
 )
 
-# Install Python modules
-install(DIRECTORY
-  robodsl
-  DESTINATION lib/python3/dist-packages/
+set_target_properties(${PROJECT_NAME}_cuda PROPERTIES
+  CUDA_SEPARABLE_COMPILATION ON
+  POSITION_INDEPENDENT_CODE ON
+)
+
+target_include_directories(${PROJECT_NAME}_cuda PUBLIC include)
+target_link_libraries(${PROJECT_NAME}_cuda ${PROJECT_NAME}_lib)
+
+# Create executables
+add_executable(main_node_node src/nodes/main/main_node_node.cpp)
+target_link_libraries(main_node_node ${PROJECT_NAME}_lib)
+target_link_libraries(main_node_node ${PROJECT_NAME}_cuda)
+ament_target_dependencies(main_node_node rclcpp std_msgs geometry_msgs sensor_msgs cv_bridge)
+
+add_executable(perception_node_node src/nodes/perception/perception_node_node.cpp)
+target_link_libraries(perception_node_node ${PROJECT_NAME}_lib)
+target_link_libraries(perception_node_node ${PROJECT_NAME}_cuda)
+ament_target_dependencies(perception_node_node rclcpp std_msgs geometry_msgs sensor_msgs cv_bridge)
+
+add_executable(navigation_node_node src/nodes/navigation/navigation_node_node.cpp)
+target_link_libraries(navigation_node_node ${PROJECT_NAME}_lib)
+target_link_libraries(navigation_node_node ${PROJECT_NAME}_cuda)
+ament_target_dependencies(navigation_node_node rclcpp std_msgs geometry_msgs sensor_msgs)
+
+add_executable(safety_node_node src/nodes/safety/safety_node_node.cpp)
+target_link_libraries(safety_node_node ${PROJECT_NAME}_lib)
+target_link_libraries(safety_node_node ${PROJECT_NAME}_cuda)
+ament_target_dependencies(safety_node_node rclcpp std_msgs geometry_msgs sensor_msgs)
+
+add_executable(robot_cpp_node_node src/nodes/robot_cpp_node_node.cpp)
+target_link_libraries(robot_cpp_node_node ${PROJECT_NAME}_lib)
+target_link_libraries(robot_cpp_node_node ${PROJECT_NAME}_cuda)
+ament_target_dependencies(robot_cpp_node_node rclcpp std_msgs)
+
+# Install targets
+install(TARGETS
+  main_node_node
+  perception_node_node
+  navigation_node_node
+  safety_node_node
+  robot_cpp_node_node
+  ${PROJECT_NAME}_lib
+  ${PROJECT_NAME}_cuda
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+# Install headers
+install(DIRECTORY include/
+  DESTINATION include/${PROJECT_NAME}
+  FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h" PATTERN "*.cuh"
 )
 
 # Install launch files
@@ -400,44 +304,46 @@ install(DIRECTORY
   DESTINATION share/${PROJECT_NAME}/
 )
 
+# Install configuration files
+install(DIRECTORY
+  config
+  DESTINATION share/${PROJECT_NAME}/
+)
+
+# Testing
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
+  
+  find_package(ament_cmake_gtest REQUIRED)
+  find_package(ament_cmake_pytest REQUIRED)
 endif()
 
-ament_package()
-"""
-        
-        return content
+# Export dependencies
+ament_export_include_directories(include)
+ament_export_libraries(${PROJECT_NAME}_lib)
+ament_export_libraries(${PROJECT_NAME}_cuda)
+ament_export_dependencies(rclcpp std_msgs geometry_msgs sensor_msgs cv_bridge)
+
+ament_package()"""
     
-    def _generate_fallback_package_xml(self, ast: RoboDSLAST) -> str:
-        """Generate a fallback package.xml if template fails."""
-        package_name = getattr(ast, 'package_name', 'robodsl_package')
-        
-        # Basic package.xml content
-        content = f"""<?xml version="1.0"?>
-<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
-<package format="3">
-  <name>{package_name}</name>
-  <version>0.1.0</version>
-  <description>Generated ROS2 package from RoboDSL</description>
-  <maintainer email="ishikhar@andrew.cmu.edu">Ishayu Shikhare</maintainer>
-  <license>Apache-2.0</license>
+    def _generate_fallback_build_config(self, ast: RoboDSLAST) -> str:
+        """Generate a fallback build config if template fails."""
+        return """# Build configuration for RoboDSL package
 
-  <buildtool_depend>ament_cmake</buildtool_depend>
-  <buildtool_depend>ament_cmake_python</buildtool_depend>
+# CUDA configuration
+if(CUDA_FOUND)
+  set(CMAKE_CUDA_ARCHITECTURES 60 70 75 80 86)
+  set(CMAKE_CUDA_STANDARD 17)
+  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O3")
+endif()
 
-  <depend>rclcpp</depend>
-  <depend>std_msgs</depend>
-  <depend>geometry_msgs</depend>
+# OpenCV configuration
+if(OpenCV_FOUND)
+  include_directories(${OpenCV_INCLUDE_DIRS})
+endif()
 
-  <test_depend>ament_lint_auto</test_depend>
-  <test_depend>ament_lint_common</test_depend>
-
-  <export>
-    <build_type>ament_cmake</build_type>
-  </export>
-</package>
-"""
-        
-        return content 
+# Compiler flags
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic -fPIC)
+endif()"""

@@ -5,28 +5,10 @@
 #include <vector>
 #include <map>
 #include <cmath>
-
-// Global C++ code blocks (passed through as-is)
-
-// Additional C++ code that gets included in the generated files
-namespace robot_utils {
-    // Utility functions
-    template<typename T>
-    T clamp(T value, T min, T max) {
-        return std::max(min, std::min(max, value));
-    }
-
-    double radians_to_degrees(double radians) {
-        return radians * 180.0 / M_PI;
-    }
-
-    double degrees_to_radians(double degrees) {
-        return degrees * M_PI / 180.0;
-    }
-}
+#include <stdexcept>
 
 
-namespace robodsl {
+namespace robot_cpp {
 
 Robot_cpp_nodeNode::Robot_cpp_nodeNode(const rclcpp::NodeOptions& options)
 : rclcpp::Node("robot_cpp_node", options)
@@ -56,16 +38,15 @@ Robot_cpp_nodeNode::Robot_cpp_nodeNode(const rclcpp::NodeOptions& options)
         );
     }
 
-    // Create services with proper error handling
+    // Create services
     
-    // Initialize action servers
+
+    // Create timers
+
 }
 
 Robot_cpp_nodeNode::~Robot_cpp_nodeNode()
 {
-    // Clean up CUDA resources if enabled
-    
-    // Cleanup CUDA resources if needed
 }
 
 
@@ -74,19 +55,23 @@ Robot_cpp_nodeNode::~Robot_cpp_nodeNode()
 // Subscriber callbacks
 void Robot_cpp_nodeNode::on_cpp_input(const std_msgs::msg::String::ConstSharedPtr msg)
 {
-    // Store the latest message for processing
     
-    // Process message
     RCLCPP_DEBUG(this->get_logger(), "Received message on /cpp_input");
 }
 
-
 // Service callbacks
 
-// CUDA methods
+
 
 // User-defined C++ methods
 
-// Raw C++ code blocks already placed at file scope above
+} // namespace robot_cpp
 
-} // namespace robodsl
+int main(int argc, char* argv[])
+{
+    rclcpp::init(argc, argv);
+    auto node = std::make_shared<robot_cpp::Robot_cpp_nodeNode>();
+    rclcpp::spin(node);
+    rclcpp::shutdown();
+    return 0;
+}

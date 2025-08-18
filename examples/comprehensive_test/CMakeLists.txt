@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(robot_package VERSION 0.1.0)
+project(robodsl_package VERSION 0.1.0)
 
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
@@ -15,7 +15,7 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 # Build configurations
-set(CMAKE_CONFIGURATION_TYPES "Release;Debug;RelWithDebInfo;MinSizeRel")
+set(CMAKE_CONFIGURATION_TYPES "")
 
 # Find dependencies
 find_package(ament_cmake REQUIRED)
@@ -23,14 +23,13 @@ find_package(ament_cmake_python REQUIRED)
 find_package(rclcpp REQUIRED)
 
 find_package(geometry_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
-find_package(rclcpp_action REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
-
-find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
+
 
 # CUDA support
 find_package(CUDA REQUIRED)
@@ -44,10 +43,8 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -g -G")
 endif()
 
-find_package(CUDA REQUIRED)
 
 # Include directories
-include_directories(include)
 include_directories(include)
 
 # Create library for common code (INTERFACE for header-only library)
@@ -81,11 +78,10 @@ target_link_libraries(main_node_node ${PROJECT_NAME}_cuda)
 
 ament_target_dependencies(main_node_node rclcpp)
 ament_target_dependencies(main_node_node geometry_msgs)
+ament_target_dependencies(main_node_node nav_msgs)
 ament_target_dependencies(main_node_node rclcpp)
-ament_target_dependencies(main_node_node rclcpp_action)
 ament_target_dependencies(main_node_node rclcpp_lifecycle)
 ament_target_dependencies(main_node_node sensor_msgs)
-ament_target_dependencies(main_node_node std_msgs)
 ament_target_dependencies(main_node_node std_msgs)
 ament_target_dependencies(main_node_node std_srvs)
 
@@ -98,11 +94,10 @@ target_link_libraries(perception_node_node ${PROJECT_NAME}_cuda)
 
 ament_target_dependencies(perception_node_node rclcpp)
 ament_target_dependencies(perception_node_node geometry_msgs)
+ament_target_dependencies(perception_node_node nav_msgs)
 ament_target_dependencies(perception_node_node rclcpp)
-ament_target_dependencies(perception_node_node rclcpp_action)
 ament_target_dependencies(perception_node_node rclcpp_lifecycle)
 ament_target_dependencies(perception_node_node sensor_msgs)
-ament_target_dependencies(perception_node_node std_msgs)
 ament_target_dependencies(perception_node_node std_msgs)
 ament_target_dependencies(perception_node_node std_srvs)
 
@@ -115,11 +110,10 @@ target_link_libraries(navigation_node_node ${PROJECT_NAME}_cuda)
 
 ament_target_dependencies(navigation_node_node rclcpp)
 ament_target_dependencies(navigation_node_node geometry_msgs)
+ament_target_dependencies(navigation_node_node nav_msgs)
 ament_target_dependencies(navigation_node_node rclcpp)
-ament_target_dependencies(navigation_node_node rclcpp_action)
 ament_target_dependencies(navigation_node_node rclcpp_lifecycle)
 ament_target_dependencies(navigation_node_node sensor_msgs)
-ament_target_dependencies(navigation_node_node std_msgs)
 ament_target_dependencies(navigation_node_node std_msgs)
 ament_target_dependencies(navigation_node_node std_srvs)
 
@@ -132,11 +126,10 @@ target_link_libraries(safety_node_node ${PROJECT_NAME}_cuda)
 
 ament_target_dependencies(safety_node_node rclcpp)
 ament_target_dependencies(safety_node_node geometry_msgs)
+ament_target_dependencies(safety_node_node nav_msgs)
 ament_target_dependencies(safety_node_node rclcpp)
-ament_target_dependencies(safety_node_node rclcpp_action)
 ament_target_dependencies(safety_node_node rclcpp_lifecycle)
 ament_target_dependencies(safety_node_node sensor_msgs)
-ament_target_dependencies(safety_node_node std_msgs)
 ament_target_dependencies(safety_node_node std_msgs)
 ament_target_dependencies(safety_node_node std_srvs)
 
@@ -149,11 +142,10 @@ target_link_libraries(robot_cpp_node_node ${PROJECT_NAME}_cuda)
 
 ament_target_dependencies(robot_cpp_node_node rclcpp)
 ament_target_dependencies(robot_cpp_node_node geometry_msgs)
+ament_target_dependencies(robot_cpp_node_node nav_msgs)
 ament_target_dependencies(robot_cpp_node_node rclcpp)
-ament_target_dependencies(robot_cpp_node_node rclcpp_action)
 ament_target_dependencies(robot_cpp_node_node rclcpp_lifecycle)
 ament_target_dependencies(robot_cpp_node_node sensor_msgs)
-ament_target_dependencies(robot_cpp_node_node std_msgs)
 ament_target_dependencies(robot_cpp_node_node std_msgs)
 ament_target_dependencies(robot_cpp_node_node std_srvs)
 
@@ -204,8 +196,7 @@ if(BUILD_TESTING)
   
   find_package(ament_cmake_gtest REQUIRED)
   find_package(ament_cmake_pytest REQUIRED)
-  find_package(ament_lint_auto REQUIRED)
-  find_package(ament_lint_common REQUIRED)
+  
   
   # Add tests
   
@@ -240,10 +231,11 @@ ament_export_libraries(${PROJECT_NAME}_lib)
 ament_export_libraries(${PROJECT_NAME}_cuda)
 ament_export_dependencies(rclcpp)
 ament_export_dependencies(geometry_msgs)
+ament_export_dependencies(nav_msgs)
 ament_export_dependencies(rclcpp)
-ament_export_dependencies(rclcpp_action)
 ament_export_dependencies(rclcpp_lifecycle)
 ament_export_dependencies(sensor_msgs)
 ament_export_dependencies(std_msgs)
+ament_export_dependencies(std_srvs)
 
 ament_package()
