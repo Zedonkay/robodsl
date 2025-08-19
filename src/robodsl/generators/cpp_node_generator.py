@@ -99,6 +99,9 @@ class CppNodeGenerator(BaseGenerator):
         # Safety/monitoring nodes
         elif 'safety' in node_name or 'monitor' in node_name or 'emergency' in node_name:
             return 'nodes/safety'
+        # CPP nodes (from package definitions)
+        elif 'cpp' in node_name or node_name.startswith('robot_'):
+            return 'nodes'
         # Default to nodes directory
         else:
             return 'nodes'
@@ -159,6 +162,8 @@ class CppNodeGenerator(BaseGenerator):
         if subdir:
             if subdir.startswith('nodes/'):
                 include_path = f"{subdir}/{node.name}_node.hpp"
+            elif subdir == 'nodes':
+                include_path = f"nodes/{node.name}_node.hpp"
             else:
                 include_path = f"nodes/{subdir}/{node.name}_node.hpp"
         else:
