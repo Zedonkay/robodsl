@@ -27,7 +27,9 @@ public:
 private:
     // ROS2 publishers and subscribers
     {% for input in stage.content.inputs %}
-    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr {{ input.input_name }}_sub_;
+    {% for input_name in input.input_names %}
+    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr {{ input_name }}_sub_;
+    {% endfor %}
     {% endfor %}
     
     {% for output in stage.content.outputs %}
@@ -49,7 +51,9 @@ private:
     
     // Callback methods
     {% for input in stage.content.inputs %}
-    void {{ input.input_name }}_callback(const std_msgs::msg::String::SharedPtr msg);
+    {% for input_name in input.input_names %}
+    void {{ input_name }}_callback(const std_msgs::msg::String::SharedPtr msg);
+    {% endfor %}
     {% endfor %}
     
     void timer_callback();

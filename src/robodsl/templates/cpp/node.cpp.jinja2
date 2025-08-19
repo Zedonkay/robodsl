@@ -401,15 +401,7 @@ void {{ class_name }}::{{ timer.callback_name }}()
 {% for sub in subscribers %}
 void {{ class_name }}::{{ sub.callback_name }}(const {{ sub.msg_type }}::ConstSharedPtr msg)
 {
-    {% if sub.msg_type == 'sensor_msgs::msg::Image' %}
-    latest_image_ = msg;
-    {% elif sub.msg_type == 'sensor_msgs::msg::PointCloud2' %}
-    latest_pointcloud_ = msg;
-    {% elif sub.msg_type == 'geometry_msgs::msg::Twist' %}
-    latest_twist_ = msg;
-    {% elif sub.msg_type == 'sensor_msgs::msg::LaserScan' %}
-    latest_scan_ = msg;
-    {% endif %}
+    latest_{{ sub.name }}_ = msg;
     
     RCLCPP_DEBUG(this->get_logger(), "Received message on {{ sub.topic }}");
 }

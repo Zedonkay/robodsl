@@ -1,0 +1,442 @@
+// Example 5: Autonomous Vehicle System
+// This example demonstrates advanced autonomous driving capabilities with:
+// - Multi-sensor fusion and perception
+// - Advanced decision making and path planning
+// - Safety systems and emergency handling
+// - ML-based traffic prediction and behavior modeling
+
+// Include necessary headers
+include <rclcpp/rclcpp.hpp>
+include <sensor_msgs/msg/image.hpp>
+include <sensor_msgs/msg/point_cloud2.hpp>
+include <sensor_msgs/msg/imu.hpp>
+include <geometry_msgs/msg/pose_stamped.hpp>
+include <geometry_msgs/msg/twist_stamped.hpp>
+// Removed autoware_auto_msgs includes to avoid unavailable dependencies
+
+// CUDA kernels for autonomous vehicle processing
+cuda_kernels {
+    kernel sensor_fusion {
+        input: float* lidar_points, int num_lidar_points, float* camera_detections, int num_camera_detections
+        output: float* fused_objects, int* num_fused_objects
+        block_size: (256, 1, 1)
+        grid_size: ((num_lidar_points + 255) / 256, 1, 1)
+        shared_memory: 2048
+        use_streams: true
+        stream_count: 3
+        code: {
+            int idx = blockIdx.x * blockDim.x + threadIdx.x;
+            
+            if (idx < num_lidar_points) {
+                float lidar_x = lidar_points[idx * 3];
+                float lidar_y = lidar_points[idx * 3 + 1];
+                float lidar_z = lidar_points[idx * 3 + 2];
+                
+                // Find matching camera detection
+                float best_match_distance = FLT_MAX;
+                int best_camera_match = -1;
+                
+                for (int cam_idx = 0; cam_idx < num_camera_detections; cam_idx++) {
+                    float cam_x = camera_detections[cam_idx * 4];
+                    float cam_y = camera_detections[cam_idx * 4 + 1];
+                    float cam_z = camera_detections[cam_idx * 4 + 2];
+                    float cam_confidence = camera_detections[cam_idx * 4 + 3];
+                    
+                    float distance = sqrtf((lidar_x - cam_x)*(lidar_x - cam_x) +
+                                         (lidar_y - cam_y)*(lidar_y - cam_y) +
+                                         (lidar_z - cam_z)*(lidar_z - cam_z));
+                    
+                    if (distance < best_match_distance && cam_confidence > 0.5f) {
+                        best_match_distance = distance;
+                        best_camera_match = cam_idx;
+                    }
+                }
+                
+                // Fuse detections if match found
+                if (best_match_distance < 1.0f) {
+                    int fused_idx = atomicAdd(num_fused_objects, 1);
+                    
+                    float lidar_weight = 0.7f;
+                    float camera_weight = 0.3f;
+                    
+                    float fused_x = lidar_x * lidar_weight + camera_detections[best_camera_match * 4] * camera_weight;
+                    float fused_y = lidar_y * lidar_weight + camera_detections[best_camera_match * 4 + 1] * camera_weight;
+                    float fused_z = lidar_z * lidar_weight + camera_detections[best_camera_match * 4 + 2] * camera_weight;
+                    
+                    fused_objects[fused_idx * 4] = fused_x;
+                    fused_objects[fused_idx * 4 + 1] = fused_y;
+                    fused_objects[fused_idx * 4 + 2] = fused_z;
+                    fused_objects[fused_idx * 4 + 3] = 1.0f; // Confidence
+                }
+            }
+        }
+    }
+    
+    kernel trajectory_planning {
+        input: float* current_pose, float* target_pose, float* obstacles, int num_obstacles
+        output: float* planned_trajectory, int* trajectory_length
+        block_size: (256, 1, 1)
+        grid_size: (1, 1, 1)
+        shared_memory: 4096
+        code: {
+            float start_x = current_pose[0];
+            float start_y = current_pose[1];
+            float start_theta = current_pose[2];
+            
+            float goal_x = target_pose[0];
+            float goal_y = target_pose[1];
+            float goal_theta = target_pose[2];
+            
+            int path_idx = 0;
+            float current_x = start_x;
+            float current_y = start_y;
+            float current_theta = start_theta;
+            
+            while (path_idx < 100 && (abs(current_x - goal_x) > 0.5f || abs(current_y - goal_y) > 0.5f)) {
+                float dx = goal_x - current_x;
+                float dy = goal_y - current_y;
+                float target_angle = atan2f(dy, dx);
+                float angle_diff = target_angle - current_theta;
+                
+                while (angle_diff > M_PI) angle_diff -= 2 * M_PI;
+                while (angle_diff < -M_PI) angle_diff += 2 * M_PI;
+                
+                float max_steering = 0.5f;
+                angle_diff = max(-max_steering, min(max_steering, angle_diff));
+                
+                float wheelbase = 2.7f;
+                float velocity = 5.0f;
+                float dt = 0.1f;
+                
+                current_theta += velocity * tanf(angle_diff) / wheelbase * dt;
+                current_x += velocity * cosf(current_theta) * dt;
+                current_y += velocity * sinf(current_theta) * dt;
+                
+                // Check for obstacles
+                bool collision = false;
+                for (int obs = 0; obs < num_obstacles; obs++) {
+                    float obs_x = obstacles[obs * 3];
+                    float obs_y = obstacles[obs * 3 + 1];
+                    float obs_radius = obstacles[obs * 3 + 2];
+                    
+                    float distance = sqrtf((current_x - obs_x)*(current_x - obs_x) +
+                                         (current_y - obs_y)*(current_y - obs_y));
+                    
+                    if (distance < obs_radius + 1.0f) {
+                        collision = true;
+                        break;
+                    }
+                }
+                
+                if (collision) {
+                    current_theta += 0.1f;
+                    continue;
+                }
+                
+                planned_trajectory[path_idx * 3] = current_x;
+                planned_trajectory[path_idx * 3 + 1] = current_y;
+                planned_trajectory[path_idx * 3 + 2] = current_theta;
+                path_idx++;
+            }
+            
+            *trajectory_length = path_idx;
+        }
+    }
+    
+    kernel safety_monitoring {
+        input: float* vehicle_state, float* obstacles, int num_obstacles, float* safety_thresholds
+        output: bool* safety_violations, float* risk_scores
+        block_size: (256, 1, 1)
+        grid_size: ((num_obstacles + 255) / 256, 1, 1)
+        shared_memory: 1024
+        code: {
+            int obs_idx = blockIdx.x * blockDim.x + threadIdx.x;
+            
+            if (obs_idx < num_obstacles) {
+                float vehicle_x = vehicle_state[0];
+                float vehicle_y = vehicle_state[1];
+                float vehicle_velocity = vehicle_state[3];
+                
+                float obstacle_x = obstacles[obs_idx * 3];
+                float obstacle_y = obstacles[obs_idx * 3 + 1];
+                float obstacle_velocity = obstacles[obs_idx * 3 + 2];
+                
+                float distance = sqrtf((vehicle_x - obstacle_x)*(vehicle_x - obstacle_x) +
+                                     (vehicle_y - obstacle_y)*(vehicle_y - obstacle_y));
+                
+                float relative_velocity = vehicle_velocity - obstacle_velocity;
+                float time_to_collision = distance / max(abs(relative_velocity), 0.1f);
+                
+                float min_distance = safety_thresholds[0];
+                float min_ttc = safety_thresholds[1];
+                
+                bool violation = (distance < min_distance) || (time_to_collision < min_ttc);
+                safety_violations[obs_idx] = violation;
+                
+                float distance_risk = max(0.0f, 1.0f - distance / min_distance);
+                float ttc_risk = max(0.0f, 1.0f - time_to_collision / min_ttc);
+                risk_scores[obs_idx] = max(distance_risk, ttc_risk);
+            }
+        }
+    }
+}
+
+// ONNX models for autonomous driving
+onnx_model traffic_sign_detector {
+    config {
+        input: "images" -> "float32[1,3,224,224]"
+        output: "detections" -> "float32[1,100,6]"
+        device: gpu
+        optimization: tensorrt
+        optimization_level: 4
+        precision: fp16
+        dynamic_batch: true
+        max_workspace_size: 134217728
+        memory_optimization: true
+    }
+}
+
+onnx_model lane_detector {
+    config {
+        input: "image" -> "float32[1,3,512,512]"
+        output: "lane_mask" -> "float32[1,1,512,512]"
+        device: gpu
+        optimization: tensorrt
+        optimization_level: 4
+        precision: fp16
+        dynamic_batch: true
+        max_workspace_size: 134217728
+        memory_optimization: true
+    }
+}
+
+onnx_model behavior_predictor {
+    config {
+        input: "vehicle_states" -> "float32[1,20,6]"
+        input: "road_context" -> "float32[1,100,3]"
+        output: "predicted_behavior" -> "float32[1,20,3]"
+        device: gpu
+        optimization: tensorrt
+        optimization_level: 4
+        precision: fp16
+        dynamic_batch: true
+        max_workspace_size: 134217728
+        memory_optimization: true
+    }
+}
+
+// Multi-stage autonomous driving pipeline
+pipeline autonomous_driving_pipeline {
+    stage sensor_fusion {
+        input: ["lidar_data", "camera_data"]
+        output: "fused_objects"
+        method: "fuse_sensors"
+        cuda_kernel: "sensor_fusion"
+        topic: /perception/fused_objects
+    }
+    
+    stage traffic_sign_detection {
+        input: ["camera_image"]
+        output: "traffic_signs"
+        method: "detect_traffic_signs"
+        onnx_model: "traffic_sign_detector"
+        topic: /perception/traffic_signs
+    }
+    
+    stage lane_detection {
+        input: ["camera_image"]
+        output: "lane_markings"
+        method: "detect_lanes"
+        onnx_model: "lane_detector"
+        topic: /perception/lane_markings
+    }
+    
+    stage behavior_prediction {
+        input: ["vehicle_states", "road_context"]
+        output: "predicted_behaviors"
+        method: "predict_behaviors"
+        onnx_model: "behavior_predictor"
+        topic: /prediction/behaviors
+    }
+    
+    stage trajectory_planning {
+        input: ["current_pose", "target_pose", "obstacles"]
+        output: "planned_trajectory"
+        method: "plan_trajectory"
+        cuda_kernel: "trajectory_planning"
+        topic: /planning/trajectory
+    }
+    
+    stage safety_monitoring {
+        input: ["vehicle_state", "obstacles", "safety_thresholds"]
+        output: "safety_violations"
+        method: "monitor_safety"
+        cuda_kernel: "safety_monitoring"
+        topic: /safety/monitoring
+    }
+}
+
+// Main autonomous vehicle controller node
+node autonomous_vehicle_controller {
+    // Sensor subscribers
+    subscriber /sensor/lidar/points: "sensor_msgs/msg/PointCloud2"
+    subscriber /sensor/camera/front/image: "sensor_msgs/msg/Image"
+    subscriber /sensor/imu/data: "sensor_msgs/msg/Imu"
+    
+    // Vehicle state subscribers
+    subscriber /vehicle/kinematic_state: "std_msgs/msg/Float64MultiArray"
+    
+    // Publishers
+    publisher /vehicle/control_command: "std_msgs/msg/Float64MultiArray"
+    publisher /vehicle/trajectory: "std_msgs/msg/Float64MultiArray"
+    publisher /perception/fused_objects: "std_msgs/msg/Float64MultiArray"
+    publisher /perception/traffic_signs: "std_msgs/msg/Float64MultiArray"
+    publisher /perception/lane_markings: "sensor_msgs/msg/Image"
+    publisher /safety/emergency_stop: "std_msgs/msg/Bool"
+    
+    // Parameters
+    parameter double control_frequency = 100.0
+    parameter double perception_frequency = 30.0
+    parameter double planning_frequency = 10.0
+    parameter double max_velocity = 30.0
+    parameter double max_acceleration = 3.0
+    parameter double safety_distance = 2.0
+    parameter double time_to_collision_threshold = 3.0
+    
+    // Model paths
+    parameter string traffic_sign_detector_path = "traffic_sign_detector.onnx"
+    parameter string lane_detector_path = "lane_detector.onnx"
+    parameter string behavior_predictor_path = "behavior_predictor.onnx"
+    
+    // Lifecycle configuration
+    lifecycle {
+        auto_start: true
+        auto_shutdown: false
+    }
+    
+    // QoS configuration
+    qos {
+        reliability: reliable
+        durability: volatile
+        history: keep_last
+        depth: 10
+    }
+    
+    // Timers
+    timer control_timer {
+        frequency: 100.0
+        callback: "control_loop"
+    }
+    
+    timer perception_timer {
+        frequency: 30.0
+        callback: "perception_loop"
+    }
+    
+    timer planning_timer {
+        frequency: 10.0
+        callback: "planning_loop"
+    }
+    
+    // Methods
+    method fuse_sensors {
+        input: sensor_msgs::msg::PointCloud2::SharedPtr lidar_data
+        input: sensor_msgs::msg::Image::SharedPtr camera_data
+        output: std_msgs::msg::Float64MultiArray::SharedPtr fused_objects
+        code: {
+            // Use CUDA kernel for sensor fusion
+            // Combine lidar and camera data
+            // Generate fused object detections
+        }
+    }
+    
+    method detect_traffic_signs {
+        input: sensor_msgs::msg::Image::SharedPtr camera_image
+        output: std_msgs::msg::Float64MultiArray::SharedPtr traffic_signs
+        code: {
+            // Use ONNX model for traffic sign detection
+            // Preprocess camera image
+            // Post-process detections
+        }
+    }
+    
+    method detect_lanes {
+        input: sensor_msgs::msg::Image::SharedPtr camera_image
+        output: sensor_msgs::msg::Image::SharedPtr lane_markings
+        code: {
+            // Use ONNX model for lane detection
+            // Generate lane mask
+            // Create visualization
+        }
+    }
+    
+    method predict_behaviors {
+        input: std_msgs::msg::Float64MultiArray::SharedPtr vehicle_states
+        input: std_msgs::msg::Float64MultiArray::SharedPtr road_context
+        output: std_msgs::msg::Float64MultiArray::SharedPtr predicted_behaviors
+        code: {
+            // Use ONNX model for behavior prediction
+            // Predict future trajectories
+            // Generate behavior predictions
+        }
+    }
+    
+    method plan_trajectory {
+        input: geometry_msgs::msg::PoseStamped::SharedPtr current_pose
+        input: geometry_msgs::msg::PoseStamped::SharedPtr target_pose
+        input: std_msgs::msg::Float64MultiArray::SharedPtr obstacles
+        output: std_msgs::msg::Float64MultiArray::SharedPtr planned_trajectory
+        code: {
+            // Use CUDA kernel for trajectory planning
+            // Plan optimal path
+            // Consider obstacles and constraints
+        }
+    }
+    
+    method monitor_safety {
+        input: std_msgs::msg::Float64MultiArray::SharedPtr vehicle_state
+        input: std_msgs::msg::Float64MultiArray::SharedPtr obstacles
+        input: std_msgs::msg::Float64MultiArray::SharedPtr safety_thresholds
+        output: std_msgs::msg::Bool::SharedPtr safety_violations
+        code: {
+            // Use CUDA kernel for safety monitoring
+            // Check for safety violations
+            // Calculate risk scores
+        }
+    }
+}
+
+// Safety monitoring node
+node safety_monitor {
+    subscriber /vehicle/kinematic_state: "std_msgs/msg/Float64MultiArray"
+    subscriber /safety/monitoring: "std_msgs/msg/Bool"
+    
+    publisher /safety/emergency_stop: "std_msgs/msg/Bool"
+    publisher /safety/safety_status: "std_msgs/msg/String"
+    
+    parameter double safety_check_frequency = 100.0
+    parameter double emergency_threshold = 0.8
+    
+    qos {
+        reliability: reliable
+        durability: volatile
+        history: keep_last
+        depth: 5
+    }
+    
+    timer safety_timer {
+        frequency: 100.0
+        callback: "safety_check"
+    }
+    
+    method safety_check {
+        input: std_msgs::msg::Float64MultiArray::SharedPtr vehicle_state
+        input: std_msgs::msg::Bool::SharedPtr safety_violations
+        output: std_msgs::msg::Bool::SharedPtr emergency_stop
+        code: {
+            // Check for safety violations
+            // Monitor vehicle state
+            // Trigger emergency stop if needed
+        }
+    }
+}

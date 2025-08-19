@@ -29,9 +29,7 @@
 
 // Message includes
 {% for include in includes %}
-{% if include.startswith('#include <std_') or include.startswith('#include <sensor_') or include.startswith('#include <geometry_') or include.startswith('#include <nav_') %}
 {{ include }}
-{% endif %}
 {% endfor %}
 
 // Additional ROS2 includes
@@ -227,17 +225,9 @@ private:
     {% endif %}
     {% endfor %}
 
-    // Latest message storage
+    // Latest message storage (per-subscriber)
     {% for sub in subscribers %}
-    {% if sub.msg_type == 'sensor_msgs::msg::Image' %}
-    {{ sub.msg_type }}::ConstSharedPtr latest_image_;
-    {% elif sub.msg_type == 'sensor_msgs::msg::PointCloud2' %}
-    {{ sub.msg_type }}::ConstSharedPtr latest_pointcloud_;
-    {% elif sub.msg_type == 'geometry_msgs::msg::Twist' %}
-    {{ sub.msg_type }}::ConstSharedPtr latest_twist_;
-    {% elif sub.msg_type == 'sensor_msgs::msg::LaserScan' %}
-    {{ sub.msg_type }}::ConstSharedPtr latest_scan_;
-    {% endif %}
+    {{ sub.msg_type }}::ConstSharedPtr latest_{{ sub.name }}_;
     {% endfor %}
 
     // CUDA kernel member variables

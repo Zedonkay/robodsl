@@ -1,0 +1,520 @@
+// Example 2: Computer Vision Processing System
+// This example demonstrates advanced computer vision capabilities with:
+// - Real-time video processing pipeline
+// - Multiple ONNX models for different vision tasks
+// - CUDA-accelerated image preprocessing and post-processing
+// - Multi-camera support with synchronization
+// - Advanced image filtering and enhancement
+
+// Include necessary headers
+include <rclcpp/rclcpp.hpp>
+include <sensor_msgs/msg/image.hpp>
+include <sensor_msgs/msg/camera_info.hpp>
+include <std_msgs/msg/header.hpp>
+include <opencv2/opencv.hpp>
+
+// CUDA kernels for image processing
+cuda_kernels {
+    kernel image_preprocessing {
+        input: uint8* raw_image, int width, int height, int channels
+        output: float* normalized_image
+        block_size: (16, 16, 1)
+        grid_size: ((width + 15) / 16, (height + 15) / 16, 1)
+        shared_memory: 1024
+        use_streams: true
+        stream_count: 2
+        code: {
+            int x = blockIdx.x * blockDim.x + threadIdx.x;
+            int y = blockIdx.y * blockDim.y + threadIdx.y;
+            
+            if (x < width && y < height) {
+                int pixel_idx = y * width + x;
+                int byte_idx = pixel_idx * channels;
+                
+                // Normalize to [0, 1] range
+                for (int c = 0; c < channels; c++) {
+                    normalized_image[pixel_idx * channels + c] = 
+                        (float)raw_image[byte_idx + c] / 255.0f;
+                }
+            }
+        }
+    }
+    
+    kernel image_resize {
+        input: float* input_image, int input_width, int input_height, int channels
+        output: float* output_image, int output_width, int output_height
+        block_size: (16, 16, 1)
+        grid_size: ((output_width + 15) / 16, (output_height + 15) / 16, 1)
+        shared_memory: 2048
+        code: {
+            int x = blockIdx.x * blockDim.x + threadIdx.x;
+            int y = blockIdx.y * blockDim.y + threadIdx.y;
+            
+            if (x < output_width && y < output_height) {
+                // Bilinear interpolation
+                float scale_x = (float)input_width / output_width;
+                float scale_y = (float)input_height / output_height;
+                
+                float src_x = x * scale_x;
+                float src_y = y * scale_y;
+                
+                int x1 = (int)src_x;
+                int y1 = (int)src_y;
+                int x2 = min(x1 + 1, input_width - 1);
+                int y2 = min(y1 + 1, input_height - 1);
+                
+                float fx = src_x - x1;
+                float fy = src_y - y1;
+                
+                for (int c = 0; c < channels; c++) {
+                    float p11 = input_image[(y1 * input_width + x1) * channels + c];
+                    float p12 = input_image[(y1 * input_width + x2) * channels + c];
+                    float p21 = input_image[(y2 * input_width + x1) * channels + c];
+                    float p22 = input_image[(y2 * input_width + x2) * channels + c];
+                    
+                    float interpolated = p11 * (1 - fx) * (1 - fy) +
+                                       p12 * fx * (1 - fy) +
+                                       p21 * (1 - fx) * fy +
+                                       p22 * fx * fy;
+                    
+                    output_image[(y * output_width + x) * channels + c] = interpolated;
+                }
+            }
+        }
+    }
+    
+    kernel gaussian_blur {
+        input: float* input_image, int width, int height, int channels
+        output: float* blurred_image
+        block_size: (16, 16, 1)
+        grid_size: ((width + 15) / 16, (height + 15) / 16, 1)
+        shared_memory: 4096
+        code: {
+            int x = blockIdx.x * blockDim.x + threadIdx.x;
+            int y = blockIdx.y * blockDim.y + threadIdx.y;
+            
+            if (x < width && y < height) {
+                // 5x5 Gaussian kernel
+                __shared__ float kernel[25];
+                if (threadIdx.x == 0 && threadIdx.y == 0) {
+                    kernel[0] = 1.0f/273.0f; kernel[1] = 4.0f/273.0f; kernel[2] = 7.0f/273.0f; kernel[3] = 4.0f/273.0f; kernel[4] = 1.0f/273.0f;
+                    kernel[5] = 4.0f/273.0f; kernel[6] = 16.0f/273.0f; kernel[7] = 26.0f/273.0f; kernel[8] = 16.0f/273.0f; kernel[9] = 4.0f/273.0f;
+                    kernel[10] = 7.0f/273.0f; kernel[11] = 26.0f/273.0f; kernel[12] = 41.0f/273.0f; kernel[13] = 26.0f/273.0f; kernel[14] = 7.0f/273.0f;
+                    kernel[15] = 4.0f/273.0f; kernel[16] = 16.0f/273.0f; kernel[17] = 26.0f/273.0f; kernel[18] = 16.0f/273.0f; kernel[19] = 4.0f/273.0f;
+                    kernel[20] = 1.0f/273.0f; kernel[21] = 4.0f/273.0f; kernel[22] = 7.0f/273.0f; kernel[23] = 4.0f/273.0f; kernel[24] = 1.0f/273.0f;
+                }
+                __syncthreads();
+                
+                for (int c = 0; c < channels; c++) {
+                    float sum = 0.0f;
+                    for (int ky = -2; ky <= 2; ky++) {
+                        for (int kx = -2; kx <= 2; kx++) {
+                            int nx = x + kx;
+                            int ny = y + ky;
+                            
+                            if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                                float pixel = input_image[(ny * width + nx) * channels + c];
+                                float weight = kernel[(ky + 2) * 5 + (kx + 2)];
+                                sum += pixel * weight;
+                            }
+                        }
+                    }
+                    blurred_image[(y * width + x) * channels + c] = sum;
+                }
+            }
+        }
+    }
+    
+    kernel edge_detection {
+        input: float* input_image, int width, int height
+        output: float* edge_image
+        block_size: (16, 16, 1)
+        grid_size: ((width + 15) / 16, (height + 15) / 16, 1)
+        shared_memory: 2048
+        code: {
+            int x = blockIdx.x * blockDim.x + threadIdx.x;
+            int y = blockIdx.y * blockDim.y + threadIdx.y;
+            
+            if (x > 0 && x < width - 1 && y > 0 && y < height - 1) {
+                // Sobel edge detection
+                float gx = -input_image[((y-1) * width + (x-1)) * 3] - 2*input_image[((y-1) * width + x) * 3] - input_image[((y-1) * width + (x+1)) * 3] +
+                          input_image[((y+1) * width + (x-1)) * 3] + 2*input_image[((y+1) * width + x) * 3] + input_image[((y+1) * width + (x+1)) * 3];
+                
+                float gy = -input_image[((y-1) * width + (x-1)) * 3] - 2*input_image[(y * width + (x-1)) * 3] - input_image[((y+1) * width + (x-1)) * 3] +
+                          input_image[((y-1) * width + (x+1)) * 3] + 2*input_image[(y * width + (x+1)) * 3] + input_image[((y+1) * width + (x+1)) * 3];
+                
+                float magnitude = sqrtf(gx*gx + gy*gy);
+                edge_image[y * width + x] = min(magnitude, 1.0f);
+            } else {
+                edge_image[y * width + x] = 0.0f;
+            }
+        }
+    }
+    
+    kernel feature_matching {
+        input: float* image1, float* image2, int width, int height, float* keypoints1, float* keypoints2, int num_keypoints
+        output: float* matches, int* num_matches
+        block_size: (256, 1, 1)
+        grid_size: ((num_keypoints + 255) / 256, 1, 1)
+        shared_memory: 1024
+        code: {
+            int idx = blockIdx.x * blockDim.x + threadIdx.x;
+            
+            if (idx < num_keypoints) {
+                // Extract SIFT-like features and match them
+                // This is a simplified version - in practice, you'd want a more sophisticated implementation
+                float x1 = keypoints1[idx * 2];
+                float y1 = keypoints1[idx * 2 + 1];
+                float x2 = keypoints2[idx * 2];
+                float y2 = keypoints2[idx * 2 + 1];
+                
+                // Simple distance-based matching
+                float distance = sqrtf((x1-x2)*(x1-x2) + (y1-y2)*(y1-y2));
+                if (distance < 10.0f) {  // Threshold for matching
+                    int match_idx = atomicAdd(num_matches, 1);
+                    matches[match_idx * 4] = x1;
+                    matches[match_idx * 4 + 1] = y1;
+                    matches[match_idx * 4 + 2] = x2;
+                    matches[match_idx * 4 + 3] = y2;
+                }
+            }
+        }
+    }
+}
+
+// ONNX models for different vision tasks
+onnx_model object_detector {
+    config {
+        input: "images" -> "float32[1,3,640,640]"
+        output: "output0" -> "float32[1,25200,85]"
+        device: gpu
+        optimization: tensorrt
+        optimization_level: 5
+        precision: fp16
+        dynamic_batch: true
+        max_workspace_size: 268435456
+        profiling: true
+        profiling_output: "object_detection_profiling.json"
+        memory_optimization: true
+        multi_stream: true
+        stream_count: 2
+    }
+}
+
+onnx_model face_recognition {
+    config {
+        input: "input" -> "float32[1,3,112,112]"
+        output: "output" -> "float32[1,512]"
+        device: gpu
+        optimization: tensorrt
+        optimization_level: 4
+        precision: fp16
+        dynamic_batch: true
+        max_workspace_size: 67108864
+        memory_optimization: true
+    }
+}
+
+onnx_model pose_estimation {
+    config {
+        input: "input" -> "float32[1,3,256,256]"
+        output: "output" -> "float32[1,17,64,64]"
+        device: gpu
+        optimization: tensorrt
+        optimization_level: 4
+        precision: fp16
+        dynamic_batch: true
+        max_workspace_size: 134217728
+        memory_optimization: true
+    }
+}
+
+onnx_model depth_estimation {
+    config {
+        input: "input" -> "float32[1,3,384,384]"
+        output: "output" -> "float32[1,1,384,384]"
+        device: gpu
+        optimization: tensorrt
+        optimization_level: 3
+        precision: fp16
+        dynamic_batch: true
+        max_workspace_size: 67108864
+        memory_optimization: true
+    }
+}
+
+onnx_model optical_flow {
+    config {
+        input: "image1" -> "float32[1,3,448,448]"
+        input: "image2" -> "float32[1,3,448,448]"
+        output: "flow" -> "float32[1,2,448,448]"
+        device: gpu
+        optimization: tensorrt
+        optimization_level: 4
+        precision: fp16
+        dynamic_batch: true
+        max_workspace_size: 134217728
+        memory_optimization: true
+    }
+}
+
+// Multi-stage vision processing pipeline
+pipeline computer_vision_pipeline {
+    stage image_preprocessing {
+        input: ["raw_image"]
+        output: "preprocessed_image"
+        method: "preprocess_image"
+        cuda_kernel: "image_preprocessing"
+        topic: /vision/preprocessed
+    }
+    
+    stage image_enhancement {
+        input: ["preprocessed_image"]
+        output: "enhanced_image"
+        method: "enhance_image"
+        cuda_kernel: "gaussian_blur"
+        topic: /vision/enhanced
+    }
+    
+    stage object_detection {
+        input: ["enhanced_image"]
+        output: "detected_objects"
+        method: "detect_objects"
+        onnx_model: "object_detector"
+        topic: /vision/detected_objects
+    }
+    
+    stage face_recognition {
+        input: ["enhanced_image"]
+        output: "face_embeddings"
+        method: "recognize_faces"
+        onnx_model: "face_recognition"
+        topic: /vision/face_embeddings
+    }
+    
+    stage pose_estimation {
+        input: ["enhanced_image"]
+        output: "human_poses"
+        method: "estimate_poses"
+        onnx_model: "pose_estimation"
+        topic: /vision/human_poses
+    }
+    
+    stage depth_estimation {
+        input: ["enhanced_image"]
+        output: "depth_map"
+        method: "estimate_depth"
+        onnx_model: "depth_estimation"
+        topic: /vision/depth_map
+    }
+    
+    stage optical_flow {
+        input: ["current_image", "previous_image"]
+        output: "flow_field"
+        method: "compute_optical_flow"
+        onnx_model: "optical_flow"
+        topic: /vision/optical_flow
+    }
+    
+    stage feature_matching {
+        input: ["current_image", "reference_image"]
+        output: "feature_matches"
+        method: "match_features"
+        cuda_kernel: "feature_matching"
+        topic: /vision/feature_matches
+    }
+}
+
+// Main vision processing node
+node vision_processor {
+    // Subscribers
+    subscriber /camera/image_raw: "sensor_msgs/msg/Image"
+    subscriber /camera/camera_info: "sensor_msgs/msg/CameraInfo"
+    subscriber /camera2/image_raw: "sensor_msgs/msg/Image"
+    subscriber /camera2/camera_info: "sensor_msgs/msg/CameraInfo"
+    
+    // Publishers
+    publisher /vision/processed_image: "sensor_msgs/msg/Image"
+    publisher /vision/detected_objects: "std_msgs/msg/Float32MultiArray"
+    publisher /vision/face_embeddings: "std_msgs/msg/Float32MultiArray"
+    publisher /vision/human_poses: "std_msgs/msg/Float32MultiArray"
+    publisher /vision/depth_map: "sensor_msgs/msg/Image"
+    publisher /vision/optical_flow: "sensor_msgs/msg/Image"
+    publisher /vision/feature_matches: "std_msgs/msg/Float32MultiArray"
+    publisher /vision/edge_map: "sensor_msgs/msg/Image"
+    
+    // Parameters
+    parameter double processing_frequency = 30.0
+    parameter int image_width = 1920
+    parameter int image_height = 1080
+    parameter int resize_width = 640
+    parameter int resize_height = 480
+    parameter double confidence_threshold = 0.5
+    parameter double nms_threshold = 0.4
+    parameter int max_detections = 100
+    parameter bool enable_edge_detection = true
+    parameter bool enable_optical_flow = true
+    parameter bool enable_feature_matching = false
+    parameter double gaussian_blur_sigma = 1.0
+    parameter double edge_detection_threshold = 0.1
+    
+    // Model paths
+    parameter string object_detector_path = "yolov8n.onnx"
+    parameter string face_recognition_path = "arcface_r100.onnx"
+    parameter string pose_estimation_path = "hrnet_w32.onnx"
+    parameter string depth_estimation_path = "monodepth2.onnx"
+    parameter string optical_flow_path = "raft_small.onnx"
+    
+    // Lifecycle configuration
+    lifecycle {
+        auto_start: true
+        auto_shutdown: false
+    }
+    
+    // QoS configuration
+    qos {
+        reliability: reliable
+        durability: volatile
+        history: keep_last
+        depth: 5
+    }
+    
+    // Timer for periodic processing
+    timer processing_timer {
+        frequency: 30.0
+        callback: "process_frame"
+    }
+    
+    // Methods
+    method preprocess_image {
+        input: sensor_msgs::msg::Image::SharedPtr raw_image
+        output: sensor_msgs::msg::Image::SharedPtr preprocessed_image
+        code: {
+            // Convert ROS image to CUDA arrays
+            // Apply preprocessing CUDA kernel
+            // Convert back to ROS message
+        }
+    }
+    
+    method enhance_image {
+        input: sensor_msgs::msg::Image::SharedPtr input_image
+        output: sensor_msgs::msg::Image::SharedPtr enhanced_image
+        code: {
+            // Apply Gaussian blur using CUDA kernel
+            // Enhance contrast and brightness
+            // Apply noise reduction
+        }
+    }
+    
+    method detect_objects {
+        input: sensor_msgs::msg::Image::SharedPtr image
+        output: std_msgs::msg::Float32MultiArray::SharedPtr detections
+        code: {
+            // Preprocess image for YOLO model
+            // Run object detection inference
+            // Apply NMS and post-processing
+            // Create detection messages
+        }
+    }
+    
+    method recognize_faces {
+        input: sensor_msgs::msg::Image::SharedPtr image
+        output: std_msgs::msg::Float32MultiArray::SharedPtr face_embeddings
+        code: {
+            // Detect faces in image
+            // Extract face regions
+            // Run face recognition model
+            // Generate embeddings
+        }
+    }
+    
+    method estimate_poses {
+        input: sensor_msgs::msg::Image::SharedPtr image
+        output: std_msgs::msg::Float32MultiArray::SharedPtr poses
+        code: {
+            // Detect humans in image
+            // Run pose estimation model
+            // Extract keypoints
+            // Create pose messages
+        }
+    }
+    
+    method estimate_depth {
+        input: sensor_msgs::msg::Image::SharedPtr image
+        output: sensor_msgs::msg::Image::SharedPtr depth_map
+        code: {
+            // Preprocess image for depth model
+            // Run depth estimation inference
+            // Post-process depth map
+            // Convert to ROS image format
+        }
+    }
+    
+    method compute_optical_flow {
+        input: sensor_msgs::msg::Image::SharedPtr current_image
+        input: sensor_msgs::msg::Image::SharedPtr previous_image
+        output: sensor_msgs::msg::Image::SharedPtr flow_field
+        code: {
+            // Preprocess both images
+            // Run optical flow model
+            // Post-process flow field
+            // Create visualization
+        }
+    }
+    
+    method match_features {
+        input: sensor_msgs::msg::Image::SharedPtr image1
+        input: sensor_msgs::msg::Image::SharedPtr image2
+        output: std_msgs::msg::Float32MultiArray::SharedPtr matches
+        code: {
+            // Extract features from both images
+            // Use CUDA kernel for feature matching
+            // Filter matches
+            // Create match messages
+        }
+    }
+    
+    method detect_edges {
+        input: sensor_msgs::msg::Image::SharedPtr image
+        output: sensor_msgs::msg::Image::SharedPtr edge_map
+        code: {
+            // Convert to grayscale
+            // Apply edge detection CUDA kernel
+            // Threshold edges
+            // Create edge visualization
+        }
+    }
+}
+
+// Multi-camera synchronization node
+node camera_synchronizer {
+    subscriber /camera/image_raw: "sensor_msgs/msg/Image"
+    subscriber /camera2/image_raw: "sensor_msgs/msg/Image"
+    subscriber /camera3/image_raw: "sensor_msgs/msg/Image"
+    
+    publisher /synchronized/camera1: "sensor_msgs/msg/Image"
+    publisher /synchronized/camera2: "sensor_msgs/msg/Image"
+    publisher /synchronized/camera3: "sensor_msgs/msg/Image"
+    
+    parameter double sync_tolerance = 0.033  // 30fps tolerance
+    parameter int max_queue_size = 10
+    
+    qos {
+        reliability: reliable
+        durability: volatile
+        history: keep_last
+        depth: 10
+    }
+    
+    method synchronize_cameras {
+        input: sensor_msgs::msg::Image::SharedPtr cam1
+        input: sensor_msgs::msg::Image::SharedPtr cam2
+        input: sensor_msgs::msg::Image::SharedPtr cam3
+        output: bool synchronized
+        code: {
+            // Check timestamps for synchronization
+            // Publish synchronized images
+            // Handle missing frames
+        }
+    }
+}

@@ -48,10 +48,12 @@ namespace {{ project_name }} {
 void {{ stage.name }}Node::initialize_ros_components() {
     // Initialize subscribers
     {% for input in stage.content.inputs %}
-    {{ input.input_name }}_sub_ = this->create_subscription<std_msgs::msg::String>(
-        "{{ stage_namespace }}/{{ input.input_name }}", 10,
-        std::bind(&{{ stage.name }}Node::{{ input.input_name }}_callback, this, std::placeholders::_1)
+    {% for input_name in input.input_names %}
+    {{ input_name }}_sub_ = this->create_subscription<std_msgs::msg::String>(
+        "{{ stage_namespace }}/{{ input_name }}", 10,
+        std::bind(&{{ stage.name }}Node::{{ input_name }}_callback, this, std::placeholders::_1)
     );
+    {% endfor %}
     {% endfor %}
     
     // Initialize publishers
@@ -84,8 +86,9 @@ bool {{ stage.name }}Node::initialize_onnx() {
 
 // Callback methods
 {% for input in stage.content.inputs %}
-void {{ stage.name }}Node::{{ input.input_name }}_callback(const std_msgs::msg::String::SharedPtr msg) {
-    RCLCPP_INFO(this->get_logger(), "Received {{ input.input_name }}: %s", msg->data.c_str());
+{% for input_name in input.input_names %}
+void {{ stage.name }}Node::{{ input_name }}_callback(const std_msgs::msg::String::SharedPtr msg) {
+    RCLCPP_INFO(this->get_logger(), "Received {{ input_name }}: %s", msg->data.c_str());
     
     // Process the received data
     {% if has_cuda or has_onnx %}
@@ -124,7 +127,7 @@ void {{ stage.name }}Node::{{ input.input_name }}_callback(const std_msgs::msg::
     {% for output in stage.content.outputs %}
     auto output_msg = std_msgs::msg::String();
     // TODO: Convert output_data to string format
-    output_msg.data = "Processed data from {{ input.input_name }}";
+    output_msg.data = "Processed data from {{ input_name }}";
     {{ output.output_name }}_pub_->publish(output_msg);
     {% endfor %}
     {% else %}
@@ -136,6 +139,7 @@ void {{ stage.name }}Node::{{ input.input_name }}_callback(const std_msgs::msg::
     {% endfor %}
     {% endif %}
 }
+{% endfor %}
 {% endfor %}
 
 void {{ stage.name }}Node::timer_callback() {

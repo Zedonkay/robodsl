@@ -39,7 +39,9 @@ def generate_launch_description():
         }],
         remappings=[
             {% for input in stage.content.inputs %}
-            ('{{ input.input_name }}', '/{{ pipeline.name }}/{{ input.input_name }}'),
+            {% for input_name in input.input_names %}
+            ('{{ input_name }}', '/{{ pipeline.name }}/{{ input_name }}'),
+            {% endfor %}
             {% endfor %}
             {% for output in stage.content.outputs %}
             ('{{ output.output_name }}', '/{{ pipeline.name }}/{{ output.output_name }}'),

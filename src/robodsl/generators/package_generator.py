@@ -82,14 +82,44 @@ class PackageGenerator(BaseGenerator):
             if hasattr(node, 'services') and node.services:
                 dependencies.add('std_srvs')
             
-            # Check for navigation messages
+            # Check for message package usage (only add packages that appear)
             for pub in getattr(node, 'publishers', []):
                 if 'nav_msgs' in pub.msg_type:
                     dependencies.add('nav_msgs')
+                if 'visualization_msgs' in pub.msg_type:
+                    dependencies.add('visualization_msgs')
+                if 'tf2_msgs' in pub.msg_type:
+                    dependencies.add('tf2_msgs')
+                # vision_msgs removed unless explicitly present
+                parts = pub.msg_type.split('/')
+                if len(parts) >= 3:
+                    dependencies.add(parts[0])
+                if 'trajectory_msgs' in pub.msg_type:
+                    dependencies.add('trajectory_msgs')
             
             for sub in getattr(node, 'subscribers', []):
                 if 'nav_msgs' in sub.msg_type:
                     dependencies.add('nav_msgs')
+                if 'visualization_msgs' in sub.msg_type:
+                    dependencies.add('visualization_msgs')
+                if 'tf2_msgs' in sub.msg_type:
+                    dependencies.add('tf2_msgs')
+                # vision_msgs removed unless explicitly present
+                parts = sub.msg_type.split('/')
+                if len(parts) >= 3:
+                    dependencies.add(parts[0])
+                if 'trajectory_msgs' in sub.msg_type:
+                    dependencies.add('trajectory_msgs')
+
+            # Services and actions: add their packages
+            for srv in getattr(node, 'services', []):
+                parts = srv.srv_type.split('/')
+                if len(parts) >= 3:
+                    dependencies.add(parts[0])
+            for act in getattr(node, 'actions', []):
+                parts = act.action_type.split('/')
+                if len(parts) >= 3:
+                    dependencies.add(parts[0])
         
         # Check for CUDA usage
         if hasattr(ast, 'cuda_kernels') and ast.cuda_kernels:

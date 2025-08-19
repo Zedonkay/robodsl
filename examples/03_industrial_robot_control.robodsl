@@ -1,0 +1,531 @@
+// Example 3: Industrial Robot Control System
+// This example demonstrates advanced industrial robotics with:
+// - Real-time trajectory planning and control
+// - Force sensing and compliance control
+// - Safety monitoring and collision detection
+// - ML-based motion prediction and optimization
+// - Multi-robot coordination and synchronization
+
+// Include necessary headers
+include <rclcpp/rclcpp.hpp>
+include <trajectory_msgs/msg/joint_trajectory.hpp>
+include <sensor_msgs/msg/joint_state.hpp>
+include <geometry_msgs/msg/pose_stamped.hpp>
+include <geometry_msgs/msg/wrench_stamped.hpp>
+include <std_msgs/msg/float64_multi_array.hpp>
+include <control_msgs/msg/joint_jog.hpp>
+// Removed industrial_msgs include to avoid unavailable dependency
+
+// CUDA kernels for trajectory planning and control
+cuda_kernels {
+    kernel trajectory_interpolation {
+        input: float* waypoints, int num_waypoints, float* time_stamps, float* trajectory, int trajectory_length
+        output: float* interpolated_trajectory
+        block_size: (256, 1, 1)
+        grid_size: ((trajectory_length + 255) / 256, 1, 1)
+        shared_memory: 2048
+        use_streams: true
+        stream_count: 2
+        code: {
+            int idx = blockIdx.x * blockDim.x + threadIdx.x;
+            
+            if (idx < trajectory_length) {
+                float t = (float)idx / (trajectory_length - 1);
+                float total_time = time_stamps[num_waypoints - 1] - time_stamps[0];
+                float current_time = t * total_time;
+                
+                // Find the appropriate waypoint segment
+                int segment = 0;
+                for (int i = 0; i < num_waypoints - 1; i++) {
+                    if (current_time >= time_stamps[i] && current_time <= time_stamps[i + 1]) {
+                        segment = i;
+                        break;
+                    }
+                }
+                
+                // Cubic spline interpolation
+                float t0 = time_stamps[segment];
+                float t1 = time_stamps[segment + 1];
+                float alpha = (current_time - t0) / (t1 - t0);
+                
+                // Interpolate each joint
+                for (int joint = 0; joint < 6; joint++) {  // 6-DOF robot
+                    float p0 = waypoints[segment * 6 + joint];
+                    float p1 = waypoints[(segment + 1) * 6 + joint];
+                    
+                    // Cubic interpolation with smooth acceleration
+                    float a = alpha * alpha * alpha;
+                    float b = 3 * alpha * alpha * (1 - alpha);
+                    float c = 3 * alpha * (1 - alpha) * (1 - alpha);
+                    float d = (1 - alpha) * (1 - alpha) * (1 - alpha);
+                    
+                    interpolated_trajectory[idx * 6 + joint] = a * p1 + b * p1 + c * p0 + d * p0;
+                }
+            }
+        }
+    }
+    
+    kernel inverse_kinematics {
+        input: float* target_pose, float* current_joints, float* joint_limits
+        output: float* computed_joints
+        block_size: (256, 1, 1)
+        grid_size: (1, 1, 1)
+        shared_memory: 1024
+        code: {
+            // Simplified IK solver using Jacobian pseudo-inverse
+            // In practice, you'd want a more sophisticated IK solver
+            
+            __shared__ float jacobian[36];  // 6x6 Jacobian matrix
+            __shared__ float target[6];
+            __shared__ float current[6];
+            
+            if (threadIdx.x < 6) {
+                target[threadIdx.x] = target_pose[threadIdx.x];
+                current[threadIdx.x] = current_joints[threadIdx.x];
+            }
+            __syncthreads();
+            
+            // Compute Jacobian matrix (simplified)
+            // This would normally involve forward kinematics derivatives
+            for (int i = 0; i < 6; i++) {
+                for (int j = 0; j < 6; j++) {
+                    jacobian[i * 6 + j] = (i == j) ? 1.0f : 0.0f;  // Identity for simplicity
+                }
+            }
+            
+            // Compute joint updates using pseudo-inverse
+            for (int joint = 0; joint < 6; joint++) {
+                float delta = 0.0f;
+                for (int i = 0; i < 6; i++) {
+                    delta += jacobian[i * 6 + joint] * (target[i] - current[i]);
+                }
+                
+                float new_joint = current[joint] + delta * 0.1f;  // Damping factor
+                
+                // Apply joint limits
+                float min_limit = joint_limits[joint * 2];
+                float max_limit = joint_limits[joint * 2 + 1];
+                new_joint = max(min_limit, min(max_limit, new_joint));
+                
+                computed_joints[joint] = new_joint;
+            }
+        }
+    }
+    
+    kernel collision_detection {
+        input: float* robot_joints, float* robot_geometry, float* obstacle_points, int num_obstacles
+        output: bool* collision_detected
+        block_size: (256, 1, 1)
+        grid_size: ((num_obstacles + 255) / 256, 1, 1)
+        shared_memory: 1024
+        code: {
+            int idx = blockIdx.x * blockDim.x + threadIdx.x;
+            
+            if (idx < num_obstacles) {
+                // Simplified collision detection using bounding boxes
+                // In practice, you'd want more sophisticated collision detection
+                
+                float obstacle_x = obstacle_points[idx * 3];
+                float obstacle_y = obstacle_points[idx * 3 + 1];
+                float obstacle_z = obstacle_points[idx * 3 + 2];
+                
+                bool collision = false;
+                
+                // Check each robot link for collision
+                for (int link = 0; link < 6; link++) {
+                    float link_x = robot_geometry[link * 3];
+                    float link_y = robot_geometry[link * 3 + 1];
+                    float link_z = robot_geometry[link * 3 + 2];
+                    
+                    float distance = sqrtf((obstacle_x - link_x)*(obstacle_x - link_x) +
+                                         (obstacle_y - link_y)*(obstacle_y - link_y) +
+                                         (obstacle_z - link_z)*(obstacle_z - link_z));
+                    
+                    if (distance < 0.1f) {  // 10cm safety margin
+                        collision = true;
+                        break;
+                    }
+                }
+                
+                collision_detected[idx] = collision;
+            }
+        }
+    }
+    
+    kernel force_control {
+        input: float* desired_force, float* measured_force, float* current_pose, float* stiffness_matrix
+        output: float* force_correction
+        block_size: (256, 1, 1)
+        grid_size: (1, 1, 1)
+        shared_memory: 1024
+        code: {
+            // Force control using impedance control law
+            // F = K * (x_desired - x_current) + D * (v_desired - v_current)
+            
+            for (int i = 0; i < 6; i++) {
+                float force_error = desired_force[i] - measured_force[i];
+                float stiffness = stiffness_matrix[i * 6 + i];  // Diagonal stiffness
+                
+                // Simple proportional force control
+                force_correction[i] = stiffness * force_error * 0.01f;  // Gain factor
+            }
+        }
+    }
+    
+    kernel motion_prediction {
+        input: float* joint_history, int history_length, float* prediction_horizon
+        output: float* predicted_joints
+        block_size: (256, 1, 1)
+        grid_size: (1, 1, 1)
+        shared_memory: 2048
+        code: {
+            // Simple motion prediction using linear extrapolation
+            // In practice, you'd use a more sophisticated ML model
+            
+            for (int joint = 0; joint < 6; joint++) {
+                if (history_length >= 2) {
+                    float v1 = joint_history[(history_length - 2) * 6 + joint];
+                    float v2 = joint_history[(history_length - 1) * 6 + joint];
+                    float velocity = v2 - v1;
+                    
+                    // Predict future position
+                    predicted_joints[joint] = v2 + velocity * prediction_horizon[0];
+                } else {
+                    predicted_joints[joint] = joint_history[joint];
+                }
+            }
+        }
+    }
+}
+
+// ONNX models for advanced robot control
+onnx_model trajectory_optimizer {
+    config {
+        input: "waypoints" -> "float32[1,10,6]"
+        input: "constraints" -> "float32[1,6]"
+        output: "optimized_trajectory" -> "float32[1,50,6]"
+        device: gpu
+        optimization: tensorrt
+        optimization_level: 4
+        precision: fp16
+        dynamic_batch: true
+        max_workspace_size: 134217728
+        memory_optimization: true
+    }
+}
+
+onnx_model collision_predictor {
+    config {
+        input: "robot_state" -> "float32[1,12]"
+        input: "environment" -> "float32[1,100,3]"
+        output: "collision_probability" -> "float32[1,1]"
+        device: gpu
+        optimization: tensorrt
+        optimization_level: 3
+        precision: fp16
+        dynamic_batch: true
+        max_workspace_size: 67108864
+        memory_optimization: true
+    }
+}
+
+onnx_model force_estimator {
+    config {
+        input: "joint_torques" -> "float32[1,6]"
+        input: "joint_positions" -> "float32[1,6]"
+        output: "external_force" -> "float32[1,6]"
+        device: gpu
+        optimization: tensorrt
+        optimization_level: 4
+        precision: fp16
+        dynamic_batch: true
+        max_workspace_size: 67108864
+        memory_optimization: true
+    }
+}
+
+// Multi-stage robot control pipeline
+pipeline industrial_robot_pipeline {
+    stage trajectory_planning {
+        input: ["target_pose", "current_joints"]
+        output: "planned_trajectory"
+        method: "plan_trajectory"
+        cuda_kernel: "trajectory_interpolation"
+        topic: /robot/trajectory_planning
+    }
+    
+    stage motion_optimization {
+        input: ["planned_trajectory", "constraints"]
+        output: "optimized_trajectory"
+        method: "optimize_motion"
+        onnx_model: "trajectory_optimizer"
+        topic: /robot/motion_optimization
+    }
+    
+    stage collision_detection {
+        input: ["optimized_trajectory", "environment"]
+        output: "collision_status"
+        method: "check_collisions"
+        cuda_kernel: "collision_detection"
+        topic: /robot/collision_detection
+    }
+    
+    stage force_estimation {
+        input: ["joint_torques", "joint_positions"]
+        output: "external_forces"
+        method: "estimate_forces"
+        onnx_model: "force_estimator"
+        topic: /robot/force_estimation
+    }
+    
+    stage force_control {
+        input: ["desired_force", "measured_force", "current_pose"]
+        output: "force_correction"
+        method: "compute_force_correction"
+        cuda_kernel: "force_control"
+        topic: /robot/force_control
+    }
+    
+    stage motion_prediction {
+        input: ["joint_history", "prediction_horizon"]
+        output: "predicted_motion"
+        method: "predict_motion"
+        cuda_kernel: "motion_prediction"
+        topic: /robot/motion_prediction
+    }
+    
+    stage joint_control {
+        input: ["optimized_trajectory", "force_correction", "collision_status"]
+        output: "joint_commands"
+        method: "compute_joint_commands"
+        topic: /robot/joint_control
+    }
+}
+
+// Main robot controller node
+node industrial_robot_controller {
+    // Subscribers
+    subscriber /joint_states: "sensor_msgs/msg/JointState"
+    subscriber /target_pose: "geometry_msgs/msg/PoseStamped"
+    subscriber /force_sensor: "geometry_msgs/msg/WrenchStamped"
+    subscriber /robot_status: "std_msgs/msg/Bool"
+    subscriber /emergency_stop: "std_msgs/msg/Bool"
+    
+    // Publishers
+    publisher /joint_trajectory: "trajectory_msgs/msg/JointTrajectory"
+    publisher /joint_commands: "std_msgs/msg/Float64MultiArray"
+    publisher /robot_pose: "geometry_msgs/msg/PoseStamped"
+    publisher /force_feedback: "geometry_msgs/msg/WrenchStamped"
+    publisher /collision_warning: "std_msgs/msg/Bool"
+    publisher /motion_prediction: "trajectory_msgs/msg/JointTrajectory"
+    
+    // Parameters
+    parameter double control_frequency = 1000.0
+    parameter double trajectory_planning_frequency = 100.0
+    parameter double collision_detection_frequency = 500.0
+    parameter double force_control_frequency = 1000.0
+    parameter double max_joint_velocity = 1.0
+    parameter double max_joint_acceleration = 2.0
+    parameter double safety_margin = 0.1
+    parameter double force_threshold = 50.0
+    parameter double prediction_horizon = 0.5
+    parameter double trajectory_smoothing = 0.1
+    
+    // Joint limits
+    parameter string joint_limits = "[(-3.14, 3.14), (-3.14, 3.14), (-3.14, 3.14), (-3.14, 3.14), (-3.14, 3.14), (-3.14, 3.14)]"
+    
+    // Model paths
+    parameter string trajectory_optimizer_path = "trajectory_optimizer.onnx"
+    parameter string collision_predictor_path = "collision_predictor.onnx"
+    parameter string force_estimator_path = "force_estimator.onnx"
+    
+    // Lifecycle configuration
+    lifecycle {
+        auto_start: true
+        auto_shutdown: false
+    }
+    
+    // QoS configuration
+    qos {
+        reliability: reliable
+        durability: volatile
+        history: keep_last
+        depth: 10
+    }
+    
+    // Timers
+    timer control_timer {
+        frequency: 1000.0
+        callback: "control_loop"
+    }
+    
+    timer planning_timer {
+        frequency: 100.0
+        callback: "trajectory_planning"
+    }
+    
+    timer safety_timer {
+        frequency: 500.0
+        callback: "safety_monitoring"
+    }
+    
+    // Methods
+    method plan_trajectory {
+        input: geometry_msgs::msg::PoseStamped::SharedPtr target_pose
+        input: sensor_msgs::msg::JointState::SharedPtr current_joints
+        output: trajectory_msgs::msg::JointTrajectory::SharedPtr planned_trajectory
+        code: {
+            // Convert target pose to joint angles using IK
+            // Plan smooth trajectory using CUDA kernel
+            // Apply velocity and acceleration limits
+            // Generate trajectory message
+        }
+    }
+    
+    method optimize_motion {
+        input: trajectory_msgs::msg::JointTrajectory::SharedPtr planned_trajectory
+        input: std_msgs::msg::Float64MultiArray::SharedPtr constraints
+        output: trajectory_msgs::msg::JointTrajectory::SharedPtr optimized_trajectory
+        code: {
+            // Use ONNX model to optimize trajectory
+            // Consider energy efficiency and smoothness
+            // Apply optimization constraints
+        }
+    }
+    
+    method check_collisions {
+        input: trajectory_msgs::msg::JointTrajectory::SharedPtr trajectory
+        input: std_msgs::msg::Float64MultiArray::SharedPtr environment
+        output: std_msgs::msg::Bool::SharedPtr collision_status
+        code: {
+            // Use CUDA kernel for collision detection
+            // Check trajectory against environment
+            // Return collision status
+        }
+    }
+    
+    method estimate_forces {
+        input: sensor_msgs::msg::JointState::SharedPtr joint_torques
+        input: sensor_msgs::msg::JointState::SharedPtr joint_positions
+        output: geometry_msgs::msg::WrenchStamped::SharedPtr external_forces
+        code: {
+            // Use ONNX model to estimate external forces
+            // Filter sensor noise
+            // Convert to wrench message
+        }
+    }
+    
+    method compute_force_correction {
+        input: geometry_msgs::msg::WrenchStamped::SharedPtr desired_force
+        input: geometry_msgs::msg::WrenchStamped::SharedPtr measured_force
+        input: geometry_msgs::msg::PoseStamped::SharedPtr current_pose
+        output: std_msgs::msg::Float64MultiArray::SharedPtr force_correction
+        code: {
+            // Use CUDA kernel for force control computation
+            // Apply impedance control law
+            // Generate force correction commands
+        }
+    }
+    
+    method predict_motion {
+        input: std_msgs::msg::Float64MultiArray::SharedPtr joint_history
+        input: std_msgs::msg::Float64::SharedPtr prediction_horizon
+        output: trajectory_msgs::msg::JointTrajectory::SharedPtr predicted_motion
+        code: {
+            // Use CUDA kernel for motion prediction
+            // Extrapolate current motion
+            // Generate prediction trajectory
+        }
+    }
+    
+    method compute_joint_commands {
+        input: trajectory_msgs::msg::JointTrajectory::SharedPtr trajectory
+        input: std_msgs::msg::Float64MultiArray::SharedPtr force_correction
+        input: std_msgs::msg::Bool::SharedPtr collision_status
+        output: std_msgs::msg::Float64MultiArray::SharedPtr joint_commands
+        code: {
+            // Combine trajectory and force correction
+            // Apply safety checks
+            // Generate final joint commands
+        }
+    }
+}
+
+// Safety monitoring node
+node safety_monitor {
+    subscriber /joint_states: "sensor_msgs/msg/JointState"
+    subscriber /force_sensor: "geometry_msgs/msg/WrenchStamped"
+    subscriber /collision_warning: "std_msgs/msg/Bool"
+    subscriber /emergency_stop: "std_msgs/msg/Bool"
+    
+    publisher /safety_status: "std_msgs/msg/Bool"
+    publisher /emergency_command: "std_msgs/msg/Bool"
+    
+    parameter double safety_check_frequency = 1000.0
+    parameter double max_force_threshold = 100.0
+    parameter double max_velocity_threshold = 2.0
+    parameter double max_acceleration_threshold = 5.0
+    
+    qos {
+        reliability: reliable
+        durability: volatile
+        history: keep_last
+        depth: 5
+    }
+    
+    timer safety_timer {
+        frequency: 1000.0
+        callback: "safety_check"
+    }
+    
+    method safety_check {
+        input: sensor_msgs::msg::JointState::SharedPtr joint_states
+        input: geometry_msgs::msg::WrenchStamped::SharedPtr force_sensor
+        output: std_msgs::msg::Bool::SharedPtr safety_status
+        code: {
+            // Check joint limits
+            // Monitor force levels
+            // Check velocity and acceleration
+            // Generate safety status
+        }
+    }
+}
+
+// Multi-robot coordinator node
+node robot_coordinator {
+    subscriber /robot1/status: "std_msgs/msg/Bool"
+    subscriber /robot2/status: "std_msgs/msg/Bool"
+    subscriber /robot3/status: "std_msgs/msg/Bool"
+    
+    publisher /robot1/coordinated_command: "trajectory_msgs/msg/JointTrajectory"
+    publisher /robot2/coordinated_command: "trajectory_msgs/msg/JointTrajectory"
+    publisher /robot3/coordinated_command: "trajectory_msgs/msg/JointTrajectory"
+    
+    parameter double coordination_frequency = 100.0
+    parameter double inter_robot_safety_distance = 0.5
+    
+    qos {
+        reliability: reliable
+        durability: volatile
+        history: keep_last
+        depth: 10
+    }
+    
+    timer coordination_timer {
+        frequency: 100.0
+        callback: "coordinate_robots"
+    }
+    
+    method coordinate_robots {
+        input: std_msgs::msg::Bool::SharedPtr robot1_status
+        input: std_msgs::msg::Bool::SharedPtr robot2_status
+        input: std_msgs::msg::Bool::SharedPtr robot3_status
+        output: bool coordination_success
+        code: {
+            // Check inter-robot distances
+            // Coordinate motion planning
+            // Avoid collisions between robots
+            // Generate coordinated commands
+        }
+    }
+}

@@ -151,9 +151,10 @@ class PipelineGenerator(BaseGenerator):
         """Get input topics for a stage."""
         topics = []
         for input_node in stage.content.inputs:
-            # Create topic name based on input name
-            topic_name = f"/{pipeline_name}/{input_node.input_name}"
-            topics.append(topic_name)
+            # Create topic names based on input names
+            for input_name in input_node.input_names:
+                topic_name = f"/{pipeline_name}/{input_name}"
+                topics.append(topic_name)
         return topics
     
     def _get_stage_output_topics(self, stage: StageNode, pipeline_name: str) -> List[str]:

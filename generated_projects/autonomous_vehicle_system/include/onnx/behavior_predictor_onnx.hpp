@@ -1,0 +1,99 @@
+#ifndef BEHAVIOR_PREDICTOR_ONNX_HPP
+#define BEHAVIOR_PREDICTOR_ONNX_HPP
+
+#include <onnxruntime_cxx_api.h>
+#include <onnxruntime_c_api.h>
+#include <onnxruntime_providers.h>
+#include <vector>
+#include <memory>
+#include <string>
+#include <opencv2/opencv.hpp>
+#include <cuda_runtime.h>
+
+class behavior_predictorOnnxInference {
+public:
+    behavior_predictorOnnxInference(const std::string& model_path);
+    ~behavior_predictorOnnxInference();
+    
+    // Initialize the model
+    bool initialize();
+    
+    // Run inference (pure C++/CUDA, no Python)
+    bool run_inference(const std::vector<float>& input_data, std::vector<float>& output_data);
+    
+    // CUDA-specific inference methods
+    bool run_inference_cuda(const float* input_data, size_t input_size, 
+                           float* output_data, size_t output_size);
+    // TensorRT-specific inference methods
+    bool run_inference_tensorrt(const std::vector<float>& input_data, std::vector<float>& output_data);
+    bool run_inference_tensorrt_cuda(const float* input_data, size_t input_size, 
+                                    float* output_data, size_t output_size);
+    
+    // TensorRT optimization methods
+    bool enable_tensorrt_fp16();
+    bool enable_tensorrt_int8();
+    bool set_tensorrt_workspace_size(size_t size);
+    bool clear_tensorrt_cache();
+    
+    // Get input/output shapes
+    std::vector<int64_t> get_input_shape() const { return input_shape_; }
+    std::vector<int64_t> get_output_shape() const { return output_shape_; }
+    
+    // Get input/output names
+    std::string get_input_name() const { return input_name_; }
+    std::string get_output_name() const { return output_name_; }
+    
+    // Memory management
+    void* allocate_cuda_memory(size_t size);
+    void free_cuda_memory(void* ptr);
+    bool copy_to_cuda(const std::vector<float>& host_data, void* cuda_ptr);
+    bool copy_from_cuda(void* cuda_ptr, std::vector<float>& host_data);
+
+private:
+    // ONNX Runtime session
+    Ort::Session session_{nullptr};
+    Ort::Env env_;
+    
+    // Model information
+    std::string model_path_;
+    std::string input_name_;
+    std::string output_name_;
+    std::vector<int64_t> input_shape_;
+    std::vector<int64_t> output_shape_;
+    
+    // Device configuration
+    std::string device_type_;
+    
+    // Memory allocator
+    Ort::AllocatorWithDefaultOptions allocator_;
+    
+    // CUDA memory management
+    std::vector<void*> cuda_memory_pool_;
+    // TensorRT configuration
+    bool tensorrt_enabled_;
+    bool tensorrt_fp16_enabled_;
+    bool tensorrt_int8_enabled_;
+    size_t tensorrt_workspace_size_;
+    std::string tensorrt_cache_path_;
+    
+    // Initialize session options
+    void initialize_session_options(Ort::SessionOptions& session_options);
+    
+    // Preprocess input data (pure C++)
+    std::vector<float> preprocess_input(const std::vector<float>& raw_input);
+    
+    // Postprocess output data (pure C++)
+    std::vector<float> postprocess_output(const std::vector<float>& raw_output);
+    
+    // CUDA preprocessing
+    bool preprocess_input_cuda(const std::vector<float>& raw_input, void* cuda_input);
+    
+    // CUDA postprocessing
+    bool postprocess_output_cuda(void* cuda_output, std::vector<float>& processed_output);
+    // TensorRT-specific private methods
+    bool initialize_tensorrt_options(OrtTensorRTProviderOptions& trt_options);
+    bool create_tensorrt_cache_directory();
+    bool validate_tensorrt_engine();
+};
+
+#endif // BEHAVIOR_PREDICTOR_ONNX_HPP 

@@ -102,14 +102,45 @@ class CMakeGenerator(BaseGenerator):
             if hasattr(node, 'services') and node.services:
                 dependencies.add('std_srvs')
             
-            # Check for navigation messages
+            # Check for message package usage (only add packages that appear)
             for pub in getattr(node, 'publishers', []):
                 if 'nav_msgs' in pub.msg_type:
                     dependencies.add('nav_msgs')
+                if 'visualization_msgs' in pub.msg_type:
+                    dependencies.add('visualization_msgs')
+                if 'tf2_msgs' in pub.msg_type:
+                    dependencies.add('tf2_msgs')
+                # vision_msgs removed unless explicitly present; examples now use std_msgs
+                # Generic: add package for any ROS type string of form package/category/Type
+                parts = pub.msg_type.split('/')
+                if len(parts) >= 3:
+                    dependencies.add(parts[0])
+                if 'trajectory_msgs' in pub.msg_type:
+                    dependencies.add('trajectory_msgs')
             
             for sub in getattr(node, 'subscribers', []):
                 if 'nav_msgs' in sub.msg_type:
                     dependencies.add('nav_msgs')
+                if 'visualization_msgs' in sub.msg_type:
+                    dependencies.add('visualization_msgs')
+                if 'tf2_msgs' in sub.msg_type:
+                    dependencies.add('tf2_msgs')
+                # vision_msgs removed unless explicitly present
+                parts = sub.msg_type.split('/')
+                if len(parts) >= 3:
+                    dependencies.add(parts[0])
+                if 'trajectory_msgs' in sub.msg_type:
+                    dependencies.add('trajectory_msgs')
+
+            # Services and actions: add their packages
+            for srv in getattr(node, 'services', []):
+                parts = srv.srv_type.split('/')
+                if len(parts) >= 3:
+                    dependencies.add(parts[0])
+            for act in getattr(node, 'actions', []):
+                parts = act.action_type.split('/')
+                if len(parts) >= 3:
+                    dependencies.add(parts[0])
         
         # Check for CUDA usage
         has_cuda = hasattr(ast, 'cuda_kernels') and ast.cuda_kernels
@@ -141,6 +172,20 @@ class CMakeGenerator(BaseGenerator):
                 'name': f'{node.name}_node',
                 'source': source
             })
+
+        # Message dependencies (set for clarity; in this template they are merged via dependencies)
+        message_dependencies = set()
+        for node in ast.nodes:
+            for pub in getattr(node, 'publishers', []):
+                if 'visualization_msgs' in pub.msg_type:
+                    message_dependencies.add('visualization_msgs')
+                if 'tf2_msgs' in pub.msg_type:
+                    message_dependencies.add('tf2_msgs')
+            for sub in getattr(node, 'subscribers', []):
+                if 'visualization_msgs' in sub.msg_type:
+                    message_dependencies.add('visualization_msgs')
+                if 'tf2_msgs' in sub.msg_type:
+                    message_dependencies.add('tf2_msgs')
         
         # Collect CUDA source files
         cuda_sources = []
@@ -152,6 +197,7 @@ class CMakeGenerator(BaseGenerator):
             'package_name': package_name,
             'version': version,
             'dependencies': sorted(list(dependencies)),
+            'message_dependencies': sorted(list(message_dependencies)),
             'build_dependencies': sorted(list(build_dependencies)),
             'executables': executables,
             'cuda_sources': cuda_sources,

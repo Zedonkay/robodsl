@@ -10,7 +10,7 @@ The {{ pipeline.name }} pipeline is a data processing pipeline consisting of {{ 
 {% for stage in pipeline.content.stages %}
 Stage {{ loop.index }}: {{ stage.name | title }}
 {% if stage.content.inputs %}
-  Inputs: {% for input in stage.content.inputs %}{{ input.input_name }}{% if not loop.last %}, {% endif %}{% endfor %}
+  Inputs: {% for input in stage.content.inputs %}{% for input_name in input.input_names %}{{ input_name }}{% if not loop.last %}, {% endif %}{% endfor %}{% if not loop.last %}, {% endif %}{% endfor %}
 {% endif %}
 {% if stage.content.outputs %}
   Outputs: {% for output in stage.content.outputs %}{{ output.output_name }}{% if not loop.last %}, {% endif %}{% endfor %}
@@ -39,7 +39,9 @@ Stage {{ loop.index }}: {{ stage.name | title }}
 {% if stage.content.inputs %}
 #### Inputs
 {% for input in stage.content.inputs %}
-- **{{ input.input_name }}**: Input data for this stage
+{% for input_name in input.input_names %}
+- **{{ input_name }}**: Input data for this stage
+{% endfor %}
 {% endfor %}
 {% endif %}
 

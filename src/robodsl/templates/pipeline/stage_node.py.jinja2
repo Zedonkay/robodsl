@@ -35,9 +35,11 @@ class {{ stage.name | title }}Node(Node):
         
         # Initialize subscribers
         {% for input in stage.content.inputs %}
-        self.{{ input.input_name }}_subscriber = self.create_subscription(
-            String, '{{ stage_namespace }}/{{ input.input_name }}',
-            self.on_{{ input.input_name }}_received, 10)
+        {% for input_name in input.input_names %}
+        self.{{ input_name }}_subscriber = self.create_subscription(
+            String, '{{ stage_namespace }}/{{ input_name }}',
+            self.on_{{ input_name }}_received, 10)
+        {% endfor %}
         {% endfor %}
         
         # Initialize timer for periodic processing
@@ -47,9 +49,10 @@ class {{ stage.name | title }}Node(Node):
         self.get_logger().info('{{ stage.name | title }}Node initialized successfully')
     
     {% for input in stage.content.inputs %}
-    def on_{{ input.input_name }}_received(self, msg):
-        """Handle received {{ input.input_name }} message."""
-        self.get_logger().info(f'Received {{ input.input_name }}: {msg.data}')
+    {% for input_name in input.input_names %}
+    def on_{{ input_name }}_received(self, msg):
+        """Handle received {{ input_name }} message."""
+        self.get_logger().info(f'Received {{ input_name }}: {msg.data}')
         
         # Process the input
         {% for method in stage.content.methods %}
@@ -59,9 +62,10 @@ class {{ stage.name | title }}Node(Node):
         # Publish outputs if available
         {% for output in stage.content.outputs %}
         output_msg = String()
-        output_msg.data = f'Processed {{ input.input_name }}: {msg.data}'
+        output_msg.data = f'Processed {{ input_name }}: {msg.data}'
         self.{{ output.output_name }}_publisher.publish(output_msg)
         {% endfor %}
+    {% endfor %}
     {% endfor %}
     
     {% for method in stage.content.methods %}

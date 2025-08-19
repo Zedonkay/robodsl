@@ -1,0 +1,398 @@
+// Example 1: Autonomous Navigation System
+// This example demonstrates a complete autonomous navigation system with:
+// - SLAM (Simultaneous Localization and Mapping) using CUDA-accelerated point cloud processing
+// - Object detection using ONNX models
+// - Path planning with ROS2 integration
+// - Multi-stage pipeline orchestration
+
+// Include necessary ROS2 headers
+include <rclcpp/rclcpp.hpp>
+include <sensor_msgs/msg/point_cloud2.hpp>
+include <sensor_msgs/msg/image.hpp>
+include <nav_msgs/msg/occupancy_grid.hpp>
+include <geometry_msgs/msg/pose_stamped.hpp>
+include <geometry_msgs/msg/twist.hpp>
+include <visualization_msgs/msg/marker_array.hpp>
+
+// CUDA kernels for point cloud processing and SLAM
+cuda_kernels {
+    kernel point_cloud_filter {
+        input: float* raw_points, int num_points, float min_distance, float max_distance
+        output: float* filtered_points, int* filtered_count
+        block_size: (256, 1, 1)
+        grid_size: ((num_points + 255) / 256, 1, 1)
+        shared_memory: 1024
+        use_streams: true
+        stream_count: 4
+        code: {
+            int idx = blockIdx.x * blockDim.x + threadIdx.x;
+            if (idx < num_points) {
+                float x = raw_points[idx * 3];
+                float y = raw_points[idx * 3 + 1];
+                float z = raw_points[idx * 3 + 2];
+                float distance = sqrtf(x*x + y*y + z*z);
+                
+                if (distance >= min_distance && distance <= max_distance) {
+                    int write_idx = atomicAdd(filtered_count, 1);
+                    filtered_points[write_idx * 3] = x;
+                    filtered_points[write_idx * 3 + 1] = y;
+                    filtered_points[write_idx * 3 + 2] = z;
+                }
+            }
+        }
+    }
+    
+    kernel occupancy_grid_update {
+        input: float* filtered_points, int num_points, float* grid_data, int grid_width, int grid_height, float resolution, float* robot_pose
+        output: float* updated_grid
+        block_size: (16, 16, 1)
+        grid_size: ((grid_width + 15) / 16, (grid_height + 15) / 16, 1)
+        shared_memory: 2048
+        use_thrust: true
+        code: {
+            int x = blockIdx.x * blockDim.x + threadIdx.x;
+            int y = blockIdx.y * blockDim.y + threadIdx.y;
+            
+            if (x < grid_width && y < grid_height) {
+                int grid_idx = y * grid_width + x;
+                float world_x = (x - grid_width/2) * resolution;
+                float world_y = (y - grid_height/2) * resolution;
+                
+                // Transform to robot frame
+                float cos_theta = cosf(robot_pose[2]);
+                float sin_theta = sinf(robot_pose[2]);
+                float local_x = (world_x - robot_pose[0]) * cos_theta + (world_y - robot_pose[1]) * sin_theta;
+                float local_y = -(world_x - robot_pose[0]) * sin_theta + (world_y - robot_pose[1]) * cos_theta;
+                
+                // Check if any point is in this grid cell
+                bool occupied = false;
+                for (int i = 0; i < num_points; i++) {
+                    float px = filtered_points[i * 3];
+                    float py = filtered_points[i * 3 + 1];
+                    float cell_x = px / resolution;
+                    float cell_y = py / resolution;
+                    
+                    if (abs(cell_x - local_x/resolution) < 0.5 && abs(cell_y - local_y/resolution) < 0.5) {
+                        occupied = true;
+                        break;
+                    }
+                }
+                
+                updated_grid[grid_idx] = occupied ? 100.0f : max(0.0f, grid_data[grid_idx] - 1.0f);
+            }
+        }
+    }
+    
+    kernel path_planning_astar {
+        input: float* occupancy_grid, int grid_width, int grid_height, int start_x, int start_y, int goal_x, int goal_y
+        output: int* path_x, int* path_y, int* path_length
+        block_size: (256, 1, 1)
+        grid_size: (1, 1, 1)
+        shared_memory: 4096
+        dynamic_parallelism: true
+        code: {
+            // A* path planning implementation
+            // This is a simplified version - in practice, you'd want a more sophisticated implementation
+            __shared__ int open_list[256];
+            __shared__ int closed_list[256];
+            __shared__ float g_scores[256];
+            __shared__ float f_scores[256];
+            
+            int current_x = start_x;
+            int current_y = start_y;
+            int path_idx = 0;
+            
+            while (current_x != goal_x || current_y != goal_y) {
+                // Find best neighbor
+                float best_f = FLT_MAX;
+                int best_x = current_x;
+                int best_y = current_y;
+                
+                for (int dx = -1; dx <= 1; dx++) {
+                    for (int dy = -1; dy <= 1; dy++) {
+                        if (dx == 0 && dy == 0) continue;
+                        
+                        int nx = current_x + dx;
+                        int ny = current_y + dy;
+                        
+                        if (nx >= 0 && nx < grid_width && ny >= 0 && ny < grid_height) {
+                            if (occupancy_grid[ny * grid_width + nx] < 50.0f) {
+                                float g = g_scores[threadIdx.x] + sqrtf(dx*dx + dy*dy);
+                                float h = sqrtf((goal_x - nx)*(goal_x - nx) + (goal_y - ny)*(goal_y - ny));
+                                float f = g + h;
+                                
+                                if (f < best_f) {
+                                    best_f = f;
+                                    best_x = nx;
+                                    best_y = ny;
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                if (best_x == current_x && best_y == current_y) {
+                    // No path found
+                    *path_length = 0;
+                    return;
+                }
+                
+                path_x[path_idx] = current_x;
+                path_y[path_idx] = current_y;
+                path_idx++;
+                
+                current_x = best_x;
+                current_y = best_y;
+                
+                if (path_idx >= 1000) break; // Prevent infinite loops
+            }
+            
+            path_x[path_idx] = goal_x;
+            path_y[path_idx] = goal_y;
+            *path_length = path_idx + 1;
+        }
+    }
+}
+
+// ONNX model for object detection
+onnx_model yolo_detector {
+    config {
+        input: "images" -> "float32[1,3,640,640]"
+        output: "output0" -> "float32[1,25200,85]"
+        device: gpu
+        optimization: tensorrt
+        optimization_level: 5
+        precision: fp16
+        dynamic_batch: true
+        max_workspace_size: 268435456
+        profiling: true
+        profiling_output: "yolo_profiling.json"
+        memory_optimization: true
+        multi_stream: true
+        stream_count: 4
+    }
+}
+
+// ONNX model for semantic segmentation
+onnx_model semantic_segmentation {
+    config {
+        input: "input" -> "float32[1,3,512,512]"
+        output: "output" -> "float32[1,21,512,512]"
+        device: gpu
+        optimization: tensorrt
+        optimization_level: 4
+        precision: fp16
+        dynamic_batch: true
+        max_workspace_size: 134217728
+        memory_optimization: true
+    }
+}
+
+// Multi-stage processing pipeline
+pipeline autonomous_navigation_pipeline {
+    stage point_cloud_processing {
+        input: ["raw_point_cloud"]
+        output: "filtered_point_cloud"
+        method: "filter_point_cloud"
+        cuda_kernel: "point_cloud_filter"
+        topic: /slam/point_cloud_filtered
+    }
+    
+    stage slam_mapping {
+        input: ["filtered_point_cloud"]
+        output: "occupancy_grid"
+        method: "update_occupancy_grid"
+        cuda_kernel: "occupancy_grid_update"
+        topic: /slam/occupancy_grid
+    }
+    
+    stage object_detection {
+        input: ["camera_image"]
+        output: "detected_objects"
+        method: "detect_objects"
+        onnx_model: "yolo_detector"
+        topic: /perception/detected_objects
+    }
+    
+    stage semantic_segmentation {
+        input: ["camera_image"]
+        output: "semantic_map"
+        method: "segment_image"
+        onnx_model: "semantic_segmentation"
+        topic: /perception/semantic_map
+    }
+    
+    stage path_planning {
+        input: ["occupancy_grid", "detected_objects", "semantic_map"]
+        output: "planned_path"
+        method: "plan_path"
+        cuda_kernel: "path_planning_astar"
+        topic: /navigation/planned_path
+    }
+    
+    stage motion_control {
+        input: ["planned_path", "robot_pose"]
+        output: "velocity_command"
+        method: "compute_velocity"
+        topic: /navigation/velocity_command
+    }
+}
+
+// Main navigation node
+node autonomous_navigator {
+    // Subscribers
+    subscriber /velodyne_points: "sensor_msgs/msg/PointCloud2"
+    subscriber /camera/image_raw: "sensor_msgs/msg/Image"
+    subscriber /odom: "nav_msgs/msg/Odometry"
+    subscriber /tf: "tf2_msgs/msg/TFMessage"
+    
+    // Publishers
+    publisher /navigation/occupancy_grid: "nav_msgs/msg/OccupancyGrid"
+    publisher /navigation/detected_objects: "visualization_msgs/msg/MarkerArray"
+    publisher /navigation/planned_path: "nav_msgs/msg/Path"
+    publisher /cmd_vel: "geometry_msgs/msg/Twist"
+    publisher /navigation/semantic_map: "sensor_msgs/msg/Image"
+    
+    // Parameters
+    parameter double map_resolution = 0.05
+    parameter int map_width = 1000
+    parameter int map_height = 1000
+    parameter double min_point_distance = 0.1
+    parameter double max_point_distance = 50.0
+    parameter string yolo_model_path = "yolov8n.onnx"
+    parameter string semantic_model_path = "deeplabv3.onnx"
+    parameter double confidence_threshold = 0.5
+    parameter double max_linear_velocity = 1.0
+    parameter double max_angular_velocity = 1.0
+    parameter double path_planning_frequency = 10.0
+    parameter double slam_update_frequency = 20.0
+    
+    // Lifecycle configuration
+    lifecycle {
+        auto_start: true
+        auto_shutdown: false
+    }
+    
+    // QoS configuration
+    qos {
+        reliability: reliable
+        durability: transient_local
+        history: keep_last
+        depth: 10
+    }
+    
+    // Timer for periodic processing
+    timer slam_timer {
+        frequency: 20.0
+        callback: "update_slam"
+    }
+    
+    timer planning_timer {
+        frequency: 10.0
+        callback: "update_path_planning"
+    }
+    
+    // Methods
+    method filter_point_cloud {
+        input: sensor_msgs::msg::PointCloud2::SharedPtr raw_cloud
+        output: sensor_msgs::msg::PointCloud2::SharedPtr filtered_cloud
+        code: {
+            // Convert ROS message to CUDA arrays
+            // Call CUDA kernel for filtering
+            // Convert back to ROS message
+        }
+    }
+    
+    method update_occupancy_grid {
+        input: sensor_msgs::msg::PointCloud2::SharedPtr filtered_cloud
+        input: geometry_msgs::msg::PoseStamped::SharedPtr robot_pose
+        output: nav_msgs::msg::OccupancyGrid::SharedPtr occupancy_grid
+        code: {
+            // Update occupancy grid using CUDA kernel
+            // Integrate new point cloud data
+            // Publish updated grid
+        }
+    }
+    
+    method detect_objects {
+        input: sensor_msgs::msg::Image::SharedPtr image
+        output: visualization_msgs::msg::MarkerArray::SharedPtr detected_objects
+        code: {
+            // Preprocess image for ONNX model
+            // Run YOLO inference
+            // Post-process detections
+            // Create visualization markers
+        }
+    }
+    
+    method segment_image {
+        input: sensor_msgs::msg::Image::SharedPtr image
+        output: sensor_msgs::msg::Image::SharedPtr semantic_map
+        code: {
+            // Preprocess image for semantic segmentation
+            // Run ONNX inference
+            // Post-process segmentation results
+            // Create colored semantic map
+        }
+    }
+    
+    method plan_path {
+        input: nav_msgs::msg::OccupancyGrid::SharedPtr occupancy_grid
+        input: visualization_msgs::msg::MarkerArray::SharedPtr obstacles
+        input: geometry_msgs::msg::PoseStamped::SharedPtr goal
+        output: nav_msgs::msg::Path::SharedPtr planned_path
+        code: {
+            // Use CUDA kernel for A* path planning
+            // Consider detected obstacles
+            // Generate smooth path
+        }
+    }
+    
+    method compute_velocity {
+        input: nav_msgs::msg::Path::SharedPtr planned_path
+        input: geometry_msgs::msg::PoseStamped::SharedPtr current_pose
+        output: geometry_msgs::msg::Twist::SharedPtr velocity_command
+        code: {
+            // Pure pursuit controller
+            // Velocity limits and safety checks
+            // Generate velocity commands
+        }
+    }
+}
+
+// Localization node for robot pose estimation
+node robot_localizer {
+    subscriber /odom: "nav_msgs/msg/Odometry"
+    subscriber /imu/data: "sensor_msgs/msg/Imu"
+    subscriber /velodyne_points: "sensor_msgs/msg/PointCloud2"
+    
+    publisher /robot_pose: "geometry_msgs/msg/PoseStamped"
+    publisher /robot_trajectory: "nav_msgs/msg/Path"
+    
+    parameter double localization_frequency = 50.0
+    parameter bool use_ekf = true
+    parameter bool use_particle_filter = false
+    
+    qos {
+        reliability: reliable
+        durability: volatile
+        history: keep_last
+        depth: 5
+    }
+    
+    timer localization_timer {
+        frequency: 50.0
+        callback: "update_localization"
+    }
+    
+    method update_localization {
+        input: nav_msgs::msg::Odometry::SharedPtr odom
+        input: sensor_msgs::msg::Imu::SharedPtr imu
+        output: geometry_msgs::msg::PoseStamped::SharedPtr robot_pose
+        code: {
+            // Extended Kalman Filter for pose estimation
+            // Sensor fusion (odometry + IMU)
+            // Publish current robot pose
+        }
+    }
+}

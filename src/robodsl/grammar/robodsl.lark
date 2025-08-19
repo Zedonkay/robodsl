@@ -387,14 +387,14 @@ using_def: "using" NAME "=" cpp_type ";"
 // Array specifications
 array_spec: LSQB expr? RSQB
 node_def: NODE NODE_NAME LBRACE node_content RBRACE
-node_content: (parameter | lifecycle | timer | remap | namespace | ros_primitive | flag | cpp_method | kernel_def | onnx_model_ref | cuda_kernels_block | use_kernel | raw_cpp_code | parameter_server | parameter_client | action_client | service_client | realtime_config | security_config | component_config)*
+node_content: (parameter | lifecycle | timer | remap | namespace | ros_primitive | flag | cpp_method | kernel_def | onnx_model_ref | cuda_kernels_block | use_kernel | raw_cpp_code | parameter_server | parameter_client | action_client | service_client | realtime_config | security_config | component_config | qos_config)*
 
 // Pipeline definitions (Phase 4) - Enhanced with CUDA/ONNX integration
 pipeline_def: "pipeline" NAME LBRACE pipeline_content RBRACE
 pipeline_content: stage_def*
 stage_def: "stage" NAME LBRACE stage_content RBRACE
 stage_content: (stage_input | stage_output | stage_method | stage_model | stage_topic | stage_cuda_kernel | stage_onnx_model)*
-stage_input: "input" ":" STRING
+stage_input: "input" ":" array
 stage_output: "output" ":" STRING
 stage_method: "method" ":" STRING
 stage_model: "model" ":" STRING

@@ -124,9 +124,21 @@ class CppNodeGenerator(BaseGenerator):
             return f"geometry_msgs::msg::{ros_type.split('/')[-1]}"
         elif ros_type.startswith('nav_msgs/msg/'):
             return f"nav_msgs::msg::{ros_type.split('/')[-1]}"
+        elif ros_type.startswith('visualization_msgs/msg/'):
+            return f"visualization_msgs::msg::{ros_type.split('/')[-1]}"
+        elif ros_type.startswith('vision_msgs/msg/'):
+            return f"vision_msgs::msg::{ros_type.split('/')[-1]}"
+        elif ros_type.startswith('tf2_msgs/msg/'):
+            return f"tf2_msgs::msg::{ros_type.split('/')[-1]}"
+        elif ros_type.startswith('trajectory_msgs/msg/'):
+            return f"trajectory_msgs::msg::{ros_type.split('/')[-1]}"
         elif ros_type.startswith('std_srvs/srv/'):
             return f"std_srvs::srv::{ros_type.split('/')[-1]}"
         else:
+            # Generic mapping: allow custom packages like my_pkg/msg/MyMsg
+            parts = ros_type.split('/')
+            if len(parts) == 3 and parts[1] in ('msg', 'srv', 'action'):
+                return f"{parts[0]}::{parts[1]}::{parts[2]}"
             return ros_type
     
     def _ros_type_to_include(self, ros_type: str) -> str:
@@ -136,11 +148,20 @@ class CppNodeGenerator(BaseGenerator):
             package, msg_or_srv, type_name = parts
             # Convert the type name from CamelCase to snake_case
             snake_case_name = self._camel_to_snake(type_name)
+            # Special-case known messages that do not follow simple snake_case headers
+            if package == 'tf2_msgs' and msg_or_srv == 'msg' and type_name == 'TFMessage':
+                return "#include <tf2_msgs/msg/tf_message.hpp>"
             return f"#include <{package}/{msg_or_srv}/{snake_case_name}.hpp>"
         else:
             return f"// Custom message: {ros_type}"
     
     def _prepare_node_context(self, node: NodeNode) -> Dict[str, Any]:
+        def _sanitize_topic_to_name(topic: str) -> str:
+            # Remove leading slash, replace remaining slashes and non-alnum with underscores
+            name = topic.lstrip('/')
+            import re
+            name = re.sub(r'[^A-Za-z0-9]+', '_', name)
+            return name or 'topic'
         """Prepare context for node template rendering."""
         # Determine if this is a lifecycle node
         is_lifecycle = getattr(node, 'lifecycle', False) or 'lifecycle' in node.name.lower()
@@ -198,7 +219,7 @@ class CppNodeGenerator(BaseGenerator):
             msg_type = self._ros_type_to_cpp(pub.msg_type)
             all_msg_types.add(pub.msg_type)
             # Extract name from topic (last part after /)
-            pub_name = pub.topic.split('/')[-1] if '/' in pub.topic else pub.topic
+            pub_name = _sanitize_topic_to_name(pub.topic)
             publishers.append({
                 'name': pub_name,
                 'topic': pub.topic,
@@ -212,7 +233,7 @@ class CppNodeGenerator(BaseGenerator):
             msg_type = self._ros_type_to_cpp(sub.msg_type)
             all_msg_types.add(sub.msg_type)
             # Extract name from topic (last part after /)
-            sub_name = sub.topic.split('/')[-1] if '/' in sub.topic else sub.topic
+            sub_name = _sanitize_topic_to_name(sub.topic)
             callback_name = f"on_{sub_name}"
             subscribers.append({
                 'name': sub_name,
@@ -250,9 +271,17 @@ class CppNodeGenerator(BaseGenerator):
         timers = []
         for timer in getattr(node, 'timers', []):
             callback_name = f"on_{timer.name}"
+            # Ensure period is a numeric literal string
+            period_value = timer.period
+            try:
+                # Attempt to coerce to float then back to string
+                period_value = float(period_value)
+            except Exception:
+                # Fallback to a safe default if unparsable
+                period_value = 1.0
             timers.append({
                 'name': timer.name,
-                'period': timer.period,
+                'period': period_value,
                 'callback_name': callback_name
             })
         

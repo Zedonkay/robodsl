@@ -577,7 +577,7 @@ class OnnxModelNode(ASTNode):
 @dataclass
 class StageInputNode(ASTNode):
     """Pipeline stage input node."""
-    input_name: str
+    input_names: List[str] = field(default_factory=list)
 
 
 @dataclass

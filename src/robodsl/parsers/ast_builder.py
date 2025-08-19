@@ -1688,10 +1688,10 @@ class ASTBuilder:
         for child in node.children:
             if isinstance(child, Tree):
                 if child.data == "stage_input":
-                    # Handle stage_input: "input_name"
+                    # Handle stage_input: array
                     if len(child.children) >= 1:
-                        input_name = str(child.children[0]).strip('"')
-                        content.inputs.append(StageInputNode(input_name=input_name))
+                        input_names = self._process_string_array(child.children[0])
+                        content.inputs.append(StageInputNode(input_names=input_names))
                 elif child.data == "stage_output":
                     # Handle stage_output: "output_name"
                     if len(child.children) >= 1:
@@ -3286,6 +3286,31 @@ class ASTBuilder:
                             values.append(value)
                         # Skip COMMA tokens
         return values
+
+    def _process_string_array(self, node: Tree) -> List[str]:
+        """Process array of strings for stage inputs."""
+        strings = []
+        if isinstance(node, Tree) and node.data == "array":
+            # Array structure: LSQB value_list RSQB
+            # value_list is: (value (COMMA value)*)?
+            if len(node.children) >= 2:  # Should have LSQB, value_list, RSQB
+                value_list_node = node.children[1]  # value_list is at index 1
+                if isinstance(value_list_node, Tree) and value_list_node.data == "value_list":
+                    for child in value_list_node.children:
+                        if isinstance(child, Tree) and child.data == "value":
+                            # Extract string value from primitive
+                            if hasattr(child, 'children') and len(child.children) > 0:
+                                primitive_node = child.children[0]
+                                if isinstance(primitive_node, Tree) and primitive_node.data == "primitive":
+                                    # Get the string value from the primitive
+                                    if hasattr(primitive_node, 'children') and len(primitive_node.children) > 0:
+                                        string_token = primitive_node.children[0]
+                                        if hasattr(string_token, 'value'):
+                                            # Remove quotes from string
+                                            string_value = str(string_token.value).strip('"')
+                                            strings.append(string_value)
+                        # Skip COMMA tokens
+        return strings
 
     def _topic_path_to_str(self, node):
         """Convert a topic_path tree to a string like '/foo/bar'."""

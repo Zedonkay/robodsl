@@ -112,6 +112,33 @@ class CudaKernelGenerator(BaseGenerator):
     
     def _prepare_kernel_context(self, kernel: KernelNode) -> Dict[str, Any]:
         """Prepare context for kernel template rendering."""
+        def _normalize_cuda_type(type_str: str) -> str:
+            """Normalize DSL scalar types to valid CUDA C types."""
+            if not type_str:
+                return "float"
+            base = type_str.strip()
+            pointer_suffix = ""
+            # Preserve pointer asterisks
+            if base.endswith('*'):
+                pointer_suffix = '*' * base.count('*')
+                base = base.replace('*', '').strip()
+            # Normalize common aliases
+            mapping = {
+                'uint8': 'unsigned char',
+                'uchar': 'unsigned char',
+                'int8': 'signed char',
+                'uint16': 'unsigned short',
+                'int16': 'short',
+                'uint32': 'unsigned int',
+                'int32': 'int',
+                'uint64': 'unsigned long long',
+                'int64': 'long long',
+                'float32': 'float',
+                'float64': 'double',
+            }
+            base_norm = mapping.get(base, base)
+            # Reattach pointer suffix
+            return f"{base_norm}{pointer_suffix}"
         # Extract parameters from kernel content
         kernel_parameters = []
         input_params = []
@@ -121,7 +148,7 @@ class CudaKernelGenerator(BaseGenerator):
             for param in kernel.content.parameters:
                 param_info = {
                     'name': param.param_name or f"param_{len(kernel_parameters)}",
-                    'type': param.param_type,
+                    'type': _normalize_cuda_type(param.param_type),
                     'direction': param.direction,
                     'size_expr': param.size_expr,
                     'device_name': f"d_{param.param_name or f'param_{len(kernel_parameters)}'}_" if param.param_name else f"d_param_{len(kernel_parameters)}_"
@@ -154,7 +181,7 @@ class CudaKernelGenerator(BaseGenerator):
         members = []
         for param in kernel_parameters:
             # Fix parameter types - ensure they're proper CUDA types
-            param_type = param['type']
+            param_type = _normalize_cuda_type(param['type'])
             # If the type already has *, keep it as is; otherwise add * for device pointer
             if '*' not in param_type:
                 param_type = param_type
